@@ -733,6 +733,7 @@ RPCHelpMan gettransaction()
                         {
                             {RPCResult::Type::ELISION, "", "Equivalent to the RPC decoderawtransaction method, or the RPC getrawtransaction method when `verbose` is passed."},
                         }},
+                        RESULT_LAST_PROCESSED_BLOCK,
                     })
                 },
                 RPCExamples{
@@ -793,6 +794,7 @@ RPCHelpMan gettransaction()
         entry.pushKV("decoded", decoded);
     }
 
+    AppendLastProcessedBlock(entry, *pwallet);
     return entry;
 },
     };
