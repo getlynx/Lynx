@@ -109,7 +109,7 @@ public:
         consensus.HardForkRule2LowerLimitMinBalance = 1000*COIN;
         consensus.HardForkRule2UpperLimitMinBalance = 100000000*COIN;
         consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.nPowTargetTimespan = 1 * 60 * 60; // KittehCoin: retarget every 1 hours
+        consensus.nPowTargetTimespan = 1 * 60 * 60; // Lynx: retarget every 1 hours
         consensus.PowTargetSpacingV1 = 30;
         consensus.PowTargetSpacingV2 = 60;
         consensus.PowTargetSpacingV3 = 30;
@@ -257,7 +257,7 @@ public:
         consensus.HardForkRule2LowerLimitMinBalance = 0.001*COIN;
         consensus.HardForkRule2UpperLimitMinBalance = 100000000*COIN;
         consensus.powLimit = uint256S("000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.nPowTargetTimespan = 1 * 60 * 60; // // KittehCoin: retarget every 1 hours
+        consensus.nPowTargetTimespan = 1 * 60 * 60; // // Lynx: retarget every 1 hours
         consensus.PowTargetSpacingV1 = 30;
         consensus.PowTargetSpacingV2 = 60;
         consensus.PowTargetSpacingV3 = 30;
