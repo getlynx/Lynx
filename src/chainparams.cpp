@@ -166,6 +166,11 @@ public:
         vSeeds.emplace_back("node03.getlynx.io");
         vSeeds.emplace_back("node04.getlynx.io");
         vSeeds.emplace_back("node05.getlynx.io");
+        vSeeds.emplace_back("node06.getlynx.io");
+        vSeeds.emplace_back("node07.getlynx.io");
+        vSeeds.emplace_back("node08.getlynx.io");
+        vSeeds.emplace_back("node09.getlynx.io");
+        vSeeds.emplace_back("node10.getlynx.io");
         //vSeeds.emplace_back("node05.getlynx.io", true);
         //vSeeds.emplace_back("node05.getlynx.io", false);
 
@@ -196,11 +201,12 @@ public:
             (  1500000, uint256S("0xf56d06f7024fad702ef37a462a8124c4176022b173c3fadb83e8ba5a52e5ee71"))
             (  2000000, uint256S("0x3ef0c9dbf7ef9b18a72b0e1abed2a7fa8f5993e5cb5d42a626a6007916a02a4d"))
             (  2500000, uint256S("0x4c32be723ec9613b5f948ade387f97e5ebe849e199b3f86b0ff9c84df5fe178c"))
-            (  2907396, uint256S("0xa40cccfa60a985673a6f351bd1e2957cdc3ecdaa744cf8b8406aa9ebdd914574"))
-            (  2907397, uint256S("0x6f8282b369220d31a032722cb701c3c2c52045de094438ebae845f8016a8cc5c"))
-            (  2907398, uint256S("0x40b6cb88c9b93079eda8d304b5725f5332ce1b9fa4a7121eef939a22784a2ce7"))
-            (  2907399, uint256S("0x061616ac5cc30cc65aeff5407cb76d331826e58d3562ebf30eae84d4506766f1"))
-            (  2907400, uint256S("0xbf095b19ea7b007a8ccf10cc0fc8121cf68dd4c52654b598227e50af386dc792"))
+            (  2979995, uint256S("0x6e53631b96a2b7e23dfdc5663160ab3ae911746742a81165d4c76b8120ea83c7"))
+            (  2979996, uint256S("0x1c2b445f8f84e107048073c160830633c07b5631b5dac210330a2049125d92cc"))
+            (  2979997, uint256S("0x98804618bd3e0774ba2e1afee66caa14d701beec6b7ca777f6ee063d89db356b"))
+            (  2979998, uint256S("0x202fe10ea097dff44c45485e244628c5cd5a4c95a05eb12109ad5b411a0996be"))
+            (  2979999, uint256S("0x89028ca0217b99d4d751301a9d5392a4ee5adbfe42b297f45ca0c246dac40d28"))
+            (  2980000, uint256S("0x7bd8933773f1c24ec909bbdf88f45fd5138faaf2d57a46e1b070e6a9b5ebdd65"))
         };
 
         chainTxData = ChainTxData{
