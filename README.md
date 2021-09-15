@@ -1,5 +1,7 @@
 # [Lynx](https://getlynx.io) Cryptocurrency Core
 
+![Lynx logo](https://getlynx.io/wp-content/uploads/2020/08/LYNX_CMYK_3COLOR_LOCKUP_HORIZ.png)
+
 ## What is Lynx?
 
 Lynx is a secure cryptocurrency with fast transaction speeds and low-transaction fees. It’s also eco-friendly & easy-to-use. In 2017, our team upgraded and rebranded an existing coin (MEOW) as Lynx. How? We successfully forked Litecoin and ported the [Kittehcoin](https://kittehcoin.io) blockchain history to it. This gives Lynx all the benefits of Litecoin with the full transaction history of Kittehcoin. These upgrades fixed the flaws in the original coin and revived its community of users. It’s cryptocurrency from the past; redesigned for the future.
