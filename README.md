@@ -36,7 +36,7 @@ Lynx is a cryptocurrency from the past re-designed for the future. We designed L
 
 ## Where to download desktop wallets?
 
-[https://getlynx.io/downloads/](https://getlynx.io/downloads/)
+[https://getlynx.io/#wallets/](https://getlynx.io/)
 
 ## License
 
