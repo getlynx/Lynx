@@ -1,6 +1,6 @@
 # [Lynx](https://getlynx.io) Cryptocurrency Core
 
-![Lynx logo](https://getlynx.io/wp-content/uploads/2020/08/LYNX_CMYK_3COLOR_LOCKUP_HORIZ.png)
+![Lynx logo](https://get.clevver.org/c9ffb5aa80caf0b83f43ea6926ec7834b9bfafe83d9d04a2696874f36b5ee66e.png)
 
 ## What is Lynx?
 
@@ -32,7 +32,7 @@ Lynx is a cryptocurrency from the past re-designed for the future. We designed L
 
 ## Mining for non-techies? (watch the video)
 
-[Let's get some things straight first!]([https://docs.getlynx.io/lynx-core/mining))
+[Let's get some things straight first!]([https://docs.getlynx.io/lynx-core/mining)
 
 ## Where to download desktop wallets?
 
