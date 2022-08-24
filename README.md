@@ -32,11 +32,11 @@ Lynx is a cryptocurrency from the past re-designed for the future. We designed L
 
 ## Mining for non-techies? (watch the video)
 
-[https://getlynx.io/can-non-techies-mine-lynx-crypto/](https://getlynx.io/can-non-techies-mine-lynx-crypto/)
+[Let's get some things straight first!]([https://docs.getlynx.io/lynx-core/mining))
 
 ## Where to download desktop wallets?
 
-[https://getlynx.io/#wallets/](https://getlynx.io/)
+[https://getlynx.io/](https://getlynx.io/#wallets/)
 
 ## License
 
