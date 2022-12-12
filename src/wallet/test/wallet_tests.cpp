@@ -961,7 +961,7 @@ public:
  */
 BOOST_FIXTURE_TEST_CASE(wallet_sync_tx_invalid_state_test, TestingSetup)
 {
-    CWallet wallet(m_node.chain.get(), "", std::make_unique<FailDatabase>());
+    CWallet wallet(m_node.chain.get(), "", CreateMockableWalletDatabase());
     {
         LOCK(wallet.cs_wallet);
         wallet.SetWalletFlag(WALLET_FLAG_DESCRIPTORS);
@@ -1008,7 +1008,7 @@ BOOST_FIXTURE_TEST_CASE(wallet_sync_tx_invalid_state_test, TestingSetup)
     // 1) Make db always fail
     // 2) Try to add a transaction that spends the previously created transaction and
     //    verify that we are not moving forward if the wallet cannot store it
-    static_cast<FailDatabase&>(wallet.GetDatabase()).m_pass = false;
+    GetMockableDatabase(wallet).m_pass = false;
     mtx.vin.clear();
     mtx.vin.push_back(CTxIn(good_tx_id, 0));
     BOOST_CHECK_EXCEPTION(wallet.transactionAddedToMempool(MakeTransactionRef(mtx)),
