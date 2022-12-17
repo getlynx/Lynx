@@ -221,13 +221,18 @@ std::shared_ptr<CWallet> SetupDescriptorsWallet(interfaces::Node& node, TestChai
     WalletDescriptor w_desc(std::move(desc), 0, 0, 1, 1);
     if (!wallet->AddWalletDescriptor(w_desc, provider, "", false)) assert(false);
     CTxDestination dest = GetDestinationForKey(test.coinbaseKey.GetPubKey(), wallet->m_default_address_type);
+<<<<<<< HEAD
     wallet->SetAddressBook(dest, "", wallet::AddressPurpose::RECEIVE);
+=======
+    wallet->SetAddressBook(dest, "", "receive");
+>>>>>>> 2f76ac0383 (test,gui: decouple chain and wallet initialization from test case)
     wallet->SetLastBlockProcessed(105, WITH_LOCK(node.context()->chainman->GetMutex(), return node.context()->chainman->ActiveChain().Tip()->GetBlockHash()));
     SyncUpWallet(wallet, node);
     wallet->SetBroadcastTransactions(true);
     return wallet;
 }
 
+<<<<<<< HEAD
 struct MiniGUI {
 public:
     SendCoinsDialog sendCoinsDialog;
@@ -254,6 +259,8 @@ public:
 
 };
 
+=======
+>>>>>>> 2f76ac0383 (test,gui: decouple chain and wallet initialization from test case)
 //! Simple qt wallet tests.
 //
 // Test widgets can be debugged interactively calling show() on them and
@@ -391,6 +398,7 @@ void TestGUI(interfaces::Node& node, const std::shared_ptr<CWallet>& wallet)
     QCOMPARE(walletModel.wallet().getAddressReceiveRequests().size(), size_t{0});
 }
 
+<<<<<<< HEAD
 void TestGUIWatchOnly(interfaces::Node& node, TestChain100Setup& test)
 {
     const std::shared_ptr<CWallet>& wallet = SetupLegacyWatchOnlyWallet(node, test);
@@ -441,6 +449,8 @@ void TestGUIWatchOnly(interfaces::Node& node, TestChain100Setup& test)
     QVERIFY(DecodeRawPSBT(psbt, MakeByteSpan(*decoded_psbt), err));
 }
 
+=======
+>>>>>>> 2f76ac0383 (test,gui: decouple chain and wallet initialization from test case)
 void TestGUI(interfaces::Node& node)
 {
     // Set up wallet and chain with 105 blocks (5 mature blocks for spending).
@@ -455,10 +465,13 @@ void TestGUI(interfaces::Node& node)
     // "Full" GUI tests, use descriptor wallet
     const std::shared_ptr<CWallet>& desc_wallet = SetupDescriptorsWallet(node, test);
     TestGUI(node, desc_wallet);
+<<<<<<< HEAD
 
     // Legacy watch-only wallet test
     // Verify PSBT creation.
     TestGUIWatchOnly(node, test);
+=======
+>>>>>>> 2f76ac0383 (test,gui: decouple chain and wallet initialization from test case)
 }
 
 } // namespace
