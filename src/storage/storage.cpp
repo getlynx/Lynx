@@ -134,7 +134,8 @@ bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
     start = clock ();    
 #endif
 
-        if (!ReadBlockFromDisk(block, pindex, chainman.GetConsensus())) {
+        // if (!ReadBlockFromDisk(block, pindex, chainman.GetConsensus())) {
+        if (!chainman.m_blockman.ReadBlockFromDisk(block, *pindex)) {
             return false;
         }
 
@@ -480,7 +481,8 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
         pindex = active_chain[height];
 
         // Get block
-        if (!ReadBlockFromDisk(block, pindex, chainman.GetConsensus())) {
+        // if (!ReadBlockFromDisk(block, pindex, chainman.GetConsensus())) {
+        if (!chainman.m_blockman.ReadBlockFromDisk(block, *pindex)) {
             return false;
         }
 
@@ -890,7 +892,8 @@ bool scan_blocks_for_specific_uuid (ChainstateManager& icsmChainStateManager, st
 #endif
 
         // Read block from disk
-        if (!ReadBlockFromDisk(blkBlock, bliBlockIndex, icsmChainStateManager.GetConsensus())) {
+        // if (!ReadBlockFromDisk(blkBlock, bliBlockIndex, icsmChainStateManager.GetConsensus())) {
+        if (!icsmChainStateManager.m_blockman.ReadBlockFromDisk(blkBlock, *bliBlockIndex)) {
             return false;
         }
 
