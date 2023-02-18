@@ -37,7 +37,7 @@
 #include <util/system.h>
 
 using namespace wallet;
-using node::ReadBlockFromDisk;
+// using node::ReadBlockFromDisk;
 
 // Staking state, set at daemon startup time
 extern bool gblnDisableStaking;
