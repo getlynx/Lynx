@@ -124,8 +124,9 @@
 #include <zmq/zmqrpc.h>
 #endif
 
-using interfaces::WalletLoader;
+// using interfaces::WalletLoader;
 
+using kernel::DEFAULT_STOPAFTERBLOCKIMPORT;
 using kernel::DumpMempool;
 using kernel::ValidationCacheSizes;
 
@@ -135,7 +136,6 @@ using node::CacheSizes;
 using node::CalculateCacheSizes;
 using node::DEFAULT_PERSIST_MEMPOOL;
 using node::DEFAULT_PRINTPRIORITY;
-using node::DEFAULT_STOPAFTERBLOCKIMPORT;
 using node::fReindex;
 using node::LoadChainstate;
 using node::MempoolPath;
@@ -1690,7 +1690,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     }
 
     chainman.m_load_block = std::thread(&util::TraceThread, "loadblk", [=, &chainman, &args] {
-        ThreadImport(chainman, vImportFiles, args, ShouldPersistMempool(args) ? MempoolPath(args) : fs::path{});
+        ThreadImport(chainman, vImportFiles, ShouldPersistMempool(args) ? MempoolPath(args) : fs::path{});
     });
 
     // Wait for genesis block to be processed
