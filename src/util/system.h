@@ -3,6 +3,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+// #ifndef BITCOIN_COMMON_ARGS_H
+// #define BITCOIN_COMMON_ARGS_H
+
 /**
  * Server/client environment: argument handling, config file parsing,
  * thread wrappers, startup time
@@ -23,6 +26,15 @@
 #include <util/settings.h>
 #include <util/time.h>
 
+
+
+// bitcoin args.h
+#include <iosfwd>
+#include <list>
+//
+
+
+
 #include <any>
 #include <map>
 #include <optional>
@@ -35,6 +47,9 @@
 
 class ArgsManager;
 class UniValue;
+
+// bitcoin
+// fs::path GetConfigFile(const ArgsManager& args, const fs::path& configuration_file_path);
 
 // Application startup time (used for uptime calculation)
 int64_t GetStartupTime();
@@ -193,6 +208,7 @@ protected:
     /**
      * Return config file path (read-only)
      */
+
     fs::path GetConfigFilePath() const;
     [[nodiscard]] bool ReadConfigFiles(std::string& error, bool ignore_invalid_keys = false);
 
@@ -350,7 +366,7 @@ protected:
      * @return ChainType::MAIN string by default; raises runtime error if an
      * invalid combination is given.
      */
-    std::string GetChainName() const;
+    std::string GetChainTypeString() const;
 
     /**
      * Add argument
