@@ -111,7 +111,8 @@ FUZZ_TARGET(utxo_total_supply)
     }
     current_block->hashMerkleRoot = BlockMerkleRoot(*current_block);
     assert(!MineBlock(node, current_block).IsNull());
-    circulation += GetBlockSubsidy(ActiveHeight(), Params().GetConsensus());
+    // circulation += GetBlockSubsidy(ActiveHeight(), Params().GetConsensus());
+    circulation += GetBlockSubsidy(ActiveHeight(), Params().GetConsensus(), uint256());
 
     assert(ActiveHeight() == 1);
     UpdateUtxoStats();
@@ -143,7 +144,8 @@ FUZZ_TARGET(utxo_total_supply)
 
                 const auto prev_utxo_stats = utxo_stats;
                 if (was_valid) {
-                    circulation += GetBlockSubsidy(ActiveHeight(), Params().GetConsensus());
+                    // circulation += GetBlockSubsidy(ActiveHeight(), Params().GetConsensus());
+                    circulation += GetBlockSubsidy(ActiveHeight(), Params().GetConsensus(), uint256());
 
                     if (duplicate_coinbase_height == ActiveHeight()) {
                         // we mined the duplicate coinbase
