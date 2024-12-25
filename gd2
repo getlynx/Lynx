@@ -1,0 +1,533 @@
+diff --git a/src/opfile/src/encode.cpp b/src/opfile/src/encode.cpp
+index 2d30f30a6..ccd132ee7 100644
+--- a/src/opfile/src/encode.cpp
++++ b/src/opfile/src/encode.cpp
+@@ -1,5 +1,7 @@
+ #include <iomanip>
+ 
++#include <logging.h>
++
+ #include "protocol.h"
+ #include "util.h"
+ 
+@@ -11,6 +13,7 @@ bool file_to_hexchunks(std::string filepath, int& protocol, int& error_level, in
+ 
+     std::string extension;
+     if (extract_file_extension(filepath, extension)) {
++
+         // we detected an extension we can store
+         protocol = 1;
+     }
+@@ -41,7 +44,9 @@ bool file_to_hexchunks(std::string filepath, int& protocol, int& error_level, in
+ 
+     // protocol 01 appends 4 byte extension to filestream
+     if (protocol == 1) {
++
+         sprintf(buffer+filelen, "%s", extension.c_str());
++
+     }
+ 
+     int chunk = 0;
+@@ -75,7 +80,8 @@ bool file_to_hexchunks(std::string filepath, int& protocol, int& error_level, in
+     return true;
+ }
+ 
+-bool build_chunks_auth_header(std::string header, std::vector<std::string>& encoded_chunks) {
++//bool build_chunks_auth_header(std::string header, std::vector<std::string>& encoded_chunks) {
++bool build_chunks_auth_header(std::string header, std::vector<std::string>& encoded_chunks, int& error_level) {
+ 
+     // we use chunknum 0 to store the authdata, signified by chunklen 0
+     std::string authheader = header;
+@@ -86,18 +92,32 @@ bool build_chunks_auth_header(std::string header, std::vector<std::string>& enco
+     sha256_hash_hex(authheader.c_str(), checkhash, authheader.size());
+     checkhash[OPENCODING_CHECKSUM*4] = 0;
+ 
++    //LogPrint (BCLog::POS, "authUserKey %s\n", authUserKey);
++
+     CKey key = DecodeSecret(authUserKey);
+     if (!key.IsValid()) {
++        error_level = ERR_NOAUTHENTICATION;
+         return false;
+     }
+ 
+     std::vector<unsigned char> signature;
+     uint256 authhash = uint256S(std::string(checkhash));
+     if (!key.SignCompact(authhash, signature)) {
++        //error_level = ERR_BADSIG;
+         return false;
+     }
+ 
+     authheader += HexStr(signature);
++
++    LogPrint (BCLog::POS, "HEADER CHUNK\n");
++    LogPrint (BCLog::POS, "magic protocol uuid chunk_length magic-protocol-uuid-chunk_length-hashed-signed\n");
++    LogPrint (BCLog::POS, "%s %s %s %s %s\n",
++      authheader.substr( 0, OPENCODING_MAGICLEN*2),
++      authheader.substr( OPENCODING_MAGICLEN*2, OPENCODING_VERSIONLEN*2),
++      authheader.substr(OPENCODING_MAGICLEN*2+OPENCODING_VERSIONLEN*2, OPENCODING_UUID*2),
++      authheader.substr(OPENCODING_MAGICLEN*2+OPENCODING_VERSIONLEN*2+OPENCODING_UUID*2, OPENCODING_CHUNKLEN*2),
++      authheader.substr(OPENCODING_MAGICLEN*2+OPENCODING_VERSIONLEN*2+OPENCODING_UUID*2+OPENCODING_CHUNKLEN*2, header.length()-OPENCODING_MAGICLEN*2+OPENCODING_VERSIONLEN*2+OPENCODING_UUID*2+OPENCODING_CHUNKLEN*2));
++
+     encoded_chunks.push_back(authheader);
+ 
+     return true;
+@@ -112,7 +132,8 @@ bool build_chunks_with_headers(std::pair<std::string, std::string>& putinfo, int
+ 
+     filepath = putinfo.first;
+     customuuid = putinfo.second;
+-    validcustom = customuuid.size() == OPENCODING_UUID;
++
++    validcustom = customuuid.size() == OPENCODING_UUID*2;
+ 
+     //! start off using protocol 00, unless we detect an extension
+     protocol = 0;
+@@ -126,7 +147,8 @@ bool build_chunks_with_headers(std::pair<std::string, std::string>& putinfo, int
+     header += protocol == 1 ? OPENCODING_VERSION[1] : OPENCODING_VERSION[0];
+     header += validcustom ? customuuid : generate_uuid(OPENCODING_UUID);
+ 
+-    if (!build_chunks_auth_header(header, encoded_chunks)) {
++    //if (!build_chunks_auth_header(header, encoded_chunks)) {
++    if (!build_chunks_auth_header(header, encoded_chunks, error_level)) {
+         return false;
+     }
+ 
+@@ -139,12 +161,35 @@ bool build_chunks_with_headers(std::pair<std::string, std::string>& putinfo, int
+         char checkhash[OPENCODING_CHECKSUM*4];
+         memset(checkhash, 0, sizeof(checkhash));
+         sha256_hash_hex(data_chunk.c_str(), checkhash, data_chunk.size());
++
+         checkhash[OPENCODING_CHECKSUM*2] = 0;
+ 
+         header2 += std::string(checkhash);
++
+         header2 += get_len_as_hex(chunknum, OPENCODING_CHUNKNUM);
++
+         header2 += get_len_as_hex(total_chunks, OPENCODING_CHUNKTOTAL);
+ 
++        LogPrint (BCLog::POS, "\n");
++        LogPrint (BCLog::POS, "DATA CHUNK %d\n", chunknum);
++        LogPrint (BCLog::POS, "magic protocol uuid\n");
++        LogPrint (BCLog::POS, "%s %s %s\n",
++          header.substr( 0, OPENCODING_MAGICLEN*2),
++          header.substr( OPENCODING_MAGICLEN*2, OPENCODING_VERSIONLEN*2),
++          header.substr( OPENCODING_MAGICLEN*2+OPENCODING_VERSIONLEN*2, OPENCODING_UUID*2));
++
++        LogPrint (BCLog::POS, "\n");
++        LogPrint (BCLog::POS, "length data_hash chunk_number total_chunks\n");
++        LogPrint (BCLog::POS, "%s %s %s %s\n",
++          header2.substr( 0, OPENCODING_CHUNKLEN*2),
++          header2.substr( OPENCODING_CHUNKLEN*2, OPENCODING_CHECKSUM*2),
++          header2.substr( OPENCODING_CHUNKLEN*2+OPENCODING_CHECKSUM*2, OPENCODING_CHUNKNUM*2),
++          header2.substr( OPENCODING_CHUNKLEN*2+OPENCODING_CHECKSUM*2+OPENCODING_CHUNKNUM*2, OPENCODING_CHUNKTOTAL*2));
++
++        LogPrint (BCLog::POS, "\n");
++        LogPrint (BCLog::POS, "data\n");
++        LogPrint (BCLog::POS, "%s\n", data_chunk);
++
+         encoded_chunk = header + header2 + data_chunk;
+         encoded_chunks.push_back(encoded_chunk);
+ 
+@@ -155,6 +200,10 @@ bool build_chunks_with_headers(std::pair<std::string, std::string>& putinfo, int
+         ++chunknum;
+     }
+ 
++//LogPrintf ("bail from build_chunks_with_headers\n");
++//error_level = ERR_NOWALLET;
++//return false;    
++
+     if (debug) printf("\n");
+ 
+     return true;
+diff --git a/src/opfile/src/protocol.h b/src/opfile/src/protocol.h
+index 10e4a5cb6..b47e4c12d 100644
+--- a/src/opfile/src/protocol.h
++++ b/src/opfile/src/protocol.h
+@@ -12,7 +12,7 @@ const int OPRETURN_PER_TX = 256;
+ const int OPENCODING_CHUNKMAX = 512;
+ const int OPENCODING_MAGICLEN = 4;
+ const int OPENCODING_VERSIONLEN = 1;
+-const int OPENCODING_UUID = 16;
++const int OPENCODING_UUID = 32;
+ const int OPENCODING_CHUNKLEN = 2;
+ const int OPENCODING_CHECKSUM = 16;
+ const int OPENCODING_CHUNKNUM = 4;
+@@ -48,6 +48,8 @@ enum {
+      ERR_FILEREAD,
+      ERR_FILEWRITE,
+      //wallet
++     ERR_NOAUTHENTICATION,
++     ERR_BADSIG,
+      ERR_NOWALLET,
+      ERR_LOWINPUTS,
+      ERR_TXGENERATE,
+diff --git a/src/opfile/src/util.cpp b/src/opfile/src/util.cpp
+index 53ebbe0b5..679ed15a5 100644
+--- a/src/opfile/src/util.cpp
++++ b/src/opfile/src/util.cpp
+@@ -11,6 +11,8 @@
+ 
+ #include "protocol.h"
+ 
++#include "logging.h"
++
+ #include <openssl/sha.h>
+ 
+ unsigned char binvalue(const char v) {
+diff --git a/src/pos/minter.cpp b/src/pos/minter.cpp
+index 993099af2..5ea098856 100644
+--- a/src/pos/minter.cpp
++++ b/src/pos/minter.cpp
+@@ -416,6 +416,7 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
+                 }
+             } else {
+                 int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(nBestHeight / 2));
++
+                 LOCK(pwallet->cs_wallet);
+                 if (pwallet->m_greatest_txn_depth < nRequiredDepth - 4) {
+                     pwallet->m_is_staking = wallet::CWallet::NOT_STAKING_DEPTH;
+diff --git a/src/storage/auth.cpp b/src/storage/auth.cpp
+index 7f3cde419..14a043adf 100644
+--- a/src/storage/auth.cpp
++++ b/src/storage/auth.cpp
+@@ -62,11 +62,29 @@ bool set_auth_user(std::string& privatewif)
+     uint160 hash160(Hash160(pubkey));
+     authUser = hash160;
+ 
++    LogPrint (BCLog::POS, "\n authUser %s \n", authUser.ToString());
++
+     // Dump authUser to log
+     LogPrintf ("setauth public key %s\n", authUser.ToString());
++
++    LogPrint (BCLog::POS, "\n");
++    LogPrint (BCLog::POS, "NOTE THE FOLLOWING PROJECT PROTOCOL FOR ENABLING USER PUTFILE FUNCTIONALITY (set_auth_user)\n");
++    LogPrint (BCLog::POS, "1) The super-user will lynx-cli setauth with the private motherkey.\n");
++    LogPrint (BCLog::POS, "The above will succeed because the public motherkey is added to global variable authList at daemon startup.\n");
++    LogPrint (BCLog::POS, "2) The super-user will lynx-cli setauth with the user privatekey.\n");
++    LogPrint (BCLog::POS, "The above will fail because the user publickey does not exist in authList.\n");
++    LogPrint (BCLog::POS, "However, the user publickey associated with the user privatekey will be sent to the log.\n");
++    LogPrint (BCLog::POS, "3) The super-user will lynx-cli addauth with the user publickey from the log.\n");
++    LogPrint (BCLog::POS, "Now the user publickey exists in authList\n");
++    LogPrint (BCLog::POS, "4) The user will lynx-cli setauth with the user privatekey.\n");
++    LogPrint (BCLog::POS, "The above will succeed because the user publickey exists in authList\n");
++    LogPrint (BCLog::POS, "Now, the user is authenticated and putfile functionality is enabled for that user.\n");
++    LogPrint (BCLog::POS, "\n");
+     
+     authUserKey = privatewif;
+ 
++    LogPrint (BCLog::POS, "\n authUserKey %s \n", authUserKey);
++
+     return true;
+ }
+ 
+@@ -335,11 +353,36 @@ bool generate_auth_payload(std::string& payload, int& type, uint32_t& time, std:
+ 
+     payload += HexStr(signature);
+ 
++    LogPrint (BCLog::POS, "\n");
++    LogPrint (BCLog::POS, "ADDAUTH DATA STRUCTURE (generate_auth_payload)\n");
++    LogPrint (BCLog::POS, "magic type time pubkey magic-type-time-pubkey-hashed-signed \n");
++    LogPrint (BCLog::POS, "%s %s %s %s %s\n",
++      payload.substr( 0, OPENCODING_MAGICLEN*2),
++      payload.substr( OPENCODING_MAGICLEN*2, OPAUTH_OPERATIONLEN*2),
++      payload.substr( OPENCODING_MAGICLEN*2+OPAUTH_OPERATIONLEN*2, OPAUTH_TIMELEN*2),
++      payload.substr( OPENCODING_MAGICLEN*2+OPAUTH_OPERATIONLEN*2+OPAUTH_TIMELEN*2, OPAUTH_HASHLEN*2),
++      payload.substr( 0, payload.length()-(OPENCODING_MAGICLEN*2+OPAUTH_OPERATIONLEN*2+OPAUTH_TIMELEN*2+OPAUTH_HASHLEN*2)));
++    LogPrint (BCLog::POS, "\n");
++
++
++
++
+     return true;
+ }
+ 
+ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload)
+ {
++
++    LogPrint (BCLog::POS, "\n");
++    LogPrint (BCLog::POS, "BUILD ADDAUTH TRANSACTION (generate_auth_transaction)\n");
++    LogPrint (BCLog::POS, "The addauth transaction contains:\n");
++    LogPrint (BCLog::POS, "1) An input transaction from which to pay for the addauth transaction.\n");
++    LogPrint (BCLog::POS, "2) An output for making change. \n");
++    LogPrint (BCLog::POS, "3) An output containing the addauth payload, prepended with 106 as a single byte.\n");
++    LogPrint (BCLog::POS, "On daemon startup, a blockchain scan for addauth transactions is done.\n");
++    LogPrint (BCLog::POS, "For each addauth transaction encountered, a public key is added to global variable authList.\n");
++    LogPrint (BCLog::POS, "\n");
++
+     auto vpwallets = GetWallets(wallet_context);
+     size_t nWallets = vpwallets.size();
+     if (nWallets < 1) {
+@@ -355,14 +398,26 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
+     if (setCoins.size() == 0) {
+         return false;
+     }
+-
++ 
+     // get vin/vout
+     std::set<std::pair<const CWalletTx*, unsigned int>>::iterator it = setCoins.begin();
+     COutPoint out{it->first->tx->GetHash(), it->second};
+     CTxIn txIn(out);
++ 
++LogPrint (BCLog::POS, "Output scriptPubKey %s\n", HexStr(it->first->tx->vout[0].scriptPubKey).substr(0, 30));
++
+     CScript receiver = it->first->tx->vout[0].scriptPubKey;
++ 
++LogPrint (BCLog::POS, "Output scriptPubKey %s\n", HexStr(receiver).substr(0, 30));
++
+     CTxOut txOut(setValue, receiver);
+ 
++
++    LogPrint (BCLog::POS, "Input size %d\n", setCoins.size());
++    LogPrint (BCLog::POS, "Input hash %s\n", it->first->tx->GetHash().ToString());
++    LogPrint (BCLog::POS, "Input index %d\n", it->second);
++    LogPrint (BCLog::POS, "Output scriptPubKey %s\n", HexStr(receiver).substr(0, 30));
++
+     // build tx
+     tx.nVersion = CTransaction::CURRENT_VERSION;
+     tx.vin.push_back(txIn);
+@@ -384,12 +439,21 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
+         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
+         tx.vout[0].nValue -= nFee;
+ 
++        LogPrint (BCLog::POS, "\n");
++        LogPrint (BCLog::POS, "Input value in satoshis:  %llu\n", setValue);
++        LogPrint (BCLog::POS, "Transaction bytes: %d\n", nBytes);
++        LogPrint (BCLog::POS, "Transaction fee in satoshis: %llu\n", nFee);
++        LogPrint (BCLog::POS, "Change in satoshis: %llu\n", tx.vout[0].nValue);
++        LogPrint (BCLog::POS, "\n");
++
+         //! sign tx again with correct fee in place
+         if (!vpwallets[0]->SignTransaction(tx)) {
+             return false;
+         }
+ 
+-        //! commit to wallet and relay to network
++        //return false;
++
++        // commit to wallet and relay to network
+         CTransactionRef txRef = MakeTransactionRef(tx);
+         vpwallets[0]->CommitTransaction(txRef, {}, {});
+     }
+diff --git a/src/storage/rpc.cpp b/src/storage/rpc.cpp
+index 309066eec..cb2eb077d 100644
+--- a/src/storage/rpc.cpp
++++ b/src/storage/rpc.cpp
+@@ -65,6 +65,7 @@ static RPCHelpMan putfile()
+     if(!request.params[1].isNull()) {
+         put_uuid = request.params[1].get_str();
+     }
++
+     if (is_valid_uuid(put_uuid)) {
+         std::vector<std::string> uuid_found;
+         scan_blocks_for_uuids(*storage_chainman, uuid_found);
+@@ -293,10 +294,15 @@ static RPCHelpMan addauth()
+         type = 0;
+         time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+ 
++        LogPrint (BCLog::POS, "\n");
++        LogPrint (BCLog::POS, "time in seconds since the first second of 1970 (3600*24*365*54 ..): %d\n", time);
++
+         if (!generate_auth_payload(opreturn_payload, type, time, hash160)) {
+             return std::string("error-generating-authpayload");
+         }
+ 
++        //return std::string("failure dkdk");
++
+         if (!generate_auth_transaction(*storage_context, tx, opreturn_payload)) {
+             return std::string("error-generating-authtransaction");
+         }
+diff --git a/src/storage/storage.cpp b/src/storage/storage.cpp
+index 3a12ca5be..a32d17304 100644
+--- a/src/storage/storage.cpp
++++ b/src/storage/storage.cpp
+@@ -195,10 +195,25 @@ void estimate_coins_for_opreturn(CWallet* wallet, int& suitable_inputs)
+         }
+     }
+ 
+-    for (const auto& output : vCoins) {
++    LogPrint (BCLog::POS, "DETERMINE NUMBER OF TRANSACTIONS IN ACTIVE WALLET SUITABLE FOR PUTFILE TRANSACTIONS (estimate_coins_for_opreturn)\n");
++    LogPrint (BCLog::POS, "For a given putfile operation, each group of 256 chunks requires a separate transaction from the active wallet.\n");
++    LogPrint (BCLog::POS, "A given suitable transaction will be associated with lynx coins to be used to pay for the chunk storage.\n");
++    LogPrint (BCLog::POS, "A count of the transactions in the active wallet follow.\n");
++    LogPrint (BCLog::POS, "After that, the number of satoshis associated with each transaction are given, regardless of suitability.\n");
++    LogPrint (BCLog::POS, "Several things can make a transaction unsuitable (for instance, less than 100,000,000 satoshis).\n");
++    LogPrint (BCLog::POS, "Next, the number of suitable transactions is given.\n");
++    LogPrint (BCLog::POS, "Because a given transaction may become the input for a putfile transaction, suitable input is used interchangeably with suitable transaction.\n");
++    LogPrint (BCLog::POS, "Finally, the number of groups of 256 chunks is given\n");
++    
++    LogPrint (BCLog::POS, "\n");
++    LogPrint (BCLog::POS, "Number of transactions: %d\n", vCoins.size());    
+ 
++    for (const auto& output : vCoins) {
+         const auto& txout = output.txout;
+         {
++
++            LogPrint (BCLog::POS, "Satoshis: %d\n", output.txout.nValue);
++
+             LOCK(wallet->cs_wallet);
+ 
+             COutPoint kernel(output.outpoint);
+@@ -220,12 +235,13 @@ void estimate_coins_for_opreturn(CWallet* wallet, int& suitable_inputs)
+             if (output.txout.nValue < 1 * COIN) {
+                 continue;
+             }
+-
+-            //LogPrintf("%s %d %llu LYNX\n", wtx->GetHash().ToString(), output.outpoint.n, output.txout.nValue);
+-
+             ++suitable_inputs;
+         }
+     }
++
++    LogPrint (BCLog::POS, "Suitable inputs: %d\n", suitable_inputs);    
++    LogPrint (BCLog::POS, "\n");
++
+ }
+ 
+ bool select_coins_for_opreturn(CWallet* wallet, std::set<std::pair<const CWalletTx*, unsigned int>>& setCoinsRet, CAmount& valueRet)
+@@ -268,6 +284,8 @@ bool select_coins_for_opreturn(CWallet* wallet, std::set<std::pair<const CWallet
+             }
+ 
+             //LogPrintf("%s %d %llu LYNX\n", wtx->GetHash().ToString(), output.outpoint.n, output.txout.nValue);
++ 
++LogPrint (BCLog::POS, "Output scriptPubKey %s\n", HexStr(wtx->tx->vout[0].scriptPubKey).substr(0, 30));
+ 
+             setCoinsRet.insert(std::make_pair(wtx, output.outpoint.n));
+             valueRet = output.txout.nValue;
+@@ -281,6 +299,9 @@ bool select_coins_for_opreturn(CWallet* wallet, std::set<std::pair<const CWallet
+ 
+ bool generate_selfsend_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::vector<std::string>& opPayload)
+ {
++
++    LogPrint (BCLog::POS, "(generate_selfsend_transaction)\n");
++
+     auto vpwallets = GetWallets(wallet_context);
+     size_t nWallets = vpwallets.size();
+     if (nWallets < 1) {
+@@ -300,6 +321,9 @@ bool generate_selfsend_transaction(WalletContext& wallet_context, CMutableTransa
+     // get vin/vout
+     std::set<std::pair<const CWalletTx*, unsigned int>>::iterator it = setCoins.begin();
+     COutPoint out{it->first->tx->GetHash(), it->second};
++
++    LogPrint (BCLog::POS, "Input value in satoshis: %llu\n", setValue);
++
+     CTxIn txIn(out);
+     CScript receiver = it->first->tx->vout[0].scriptPubKey;
+     CTxOut txOut(setValue, receiver);
+@@ -327,15 +351,26 @@ bool generate_selfsend_transaction(WalletContext& wallet_context, CMutableTransa
+         unsigned int nBytes = GetSerializeSize(tx) + 32;
+         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
+ 
+-        //LogPrintf ("nFee %d\n", nFee);
++        LogPrint (BCLog::POS, "Transaction bytes: %d\n", nBytes);
++        LogPrint (BCLog::POS, "Transaction fee in satoshis: %llu\n", nFee);
+ 
+         tx.vout[0].nValue -= nFee;
+ 
++        LogPrint (BCLog::POS, "Change in satoshis: %llu\n", tx.vout[0].nValue);
++        LogPrint (BCLog::POS, "\n");
++        
+         //! sign tx again with correct fee in place
+         if (!vpwallets[0]->SignTransaction(tx)) {
+             return false;
+         }
+ 
++//
++// Harness: uncomment the following two lines to bail from 
++// putfile before committing to wallet and blockchain - MH
++//
++//LogPrintf ("bail from generate_selfsend_transaction\n");
++//return false;    
++
+         //! commit to wallet and relay to network
+         CTransactionRef txRef = MakeTransactionRef(tx);
+         vpwallets[0]->CommitTransaction(txRef, {}, {});
+diff --git a/src/storage/util.cpp b/src/storage/util.cpp
+index 2e60877ee..3d0bdb7a7 100644
+--- a/src/storage/util.cpp
++++ b/src/storage/util.cpp
+@@ -138,7 +138,7 @@ static bool is_hex_notation(std::string const& s)
+ 
+ bool is_valid_uuid(std::string& uuid)
+ {
+-    if (uuid.size() != OPENCODING_UUID) return false;
++    if (uuid.size() != OPENCODING_UUID*2) return false;
+     if (!is_hex_notation(uuid)) return false;
+     return true;
+ }
+diff --git a/src/storage/worker.cpp b/src/storage/worker.cpp
+index 575665f34..6352ff4ab 100644
+--- a/src/storage/worker.cpp
++++ b/src/storage/worker.cpp
+@@ -79,7 +79,8 @@ void perform_put_task(std::pair<std::string, std::string>& put_info, int& error_
+     int est_chunks = calculate_chunks_from_filesize(filelen);
+     estimate_coins_for_opreturn(vpwallets.front().get(), usable_inputs);
+ 
+-    //LogPrintf ("usable_inputs %d\n", usable_inputs);
++    LogPrint (BCLog::POS, "Number of groups of 256 chunks %d\n", est_chunks);
++    LogPrint (BCLog::POS, "\n");
+ 
+     // one usable input per batch of 256 chunks
+     if (usable_inputs < (est_chunks/256)) {
+@@ -95,6 +96,27 @@ void perform_put_task(std::pair<std::string, std::string>& put_info, int& error_
+         return;
+     }
+ 
++//LogPrintf ("harness return\n");
++//error_level = ERR_LOWINPUTS;
++//return;    
++
++    LogPrint (BCLog::POS, "\n");
++    LogPrint (BCLog::POS, "CREATE AND SUBMIT CHUNK TRANSACTIONS (perform_put_task)\n");
++    LogPrint (BCLog::POS, "For each group of 256 chunks, there will be one putfile transaction\n");
++    LogPrint (BCLog::POS, "For each putfile transaction, there will be one input, used to pay for the transaction.\n");
++    LogPrint (BCLog::POS, "For each putfile transaction, the first output will be the change from the input.\n");
++    LogPrint (BCLog::POS, "The change from the input is the value of the input minus the cost of chunk storage.\n");
++    LogPrint (BCLog::POS, "The cost of chunk storage is one satoshi per byte of transaction.\n");
++    LogPrint (BCLog::POS, "For each putfile transaction, there will be one output per chunk.\n");
++    LogPrint (BCLog::POS, "A chunk output output-script is the chunk prepended with 106 as a single byte.\n");
++    LogPrint (BCLog::POS, "Chunk outputs have a value of zero satoshis\n");
++    LogPrint (BCLog::POS, "\n");
++    LogPrint (BCLog::POS, "For each putfile transaction, the value of the input is given.\n");
++    LogPrint (BCLog::POS, "Next, the number of transaction bytes is given.\n");
++    LogPrint (BCLog::POS, "Next, the number of satoshis used to pay for the storage is given.\n");
++    LogPrint (BCLog::POS, "Finally, the amount of change from the input is given.\n");
++    LogPrint (BCLog::POS, "\n");
++
+     // create tx, sign and submit for each chunk
+     CMutableTransaction txChunk;
+     std::vector<std::string> batch_chunks;
+@@ -164,6 +186,8 @@ void thread_storage_worker()
+      "ERR_FILEREAD",
+      "ERR_FILEWRITE",
+      //wallet
++     "ERR_NOAUTHENTICATION",
++     "ERR_BADSIG",
+      "ERR_NOWALLET",
+      "ERR_LOWINPUTS",
+      "ERR_TXGENERATE",
+diff --git a/src/wallet/spend.cpp b/src/wallet/spend.cpp
+index 57f3785a3..fc83dd272 100644
+--- a/src/wallet/spend.cpp
++++ b/src/wallet/spend.cpp
+@@ -277,7 +277,6 @@ CoinsResult AvailableCoins(const CWallet& wallet,
+         }
+ 
+         bool tx_from_me = CachedTxIsFromMe(wallet, wtx, ISMINE_ALL);
+-
+         for (unsigned int i = 0; i < wtx.tx->vout.size(); i++) {
+             const CTxOut& output = wtx.tx->vout[i];
+             const COutPoint outpoint(wtxid, i);
+diff --git a/src/wallet/wallet.h b/src/wallet/wallet.h
+index ff8f2c3e9..c59562249 100644
+--- a/src/wallet/wallet.h
++++ b/src/wallet/wallet.h
+@@ -988,6 +988,10 @@ public:
+     CAmount nReserveBalance{0};
+     CAmount nStakeCombineThreshold;
+     CAmount nStakeSplitThreshold{COIN / 2};
++
++    //
++    // Uncomment the following line to rollback double staking transaction commit - MH
++    //CAmount nStakeSplitThreshold;
+     size_t nMaxStakeCombine = 3;
+     int64_t nLastCoinStakeSearchTime = 0;
+     mutable int m_greatest_txn_depth = 0;
