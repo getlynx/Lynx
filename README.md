@@ -11,4 +11,4 @@ The Lynx blockchain uses a Proof of Stake (PoS) consensus mechanism, which is mu
 
 In addition, Lynx is designed to keep your data accessible and secure for over 250 years. No matter what happens, you can count on your information being there when you need it.
 
-Overall, Lynx provides a reliable, sustainable, and long-lasting solution for storing your most important data on the blockchain. 
+Overall, Lynx provides a reliable, sustainable, and long-lasting solution for storing your most important data on the blockchain..
