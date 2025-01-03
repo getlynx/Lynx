@@ -5,10 +5,17 @@
 # For easier error trapping.
 set -e
 
+if pgrep -f "lynx" >/dev/null; then
+    lynx-cli stop
+    # Give it a moment to shut down gracefully
+    sleep 5
+    rm -rf /root/.lynx/debug.log
+fi
+
 date=$(date +%Y-%m-%d)
 
 # Format Lynx [CLI|GUI] v25.0.28 [Debian|Ubuntu] [11|12|X] [AMD|ARM]
-version="Lynx CLI v25.0.28 Ubuntu 22.04 LTS AMD"
+version="Lynx CLI v25.0.28 Debian 12 AMD"
 
 # Required <arch> argument from the list below. If not provided, defaults to "x86 Linux"
 
@@ -24,17 +31,17 @@ version="Lynx CLI v25.0.28 Ubuntu 22.04 LTS AMD"
 # aarch64-linux-gnu for Linux ARM 64 bit
 
 # Prep the target OS. This will set locale, update, upgrade and install needed packages for the task.
-echo "en_US.UTF-8 UTF-8" | tee -a /etc/locale.gen
-locale-gen en_US.UTF-8
-apt-get update -y && apt-get upgrade -y && apt-get dist-upgrade -y && apt-get autoremove -y
-[ "$arch" = "x86_64-pc-linux-gnu" ] && apt install build-essential make automake curl htop git libtool binutils bsdmainutils pkg-config python3 patch bison -y
-[ "$arch" = "arm-linux-gnueabihf" ] && apt install build-essential make automake curl htop git libtool g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf gperf pkg-config bison byacc -y
-[ "$arch" = "aarch64-linux-gnu" ] && apt install build-essential make automake curl htop git libtool g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf gperf pkg-config bison byacc -y
+#echo "en_US.UTF-8 UTF-8" | tee -a /etc/locale.gen
+#locale-gen en_US.UTF-8
+#apt-get update -y && apt-get upgrade -y && apt-get dist-upgrade -y && apt-get autoremove -y
+#[ "$arch" = "x86_64-pc-linux-gnu" ] && apt install build-essential make automake curl htop git libtool binutils bsdmainutils pkg-config python3 patch bison -y
+#[ "$arch" = "arm-linux-gnueabihf" ] && apt install build-essential make automake curl htop git libtool g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf gperf pkg-config bison byacc -y
+#[ "$arch" = "aarch64-linux-gnu" ] && apt install build-essential make automake curl htop git libtool g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf gperf pkg-config bison byacc -y
 
 
 #rm -rf /root/Lynx*
-cd /root
-git clone https://github.com/getlynx/Lynx.git
+#cd /root
+#git clone https://github.com/getlynx/Lynx.git
 cd /root/Lynx/depends
 
 make HOST="$arch"
@@ -45,8 +52,12 @@ make -j4
 
 sleep 5
 
-apt-get install zip -y
+#apt-get install zip -y
 cd /root/Lynx/src/
+cp /root/Lynx/src/lynxd /usr/local/bin/.
+cp /root/Lynx/src/lynx-cli /usr/local/bin/.
+cp /root/Lynx/src/lynx-tx /usr/local/bin/.
+
 zip "$date $version.zip" lynxd lynx-cli lynx-tx
 mv "/root/Lynx/src/$date $version.zip" /root
 

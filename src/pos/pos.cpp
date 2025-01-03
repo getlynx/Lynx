@@ -98,66 +98,96 @@ uint256 ComputeStakeModifier(const CBlockIndex* pindexPrev, const uint256& kerne
 }
 
 /**
- * BlackCoin kernel protocol
- * coinstake must meet hash target according to the protocol:
- * kernel (input 0) must meet the formula
- *     hash(nStakeModifier + txPrev.block.nTime + txPrev.nTime + txPrev.vout.hash + txPrev.vout.n + nTime) < bnTarget * nWeight
- * this ensures that the chance of getting a coinstake is proportional to the
- * amount of coins one owns.
- * The reason this hash is chosen is the following:
- *   nStakeModifier: scrambles computation to make it very difficult to precompute
- *                   future proof-of-stake
- *   txPrev.block.nTime: prevent nodes from guessing a good timestamp to
- *                       generate transaction for future advantage,
- *                       obsolete since v3
- *   txPrev.nTime: slightly scrambles computation
- *   txPrev.vout.hash: hash of txPrev, to reduce the chance of nodes
- *                     generating coinstake at the same time
- *   txPrev.vout.n: output number of txPrev, to reduce the chance of nodes
- *                  generating coinstake at the same time
- *   nTime: current timestamp
- *   block/tx hash should not be used here as they can be generated in vast
- *   quantities so as to generate blocks faster, degrading the system back into
- *   a proof-of-work situation.
+ * BlackCoin Proof-of-Stake Kernel Validation
+ * 
+ * This implements the core validation logic for BlackCoin's proof-of-stake protocol.
+ * In proof-of-stake, instead of solving computational puzzles (like in Bitcoin),
+ * participants can create new blocks proportional to the coins they hold.
+ *
+ * The protocol uses this formula to validate stake attempts:
+ *     hash(nStakeModifier + txPrev.block.nTime + txPrev.nTime + 
+ *          txPrev.vout.hash + txPrev.vout.n + nTime) < bnTarget * nWeight
+ *
+ * Security measures in the hash calculation:
+ * 1. nStakeModifier: A changing value that prevents future stake calculations
+ *                    This stops attackers from pre-computing future stakes
+ *
+ * 2. Transaction times: Multiple timestamps are included to prevent manipulation
+ *    - txPrev.block.nTime: Previous block time (obsolete since v3)
+ *    - txPrev.nTime: Transaction time adds randomization
+ *    - nTime: Current time ensures freshness
+ *
+ * 3. Transaction details: Unique transaction identifiers reduce collisions
+ *    - txPrev.vout.hash: Previous transaction hash
+ *    - txPrev.vout.n: Output index in previous transaction
+ *
+ * Design Note: Block and transaction hashes are intentionally not used since they
+ * can be generated rapidly, which would effectively turn this back into a 
+ * proof-of-work system.
  */
-bool CheckStakeKernelHash(const CBlockIndex* pindexPrev,
-    uint32_t nBits, uint32_t nBlockFromTime,
-    CAmount prevOutAmount, const COutPoint& prevout, uint32_t nTime,
-    uint256& hashProofOfStake, uint256& targetProofOfStake,
-    bool fPrintProofOfStake)
-{
-    // CheckStakeKernelHash
 
-    if (nTime < nBlockFromTime) { // Transaction timestamp violation
+bool CheckStakeKernelHash(
+    const CBlockIndex* pindexPrev,     // Previous block in the chain. Contains stake modifier and timing data
+    uint32_t nBits,                    // Current difficulty target in compact form. Controls how hard it is to find valid stakes
+    uint32_t nBlockFromTime,           // Timestamp of the previous block. Used for basic time ordering checks
+    CAmount prevOutAmount,             // Number of coins being staked. Affects probability of successful stake
+    const COutPoint& prevout,          // Reference to previous transaction output. Contains both transaction hash and index
+    uint32_t nTime,                    // Current block timestamp. Must be after previous block time
+    uint256& hashProofOfStake,         // Output: The calculated stake hash. Must be below target to be valid
+    uint256& targetProofOfStake,       // Output: Weighted target threshold. Adjusted by stake amount
+    bool fPrintProofOfStake)           // Enable detailed debug logging
+{
+
+    // 1. Basic timestamp validation
+    if (nTime < nBlockFromTime) {
+        // Ensure current time is after previous block time
         return error("%s: nTime violation", __func__);
     }
 
+    // 2. Calculate target difficulty
     arith_uint256 bnTarget;
     bool fNegative;
     bool fOverflow;
 
+    // Convert compact bits representation to full 256-bit target
     bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
     if (fNegative || fOverflow || bnTarget == 0) {
+        // Ensure target is valid (positive, not overflowed, non-zero)
         return error("%s: SetCompact failed.", __func__);
     }
 
-    // Weighted target
+    // 3. Weight target by stake amount
     int64_t nValueIn = prevOutAmount;
     arith_uint256 bnWeight = arith_uint256(nValueIn);
+    // The target is multiplied by the stake weight (coin amount)
+    // This implements the core proof-of-stake principle:
+    // - Larger stakes = larger target = higher chance of successful stake
+    // - Probability is directly proportional to stake size
     bnTarget *= bnWeight;
 
+    // Store weighted target for output
     targetProofOfStake = ArithToUint256(bnTarget);
 
+    // 4. Get stake modifier from previous block
     const uint256& nStakeModifier = pindexPrev->nStakeModifier;
     int nStakeModifierHeight = pindexPrev->nHeight;
     int64_t nStakeModifierTime = pindexPrev->nTime;
 
+    // 5. Build data stream for hash calculation
     CDataStream ss(SER_GETHASH, 0);
-    ss << nStakeModifier;
-    ss << nBlockFromTime << prevout.hash << prevout.n << nTime;
+    // Combine inputs to create a unique, unpredictable stake hash
+    // Order matters! This matches the protocol specification:
+    ss << nStakeModifier;              // Changes each block - prevents precomputation
+    ss << nBlockFromTime               // Previous block time - time ordering
+       << prevout.hash                 // Unique transaction ID - prevents duplicates
+       << prevout.n                    // Output index - adds uniqueness
+       << nTime;                       // Current time - ensures freshness
+    // Final hash must be below weighted target to be valid
     hashProofOfStake = Hash(ss);
 
+    // 6. Debug logging if enabled
     if (fPrintProofOfStake) {
+        // Log stake modifier details and hash computation inputs
         LogPrintf("%s: using modifier=%s at height=%d timestamp=%s\n",
             __func__, nStakeModifier.ToString(), nStakeModifierHeight,
             FormatISO8601DateTime(nStakeModifierTime));
@@ -167,12 +197,20 @@ bool CheckStakeKernelHash(const CBlockIndex* pindexPrev,
             hashProofOfStake.ToString());
     }
 
-    // Now check if proof-of-stake hash meets target protocol
+    // 7. Final proof-of-stake validation
+    // Convert hash to integer and compare against weighted target
+    // This check implements the core staking formula:
+    // hash < target * weight
+    // The larger your stake (weight), the larger the target,
+    // making it more likely for a hash to be valid
     if (UintToArith256(hashProofOfStake) > bnTarget) {
-        return false;
+        LogPrint (BCLog::POS, "Hash exceeds target - stake attempt invalid \n");
+        return false;  // Hash exceeds target - stake attempt invalid
     }
 
+    // 8. Additional debug logging
     if (LogAcceptCategory(BCLog::POS, BCLog::Level::Debug) && !fPrintProofOfStake) {
+        // Log successful validation details
         LogPrintf("%s: using modifier=%s at height=%d timestamp=%s\n",
             __func__, nStakeModifier.ToString(), nStakeModifierHeight,
             FormatISO8601DateTime(nStakeModifierTime));
@@ -182,67 +220,107 @@ bool CheckStakeKernelHash(const CBlockIndex* pindexPrev,
             hashProofOfStake.ToString());
     }
 
-    return true;
+    return true; // All validation checks passed
 }
 
-bool CheckProofOfStake(Chainstate& chain_state, BlockValidationState& state, const CBlockIndex* pindexPrev, const CTransaction& tx, int64_t nTime, unsigned int nBits, uint256& hashProofOfStake, uint256& targetProofOfStake)
+/**
+ * This function performs the core validation of a proof-of-stake 
+ * attempt. Here's what's happening at a high level:
+ * 
+ * 1) Basic Validation: Ensures we're actually dealing with a staking transaction.
+ * 2) Input Verification: Checks that the coin being staked exists and isn't already spent.
+ * 3) Maturity Check: Verifies the coin is old enough to be used for staking. This prevents
+ *    newly received coins from being immediately used for staking.
+ * 4) Ownership Verification: Validates that the staker actually owns the coins through
+ *    cryptographic signatures.
+ * 5) Stake Hash Check: The core proof-of-stake verification, ensuring the stake hash meets
+ *    the required difficulty target, weighted by the amount being staked.
+ *
+ * The function acts as a gatekeeper, ensuring all proof-of-stake rules are followed before
+ * allowing a new block to be created.
+ */
+bool CheckProofOfStake(
+    Chainstate& chain_state,          // Current blockchain state
+    BlockValidationState& state,      // Tracks validation status/errors
+    const CBlockIndex* pindexPrev,    // Previous block index (current chain tip)
+    const CTransaction& tx,           // Transaction being validated
+    int64_t nTime,                    // Timestamp of the new block being validated
+    unsigned int nBits,               // Target difficulty for the block
+    uint256& hashProofOfStake,        // Output parameter: Will contain the computed stake hash
+    uint256& targetProofOfStake)      // Output parameter: Will contain the target threshold
 {
-    // pindexPrev is the current tip, the block the new block will connect on to
-    // nTime is the time of the new/next block
+    // pindexPrev points to the latest block in our chain
+    // nTime represents when the new block was created
 
+    // Get access to the block database through the chain state
     auto& pblocktree { chain_state.m_blockman.m_block_tree_db };
 
+    // Verify this is a valid staking transaction with at least one input
     if (!tx.IsCoinStake() || tx.vin.size() < 1) {
         LogPrintf("ERROR: %s: malformed-txn %s\n", __func__, tx.GetHash().ToString());
         return false;
     }
 
+    // Reference to hold the previous transaction (though unused in this function)
     CTransactionRef txPrev;
 
+    // Get the first input of the coinstake transaction
+    // This input (known as the kernel) must meet the staking target
     // Kernel (input 0) must match the stake hash target per coin age (nBits)
     const CTxIn& txin = tx.vin[0];
 
-    uint32_t nBlockFromTime;
-    int nDepth;
-    CScript kernelPubKey;
-    CAmount amount;
+    // Variables to store information about the staking coin
+    uint32_t nBlockFromTime;    // Timestamp of block containing the staked coin
+    int nDepth;                 // How many blocks deep is the staked coin
+    CScript kernelPubKey;       // Public key script that controls the stake
+    CAmount amount;             // Amount of coins being staked
 
+    // Try to find the coin being staked in the UTXO (unspent transaction output) set
     Coin coin;
     if (!chain_state.CoinsTip().GetCoin(txin.prevout, coin) || coin.IsSpent()) {
-        return false;
+        return false;  // Coin doesn't exist or was already spent
     }
 
+    // Find the block that contains the coin being staked
     CBlockIndex* pindex = chain_state.m_chain[coin.nHeight];
     if (!pindex) {
-        return false;
+        return false;  // Block not found in main chain
     }
 
+    // Calculate the coin's age in blocks and verify it meets minimum age requirement
     nDepth = pindexPrev->nHeight - coin.nHeight;
+    // Required depth is the lesser of COINBASE_MATURITY or half the chain height
     int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(pindexPrev->nHeight / 2));
     if (nRequiredDepth > nDepth) {
-        return false;
+        return false;  // Coin isn't mature enough to stake
     }
 
-    kernelPubKey = coin.out.scriptPubKey;
-    amount = coin.out.nValue;
-    nBlockFromTime = pindex->GetBlockTime();
+    // Store the staking coin's details for validation
+    kernelPubKey = coin.out.scriptPubKey;      // Script controlling the coins
+    amount = coin.out.nValue;                   // Amount being staked
+    nBlockFromTime = pindex->GetBlockTime();    // When the coin's block was mined
 
+    // Get the spending transaction's signature details
     const CScript& scriptSig = txin.scriptSig;
     const CScriptWitness* witness = &txin.scriptWitness;
     ScriptError serror = SCRIPT_ERR_OK;
     std::vector<uint8_t> vchAmount(8);
 
+    // Verify the transaction signature is valid and the spender owns the coins
     if (!VerifyScript(scriptSig, kernelPubKey, witness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&tx, 0, amount, MissingDataBehavior::FAIL), &serror)) {
         LogPrintf("ERROR: %s: verify-script-failed, txn %s, reason %s\n", __func__, tx.GetHash().ToString(), ScriptErrorString(serror));
         return false;
     }
 
+    // Finally, verify the proof-of-stake kernel hash meets required target
+    // This is the core staking check that proves the staker's right to create a block
     if (!CheckStakeKernelHash(pindexPrev, nBits, nBlockFromTime,
             amount, txin.prevout, nTime, hashProofOfStake, targetProofOfStake, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
         LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, hashProof=%s\n", __func__, tx.GetHash().ToString(), hashProofOfStake.ToString());
         return false;
     }
 
+    // All validation checks passed - this is a valid stake
     return true;
 }
 
