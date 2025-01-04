@@ -101,7 +101,7 @@ public:
         consensus.nPosTargetTimespan = 5 * 60;
         consensus.nPosTargetSpacing = 5 * 60;
         consensus.nStakeMinAge = 10 * 60;
-        consensus.nStakeMaxAge = 60 * 60 * 24 * 30;
+        consensus.nStakeMaxAge = 60 * 60 * 24 * 120;
         consensus.nRuleChangeActivationThreshold = 6048; // 75% of 8064
         consensus.nMinerConfirmationWindow = 8064;
         consensus.nUUIDBlockStart = 3084941;
