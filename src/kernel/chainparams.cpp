@@ -156,6 +156,8 @@ public:
         consensus.PowTargetSpacingV1 = 30;
         consensus.PowTargetSpacingV2 = 60;
         consensus.PowTargetSpacingV3 = 30;
+        consensus.weightDampener = 10000000 * COIN;
+        consensus.weightDampenerHeight = 3086200;
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -308,6 +310,8 @@ public:
         consensus.PowTargetSpacingV1 = 30;
         consensus.PowTargetSpacingV2 = 60;
         consensus.PowTargetSpacingV3 = 30;
+        consensus.weightDampener = 10000000 * COIN;
+        consensus.weightDampenerHeight = std::numeric_limits<int>::max();
 
         pchMessageStart[0] = 0x0b;
         pchMessageStart[1] = 0x11;
