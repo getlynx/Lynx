@@ -137,6 +137,7 @@ bool CheckStakeKernelHash(
     uint256& targetProofOfStake,       // Output: Weighted target threshold. Adjusted by stake amount
     bool fPrintProofOfStake)           // Enable detailed debug logging
 {
+    const Consensus::Params& params = Params().GetConsensus();
 
     // 1. Basic timestamp validation
     if (nTime < nBlockFromTime) {
@@ -158,6 +159,11 @@ bool CheckStakeKernelHash(
 
     // 3. Weight target by stake amount
     int64_t nValueIn = prevOutAmount;
+    if (pindexPrev->nHeight + 1 >= params.weightDampenerHeight &&
+        nValueIn >= params.weightDampener) {
+        nValueIn = params.weightDampener;
+    }
+
     arith_uint256 bnWeight = arith_uint256(nValueIn);
     // The target is multiplied by the stake weight (coin amount)
     // This implements the core proof-of-stake principle:

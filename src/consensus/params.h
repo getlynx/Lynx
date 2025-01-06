@@ -174,6 +174,9 @@ struct Params {
     uint160 initAuthUser;
     uint32_t initAuthTime{0};
     uint32_t nUUIDBlockStart;
+    /** Weight dampener */
+    CAmount weightDampener{0};
+    int weightDampenerHeight{0};
 
     /**
      * If true, witness commitments contain a payload equal to a Bitcoin Script solution
