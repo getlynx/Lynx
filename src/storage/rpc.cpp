@@ -67,9 +67,6 @@ static RPCHelpMan store()
         return std::string("Please authenticate to use this command.");
     }
 
-    // if (authUser.ToString() == "2eba8c3d9038b739d4b2a85fa40eb91648ee2366") {
-    // if (authUser.ToString() == "ee78c09ab25ea0f5df7112968ce6592019dd9401") {
-    // if (authUser.ToString() == "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d") {
     if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
         return std::string("not-authenticated as tenant");
     }
@@ -90,9 +87,7 @@ static RPCHelpMan store()
         // if custom uuid valid (length, hex notation)
         if (is_valid_uuid(put_uuid, invalidity_type)) {
             std::vector<std::string> uuid_found;
-            // scan_blocks_for_uuids(*storage_chainman, uuid_found);
 
-            // Untested change
             int intCount = 0;
             scan_blocks_for_uuids(*storage_chainman, uuid_found, intCount);
 
@@ -514,9 +509,6 @@ static RPCHelpMan allow()
     // are we authenticated
     if (is_auth_member(authUser)) {
 
-        // if (authUser.ToString() != "2eba8c3d9038b739d4b2a85fa40eb91648ee2366") {
-        // if (authUser.ToString() != "ee78c09ab25ea0f5df7112968ce6592019dd9401") {
-        // if (authUser.ToString() != "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d") {
         if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
             return std::string("not-authenticated as manager");
         }
@@ -535,8 +527,6 @@ static RPCHelpMan allow()
         if (!generate_auth_payload(opreturn_payload, type, time, hash160)) {
             return std::string("error-generating-authpayload");
         }
-
-        //return std::string("failure dkdk");
 
         if (!generate_auth_transaction(*storage_context, tx, opreturn_payload)) {
             return std::string("error-generating-authtransaction");

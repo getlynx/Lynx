@@ -599,7 +599,6 @@ bool scan_blocks_for_authdata(ChainstateManager& chainman)
 LogPrint (BCLog::ALL, "tip_height %d \n", tip_height);    
 
     // Begin scanning with POS blocks
-    //for (int height = 6000; height < tip_height; height++) {
     for (int height = Params().GetConsensus().nUUIDBlockStart; height < tip_height; height++) {
 
 #ifdef TIMING

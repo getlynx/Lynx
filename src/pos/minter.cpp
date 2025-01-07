@@ -454,24 +454,9 @@ bool SelectCoinsForStaking(wallet::CWallet* wallet, CAmount nTargetValue, std::s
         const auto& txout = output.txout;
         int input_age = GetTime() - output.time;
         if (input_age < params.nStakeMinAge || input_age > params.nStakeMaxAge) {
-
-LogPrint (BCLog::ALL, "\n");
-LogPrint (BCLog::ALL, "GetTime() %ld \n", GetTime());
-LogPrint (BCLog::ALL, "output.time %ld \n", output.time);
-LogPrint (BCLog::ALL, "input_age %ld \n", input_age);
-LogPrint (BCLog::ALL, "params.nStakeMinAge %ld \n", params.nStakeMinAge);
-LogPrint (BCLog::ALL, "params.nStakeMaxAge %ld \n", params.nStakeMaxAge);
-LogPrint (BCLog::ALL, "\n");
-
             LogPrint(BCLog::POS, "not using %s: age params not met\n", txout.ToString());
             continue;
-        } else {
-
-LogPrint (BCLog::ALL, "\n");
-LogPrint (BCLog::ALL, "DKDK FJFJ DKDK\n");
-LogPrint (BCLog::ALL, "\n");
-
-        }
+        } 
 
         {
             LOCK(wallet->cs_wallet);
