@@ -214,7 +214,7 @@ static RPCHelpMan list()
     }
 
     // Initialize number of uuids asked for (0 means all)
-    std::string strCount = "0";
+    std::string strCount = "10";
 
     // Integer number of uuids asked for
     int intCount;
