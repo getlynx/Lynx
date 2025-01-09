@@ -532,7 +532,7 @@ static RPCHelpMan allow()
             return std::string("error-generating-authtransaction");
         }
 
-        add_auth_member(hash);
+        // add_auth_member(hash);
 
         return std::string("success");
 
