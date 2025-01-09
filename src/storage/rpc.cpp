@@ -495,10 +495,10 @@ static RPCHelpMan allow()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
-    const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
-    if (check_mempool_for_authdata(mempool)) {
-        return std::string("authtx-in-mempool");
-    }
+    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    // if (check_mempool_for_authdata(mempool)) {
+        // return std::string("authtx-in-mempool");
+    // }
 
     std::string hash160 = request.params[0].get_str();
     if (hash160.size() != OPAUTH_HASHLEN*2) {
