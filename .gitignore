@@ -41,3 +41,10 @@ src/test/fuzz/fuzz
 libbitcoinconsensus.pc
 contrib/devtools/split-debug.sh
 build-aux/ltmain.sh
+config.log
+config.status
+configure
+libtool
+src/config/bitcoin-config.h
+src/obj/build.h
+test/config.ini
