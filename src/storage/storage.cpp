@@ -381,21 +381,13 @@ bool scan_blocks_for_specific_uuid (ChainstateManager& chainman, std::string& uu
     clock_t start, end;
 
     double t_hs = 0.0;
-
     double t_rbfd = 0.0;
-
     double t_sofc = 0.0;
-
     double t_ccc = 0.0;
-
     double t_iva = 0.0;
-
     double t_gctfc = 0.0;
-
     double t_gcnfc = 0.0;
-
     double t_gufc = 0.0;
-
     double t_gclfc = 0.0;
 
     bool hasauth;
@@ -494,44 +486,37 @@ bool scan_blocks_for_specific_uuid (ChainstateManager& chainman, std::string& uu
     start = clock ();    
 #endif
 
-if (intAllDataChunksFound == 1) {
+                    if (intAllDataChunksFound == 1) {
 
-    get_magic_from_chunk (opdata, magic, offset);
+                        get_magic_from_chunk (opdata, magic, offset);
 
-    if (magic == OPAUTH_MAGIC) {
+                        if (magic == OPAUTH_MAGIC) {
 
-        // LogPrint (BCLog::ALL, "MAGIC\n");
+                            get_hash_from_auth (opdata, strAuthenticatetenantPubkeyCandidate, offset);
 
-        // LogPrint (BCLog::ALL, "ghshAuthenticatetenantPubkey %s \n", ghshAuthenticatetenantPubkey.ToString());
+                            std::string operation;
 
-        get_hash_from_auth (opdata, strAuthenticatetenantPubkeyCandidate, offset);
+                            get_operation_from_auth (opdata, operation, offset);
 
-        // LogPrint (BCLog::ALL, "strAuthenticatetenantPubkeyCandidate %s \n", strAuthenticatetenantPubkeyCandidate);
+                            if (operation == OPAUTH_ADDUSER) {
 
-        std::string operation;
+                                if (ghshAuthenticatetenantPubkey.ToString() == strAuthenticatetenantPubkeyCandidate) {
 
-        get_operation_from_auth (opdata, operation, offset);
+                                    intAuthenticateTenantPubkeyFound = 1;
+                                    height = lngCutoff;
+                                    LogPrint (BCLog::ALL, "authenticatetenant pubkey found \n");
 
-        if (operation == OPAUTH_ADDUSER) {
+                                }
 
-            if (ghshAuthenticatetenantPubkey.ToString() == strAuthenticatetenantPubkeyCandidate) {
+                            }    
 
-                intAuthenticateTenantPubkeyFound = 1;
-                // height = 6000;
-                height = lngCutoff;
-                LogPrint (BCLog::ALL, "authenticatetenant pubkey found \n");
+                        } else {
 
-            }
+                            continue;
 
-        }    
+                        }
 
-    } else {
-
-        continue;
-
-    }
-
-}    
+                    }    
 
                     // Check for chunk data, check for valid protocal, return protocol
                     if (!check_chunk_contextual (opdata, protocol, error_level, offset)) {
@@ -640,12 +625,7 @@ if (intAllDataChunksFound == 1) {
 
                         if (count == chunktotal2) {
 
-intAllDataChunksFound = 1;
-
-                            // height = 6000;
-                            // LogPrint (BCLog::ALL, "The last chunk was found (%s).\n", chunknum2);
-
-// LogPrint (BCLog::ALL, "ghshAuthenticatetenantPubkey %s \n", ghshAuthenticatetenantPubkey.ToString());
+                            intAllDataChunksFound = 1;
 
                         }
 
@@ -669,8 +649,6 @@ intAllDataChunksFound = 1;
         error_level = ERR_CHUNKAUTHNONE;
         return false;
     }
-
-// count = 0;
 
     // If not all data chunks
     if (count != chunktotal2) {

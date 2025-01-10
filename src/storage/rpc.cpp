@@ -67,9 +67,6 @@ static RPCHelpMan store()
         return std::string("Please authenticate to use this command.");
     }
 
-    // if (authUser.ToString() == "2eba8c3d9038b739d4b2a85fa40eb91648ee2366") {
-    // if (authUser.ToString() == "ee78c09ab25ea0f5df7112968ce6592019dd9401") {
-    // if (authUser.ToString() == "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d") {
     if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
         return std::string("not-authenticated as tenant");
     }
@@ -90,9 +87,7 @@ static RPCHelpMan store()
         // if custom uuid valid (length, hex notation)
         if (is_valid_uuid(put_uuid, invalidity_type)) {
             std::vector<std::string> uuid_found;
-            // scan_blocks_for_uuids(*storage_chainman, uuid_found);
 
-            // Untested change
             int intCount = 0;
             scan_blocks_for_uuids(*storage_chainman, uuid_found, intCount);
 
@@ -219,7 +214,7 @@ static RPCHelpMan list()
     }
 
     // Initialize number of uuids asked for (0 means all)
-    std::string strCount = "0";
+    std::string strCount = "10";
 
     // Integer number of uuids asked for
     int intCount;
@@ -423,6 +418,11 @@ static RPCHelpMan tenants()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
+
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+        return std::string("not-authenticated as manager");
+    }
+
     UniValue ret(UniValue::VARR);
 
     std::vector<uint160> tempList;
@@ -464,17 +464,16 @@ static RPCHelpMan auth()
             ret.push_back(std::string("authorized user failure 1"));
         } else {
 
-auto vpwallets = GetWallets(*storage_context);
-size_t nWallets = vpwallets.size();
-if (nWallets < 1) {
-    ret.push_back(std::string("no wallet"));
-    return ret;
-}
+            auto vpwallets = GetWallets(*storage_context);
+            size_t nWallets = vpwallets.size();
+            if (nWallets < 1) {
+                ret.push_back(std::string("no wallet"));
+                return ret;
+            }
 
-int suitable_inputs;
-estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
-
-
+            int suitable_inputs;
+            estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
+    
             ret.push_back(std::string("success"));
             ret.push_back(suitable_inputs);
         }
@@ -500,10 +499,10 @@ static RPCHelpMan allow()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
-    const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
-    if (check_mempool_for_authdata(mempool)) {
-        return std::string("authtx-in-mempool");
-    }
+    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    // if (check_mempool_for_authdata(mempool)) {
+        // return std::string("authtx-in-mempool");
+    // }
 
     std::string hash160 = request.params[0].get_str();
     if (hash160.size() != OPAUTH_HASHLEN*2) {
@@ -514,9 +513,6 @@ static RPCHelpMan allow()
     // are we authenticated
     if (is_auth_member(authUser)) {
 
-        // if (authUser.ToString() != "2eba8c3d9038b739d4b2a85fa40eb91648ee2366") {
-        // if (authUser.ToString() != "ee78c09ab25ea0f5df7112968ce6592019dd9401") {
-        // if (authUser.ToString() != "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d") {
         if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
             return std::string("not-authenticated as manager");
         }
@@ -536,13 +532,11 @@ static RPCHelpMan allow()
             return std::string("error-generating-authpayload");
         }
 
-        //return std::string("failure dkdk");
-
         if (!generate_auth_transaction(*storage_context, tx, opreturn_payload)) {
             return std::string("error-generating-authtransaction");
         }
 
-        add_auth_member(hash);
+        // add_auth_member(hash);
 
         return std::string("success");
 
@@ -570,10 +564,10 @@ static RPCHelpMan deny()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
-    const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
-    if (check_mempool_for_authdata(mempool)) {
-        return std::string("authtx-in-mempool");
-    }
+    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    // if (check_mempool_for_authdata(mempool)) {
+        // return std::string("authtx-in-mempool");
+    // }
 
     std::string hash160 = request.params[0].get_str();
     if (hash160.size() != OPAUTH_HASHLEN*2) {
@@ -583,6 +577,10 @@ static RPCHelpMan deny()
 
     // are we authenticated
     if (is_auth_member(authUser)) {
+
+        if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+            return std::string("not-authenticated as manager");
+        }
 
         int type;
         uint32_t time;
