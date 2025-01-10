@@ -16,11 +16,21 @@
 
 class CBlockPolicyEstimator;
 
-/** Default for -maxmempool, maximum megabytes of mempool memory usage */
-static constexpr unsigned int DEFAULT_MAX_MEMPOOL_SIZE_MB{300};
+/** Default for -maxmempool, maximum megabytes of mempool memory usage
+ * 
+ * 1 hour = 60 minutes
+ * 48 hours = 48 × 60 = 2,880 minutes
+
+ * Now that we know there are 1,440 minutes in 24 hours, and you can store 1 MB per minute, we can calculate the total storage:
+ * 1 MB/minute × 2,880 minutes = 2,880 MB
+ */
+static constexpr unsigned int DEFAULT_MAX_MEMPOOL_SIZE_MB{2880};
 /** Default for -maxmempool when blocksonly is set */
 static constexpr unsigned int DEFAULT_BLOCKSONLY_MAX_MEMPOOL_SIZE_MB{5};
-/** Default for -mempoolexpiry, expiration time for mempool transactions in hours */
+/** Default for -mempoolexpiry, expiration time for mempool transactions in hours
+ * 
+ * 336 ÷ 24 = 14 days
+ */
 static constexpr unsigned int DEFAULT_MEMPOOL_EXPIRY_HOURS{336};
 /** Default for -mempoolfullrbf, if the transaction replaceability signaling is ignored */
 static constexpr bool DEFAULT_MEMPOOL_FULL_RBF{false};

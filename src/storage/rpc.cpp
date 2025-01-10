@@ -410,12 +410,12 @@ static RPCHelpMan status()
 static RPCHelpMan tenants()
 {
     return RPCHelpMan{"tenants",
-                "\nDisplay the users present in the authlist (the user's hash160).\n",
+                "\nDisplay the current list of Tenants.\n",
                 {},
                 {
                     RPCResult{
                         RPCResult::Type::ARR, "", "",
-                        {{RPCResult::Type::STR_HEX, "", "The hash160 of the users authentication key."}}},
+                        {{RPCResult::Type::STR_HEX, "", "The hash160 of the Tenant's authentication key."}}},
                 },
                 RPCExamples{
                     HelpExampleCli("tenants", "")
@@ -488,9 +488,9 @@ estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
 static RPCHelpMan allow()
 {
     return RPCHelpMan{"allow",
-                "\nAdd an authuser to the authlist.\n",
+                "\nAdd a new data storage Tenant.\n",
                 {
-                    {"hash160", RPCArg::Type::STR, RPCArg::Optional::NO, "The hash160 of the users key."},
+                    {"hash160", RPCArg::Type::STR, RPCArg::Optional::NO, "The hash160 of the Tenants key."},
                 },
                 RPCResult{
                     RPCResult::Type::STR, "", "success or failure"},
@@ -526,11 +526,11 @@ static RPCHelpMan allow()
         CMutableTransaction tx;
         std::string opreturn_payload;
 
-        type = 0;
-        time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+        // type = 0;
+        // time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
 
-        LogPrint (BCLog::ALL, "\n");
-        LogPrint (BCLog::ALL, "time in seconds since the first second of 1970 (3600*24*365*54 ..): %d\n", time);
+        // LogPrint (BCLog::ALL, "\n");
+        // LogPrint (BCLog::ALL, "time in seconds since the first second of 1970 (3600*24*365*54 ..): %d\n", time);
 
         if (!generate_auth_payload(opreturn_payload, type, time, hash160)) {
             return std::string("error-generating-authpayload");
@@ -558,9 +558,9 @@ static RPCHelpMan allow()
 static RPCHelpMan deny()
 {
     return RPCHelpMan{"deny",
-                "\nDelete an authuser from the authlist.\n",
+                "\nRemove a data storage Tenant.\n",
                 {
-                    {"hash160", RPCArg::Type::STR, RPCArg::Optional::NO, "The hash160 of the users key."},
+                    {"hash160", RPCArg::Type::STR, RPCArg::Optional::NO, "The hash160 of the Tenants key."},
                 },
                 RPCResult{
                     RPCResult::Type::STR, "", "success or failure"},

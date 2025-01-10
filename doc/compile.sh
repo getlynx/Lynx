@@ -6,7 +6,8 @@
 set -e
 
 if pgrep -f "lynx" >/dev/null; then
-    lynx-cli stop
+    systemctl stop lynx
+    #lynx-cli stop
     # Give it a moment to shut down gracefully
     sleep 5
     rm -rf /root/.lynx/debug.log
@@ -15,7 +16,7 @@ fi
 date=$(date +%Y-%m-%d)
 
 # Format Lynx [CLI|GUI] v25.0.28 [Debian|Ubuntu] [11|12|X] [AMD|ARM]
-version="Lynx CLI v25.0.28 Debian 12 AMD"
+version="Lynx CLI v25.0.29 Debian 12 AMD"
 
 # Required <arch> argument from the list below. If not provided, defaults to "x86 Linux"
 
