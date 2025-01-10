@@ -596,8 +596,6 @@ bool scan_blocks_for_authdata(ChainstateManager& chainman)
 
     start_t = clock ();    
 
-LogPrint (BCLog::ALL, "tip_height %d \n", tip_height);    
-
     // Begin scanning with POS blocks
     for (int height = Params().GetConsensus().nUUIDBlockStart; height < tip_height; height++) {
 
@@ -622,31 +620,32 @@ LogPrint (BCLog::ALL, "tip_height %d \n", tip_height);
                 continue;
             }
 
-if (block.vtx[vtx]->vout.size() < 5) {            
+            // If not chunk data
+            if (block.vtx[vtx]->vout.size() < 5) {            
 
-            // Loop on transaction outputs
-            for (unsigned int vout = 0; vout < block.vtx[vtx]->vout.size(); vout++) {
+                // Loop on transaction outputs
+                for (unsigned int vout = 0; vout < block.vtx[vtx]->vout.size(); vout++) {
 
-                const CScript opreturn_out = block.vtx[vtx]->vout[vout].scriptPubKey;
+                    const CScript opreturn_out = block.vtx[vtx]->vout[vout].scriptPubKey;
 
-                // If OP_RETURN
-                if (opreturn_out.IsOpReturn()) {
-                    int error_level;
+                    // If OP_RETURN
+                    if (opreturn_out.IsOpReturn()) {
+                        int error_level;
 
 #ifdef TIMING
     start = clock ();    
 #endif
 
-                    // If auth chunk, rather than data chunk
-                    if (!is_opreturn_an_authdata (opreturn_out, error_level)) {
+                        // If auth chunk, rather than data chunk
+                        if (!is_opreturn_an_authdata (opreturn_out, error_level)) {
 
 #ifdef TIMING
     end = clock ();    
     t_ioaa = t_ioaa + (double) (end - start) / CLOCKS_PER_SEC;
 #endif
 
-                        continue;
-                    }
+                            continue;
+                        }
 
 #ifdef TIMING
     end = clock ();    
@@ -657,24 +656,24 @@ if (block.vtx[vtx]->vout.size() < 5) {
     start = clock ();    
 #endif
 
-                     // Validate authdata, and popoulate authList
-                    if (!found_opreturn_in_authdata (opreturn_out, error_level)) {
-                        LogPrint (BCLog::ALL, "\n");
-                        LogPrint (BCLog::ALL, "An invalid Tenant public key was found in TX %s (vout %d).\n", block.vtx[vtx]->GetHash().ToString(), vout);
-                    } else {
-                        //LogPrint (BCLog::ALL, "\n");
-                        //LogPrint (BCLog::ALL, "A valid Tenant public key was found in TX %s (vout %d).\n", block.vtx[vtx]->GetHash().ToString(), vout);
-                    }
+                         // Validate authdata, and popoulate authList
+                        if (!found_opreturn_in_authdata (opreturn_out, error_level)) {
+                            LogPrint (BCLog::ALL, "\n");
+                            LogPrint (BCLog::ALL, "An invalid Tenant public key was found in TX %s (vout %d).\n", block.vtx[vtx]->GetHash().ToString(), vout);
+                        } else {
+                            //LogPrint (BCLog::ALL, "\n");
+                            //LogPrint (BCLog::ALL, "A valid Tenant public key was found in TX %s (vout %d).\n", block.vtx[vtx]->GetHash().ToString(), vout);
+                        }
 
 #ifdef TIMING
     end = clock ();    
     t_foia = t_foia + (double) (end - start) / CLOCKS_PER_SEC;
 #endif
 
+                    }
                 }
-            }
 
-}
+            }
 
         }
     }
