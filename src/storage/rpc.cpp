@@ -418,6 +418,11 @@ static RPCHelpMan tenants()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
+
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+        return std::string("not-authenticated as manager");
+    }
+
     UniValue ret(UniValue::VARR);
 
     std::vector<uint160> tempList;
