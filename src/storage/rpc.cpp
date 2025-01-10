@@ -464,16 +464,15 @@ static RPCHelpMan auth()
             ret.push_back(std::string("authorized user failure 1"));
         } else {
 
-auto vpwallets = GetWallets(*storage_context);
-size_t nWallets = vpwallets.size();
-if (nWallets < 1) {
-    ret.push_back(std::string("no wallet"));
-    return ret;
-}
+            auto vpwallets = GetWallets(*storage_context);
+            size_t nWallets = vpwallets.size();
+            if (nWallets < 1) {
+                ret.push_back(std::string("no wallet"));
+                return ret;
+            }
 
-int suitable_inputs;
-estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
-
+            int suitable_inputs;
+            estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
 
             ret.push_back(std::string("success"));
             ret.push_back(suitable_inputs);
