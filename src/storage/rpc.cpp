@@ -473,7 +473,7 @@ static RPCHelpMan auth()
 
             int suitable_inputs;
             estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
-
+    
             ret.push_back(std::string("success"));
             ret.push_back(suitable_inputs);
         }
