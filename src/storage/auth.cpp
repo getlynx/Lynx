@@ -4,9 +4,6 @@
 
 #define TIMING 1
 
-// Test
-
-
 #include <storage/auth.h>
 #include <storage/chunk.h>
 #include <storage/util.h>
