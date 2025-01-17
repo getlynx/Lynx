@@ -65,7 +65,9 @@ static constexpr auto EXTRA_BLOCK_RELAY_ONLY_PEER_INTERVAL = 5min;
 
 // Allow > 4M storeasset
 
-static const unsigned int MAX_PROTOCOL_MESSAGE_LENGTH = 24 * 1000 * 1000;
+//static const unsigned int MAX_PROTOCOL_MESSAGE_LENGTH = 24 * 1000 * 1000;
+static const unsigned int MAX_PROTOCOL_MESSAGE_LENGTH = 30 * 1000 * 1000;
+
 /** Maximum length of the user agent string in `version` message */
 static const unsigned int MAX_SUBVERSION_LENGTH = 256;
 /** Maximum number of automatic outgoing nodes over which we'll relay everything (blocks, tx, addrs, etc) */

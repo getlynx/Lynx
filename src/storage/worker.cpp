@@ -80,7 +80,7 @@ void perform_put_task(std::pair<std::string, std::string>& put_info, int& error_
     int filelen = read_file_size(put_info.first);
 
     // check file length
-    int maxfilelength = 23 * 1024 * 1024;
+    int maxfilelength = 25 * 1024 * 1024;
     if (filelen > maxfilelength) {
         LogPrint (BCLog::ALL, "File length exceeds max file length. filelen: %d maxfilelength: %d\n", filelen, maxfilelength);
         error_level = ERR_FILELENGTH;
