@@ -81,5 +81,5 @@ void ShowAverageSpans(const CBlockIndex* pindex)
     // Log all statistics
     LogPrintAlways(BCLog::NONE, "Block Statistics - last hour: %s, day: %s, week: %s, fortnight: %s, month: %s\n",
         stringHour, stringDay, stringWeek, stringBiweek, stringMonth);
-    LogPrintAlways(BCLog::POS, "Block Statistics - https://docs.getlynx.io/lynx-core/understanding-the-lynx-blockchain-statistics-report");
+    LogPrint(BCLog::POS, "Block Statistics - https://docs.getlynx.io/lynx-core/understanding-the-lynx-blockchain-statistics-report\n");
 }

@@ -15,7 +15,7 @@
 /* #undef CHAR_EQUALS_INT8 */
 
 /* Version Build */
-#define CLIENT_VERSION_BUILD 29
+#define CLIENT_VERSION_BUILD 30
 
 /* Version is release */
 #define CLIENT_VERSION_IS_RELEASE true
@@ -356,7 +356,7 @@
 #define PACKAGE_NAME "Lynx Core"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "Lynx Core 25.0.29"
+#define PACKAGE_STRING "Lynx Core 25.0.30"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "lynx"
@@ -365,7 +365,7 @@
 #define PACKAGE_URL "https://getlynx.io/"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "25.0.29"
+#define PACKAGE_VERSION "25.0.30"
 
 /* Define to necessary symbol if this constant uses a non-standard name on
    your system. */

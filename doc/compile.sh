@@ -16,7 +16,7 @@ fi
 date=$(date +%Y-%m-%d)
 
 # Format Lynx [CLI|GUI] v25.0.28 [Debian|Ubuntu] [11|12|X] [AMD|ARM]
-version="Lynx CLI v25.0.29 Debian 12 AMD"
+version="Lynx CLI v25.0.30 Debian 12 AMD"
 
 # Required <arch> argument from the list below. If not provided, defaults to "x86 Linux"
 

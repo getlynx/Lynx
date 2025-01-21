@@ -49,3 +49,8 @@ config.log
 src/obj/build.h
 .gitignore
 doc/compile.sh
+config.log
+config.status
+config.status
+configure
+libtool
