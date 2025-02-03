@@ -94,7 +94,18 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
         // Set is tenant
         intIsTenant = 1;
 
-    // End if authenticatedc user is not manager
+    // End if authenticated user is not manager
+    }
+
+    // If masquarading as manager, asking for all uuids
+    if (pintCount == -1) {
+
+        // Unset is tenant 
+        intIsTenant = 0;
+
+        // Set count to all
+        pintCount = 0;
+
     }
 
     // Total number of unique uuids found so far
@@ -196,7 +207,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                     // If header chunk
                     if (intChunkLength == 0) {
 
-                        // Extract authenticated tenant at storeasset time from header chunk
+                        // Extract authenticated tenant at storeasset time from header chunk (ghshAuthenticatetenantPubkey)
                         extract_pubkey_from_signature (strOpreturnOutput, intOffset); 
 
                         // If authenticated user is manager
