@@ -273,7 +273,7 @@ static RPCHelpMan list()
             // If match
             if (m.first == strUUID) {
 
-                // Get filkelength
+                // Get filelength
                 intFileLength = m.second;
 
             // End if match

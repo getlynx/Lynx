@@ -356,6 +356,15 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                             // Record filelength in global map for processing in calling routine
                             gmapFileLength[strUUID] = intFileLengthInBytes;
 
+                            // If all uuids asked for found
+                            if ((intUUIDCount == pintCount) && (intUUIDCount > 0)) {
+
+                                // End scan
+                                height = lngCutoff;
+
+                            // End if all uuids asked for found
+                            }
+
                         // End if final data chunk
                         }
 
