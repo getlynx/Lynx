@@ -249,17 +249,6 @@ static RPCHelpMan list()
     // Get list of uuids
     scan_blocks_for_uuids(*storage_chainman, vctUUIDs, intCount);
 
-    // End timer
-    clkEnd = clock ();
-
-    // Compute elapsed time
-    dblElapsedTime = (double) (clkEnd - clkStart) / CLOCKS_PER_SEC;
-
-    // Output elapsed time to debug
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "Elapsed time for list %ld \n", dblElapsedTime);
-    LogPrint (BCLog::ALL, "\n");
-
     // Output data structures
     UniValue unvResult0(UniValue::VOBJ);
     UniValue unvResult1(UniValue::VARR);
@@ -350,6 +339,17 @@ static RPCHelpMan list()
 
     // Pack results
     unvResult2.push_back (unvResult1);
+
+    // End timer
+    clkEnd = clock ();
+
+    // Compute elapsed time
+    dblElapsedTime = (double) (clkEnd - clkStart) / CLOCKS_PER_SEC;
+
+    // Output elapsed time to debug
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "Elapsed time for list %ld \n", dblElapsedTime);
+    LogPrint (BCLog::ALL, "\n");
 
     // Return results
     return unvResult2;
