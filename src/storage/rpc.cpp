@@ -88,7 +88,7 @@ static RPCHelpMan store()
         if (is_valid_uuid(put_uuid, invalidity_type)) {
             std::vector<std::string> uuid_found;
 
-            // -1 means all uuids, masquarading as manager
+            // -1 means all uuids, masquerading as manager
             int intCount = -1;
             scan_blocks_for_uuids(*storage_chainman, uuid_found, intCount);
 

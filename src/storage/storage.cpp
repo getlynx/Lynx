@@ -97,7 +97,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
     // End if authenticated user is not manager
     }
 
-    // If masquarading as manager, asking for all uuids
+    // If masquerading as manager, asking for all uuids
     if (pintCount == -1) {
 
         // Unset is tenant 
