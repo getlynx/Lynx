@@ -257,7 +257,7 @@ static RPCHelpMan list()
 
     // Output elapsed time to debug
     LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "Elapsed time for getuuids %ld \n", dblElapsedTime);
+    LogPrint (BCLog::ALL, "Elapsed time for list %ld \n", dblElapsedTime);
     LogPrint (BCLog::ALL, "\n");
 
     // Output data structures
