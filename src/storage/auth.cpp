@@ -20,6 +20,8 @@ std::string authUserKey;
 RecursiveMutex authListLock;
 std::vector<uint160> authList;
 
+uint32_t gu32BlockHeight;
+
 void add_auth_member(uint160 pubkeyhash)
 {
     LOCK(authListLock);
@@ -333,6 +335,7 @@ bool process_auth_chunk (std::string& chunk, int& , int pintOffset)
     LogPrint (BCLog::ALL, "AUTHORIZE TENANT DATA STRUCTURE (%s)\n", __func__);
     LogPrint (BCLog::ALL, "magic type time pubkey signature\n");
     LogPrint (BCLog::ALL, "%s %s %s %s %s\n", magic, type, time, pubkey, signature);
+    LogPrint (BCLog::ALL, "Block height: %d \n", gu32BlockHeight);
     LogPrint (BCLog::ALL, "\n");
 
     // addauth or delauth
@@ -593,8 +596,20 @@ bool scan_blocks_for_authdata(ChainstateManager& chainman)
 
     start_t = clock ();    
 
-    // Begin scanning with POS blocks
-    for (int height = Params().GetConsensus().nUUIDBlockStart; height < tip_height; height++) {
+    // uint32_t u32Cutoff =  Params().GetConsensus().nUUIDBlockStart;
+    // uint32_t u32BlockSpan =  8301;
+    uint32_t u32BlockSpan =  105120;
+    uint32_t u32Cutoff =  tip_height - u32BlockSpan;
+
+    if (u32Cutoff < Params().GetConsensus().nUUIDBlockStart) {
+        u32Cutoff = Params().GetConsensus().nUUIDBlockStart;
+    }
+
+    // Scan most recent blockspan blocks
+    // for (int height = Params().GetConsensus().nUUIDBlockStart; height < tip_height; height++) {
+    for (int height = u32Cutoff; height < tip_height; height++) {
+
+gu32BlockHeight = height;        
 
 #ifdef TIMING
     start = clock ();    
