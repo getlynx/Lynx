@@ -24,6 +24,7 @@
 #include <storage/util.h>
 #include <sync.h>
 #include <validation.h>
+#include <storage/auth.h>
 
 #include <wallet/rpc/util.h>
 #include <wallet/rpc/wallet.h>
@@ -506,38 +507,6 @@ bool scan_blocks_for_specific_uuid (ChainstateManager& chainman, std::string& uu
     start = clock ();    
 #endif
 
-                    if (intAllDataChunksFound == 1) {
-
-                        get_magic_from_chunk (opdata, magic, offset);
-
-                        if (magic == OPAUTH_MAGIC) {
-
-                            get_hash_from_auth (opdata, strAuthenticatetenantPubkeyCandidate, offset);
-
-                            std::string operation;
-
-                            get_operation_from_auth (opdata, operation, offset);
-
-                            if (operation == OPAUTH_ADDUSER) {
-
-                                if (ghshAuthenticatetenantPubkey.ToString() == strAuthenticatetenantPubkeyCandidate) {
-
-                                    intAuthenticateTenantPubkeyFound = 1;
-                                    height = lngCutoff;
-                                    LogPrint (BCLog::ALL, "authenticatetenant pubkey found \n");
-
-                                }
-
-                            }    
-
-                        } else {
-
-                            continue;
-
-                        }
-
-                    }    
-
                     // Check for chunk data, check for valid protocal, return protocol
                     if (!check_chunk_contextual (opdata, protocol, error_level, offset)) {
                         // LogPrintf ("%s - failed at check_chunk_contextual. error_level %d\n", __func__, error_level);
@@ -612,6 +581,21 @@ bool scan_blocks_for_specific_uuid (ChainstateManager& chainman, std::string& uu
                             LogPrint (BCLog::ALL, "\n");
 
                             hasauth = true;
+
+
+if (is_auth_member(ghshAuthenticatetenantPubkey)) {
+
+    intAuthenticateTenantPubkeyFound = 1;
+
+    if (intAllDataChunksFound == 1) {
+
+        height = lngCutoff;
+
+    }
+
+}
+
+                            
                             continue;
                         } else {
                             count++;
@@ -646,6 +630,12 @@ bool scan_blocks_for_specific_uuid (ChainstateManager& chainman, std::string& uu
                         if (count == chunktotal2) {
 
                             intAllDataChunksFound = 1;
+
+if (hasauth) {
+
+    height = lngCutoff;
+
+}
 
                         }
 
