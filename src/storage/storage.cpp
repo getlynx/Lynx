@@ -583,9 +583,9 @@ bool scan_blocks_for_specific_uuid (ChainstateManager& chainman, std::string& uu
                             hasauth = true;
 
 
-if (is_auth_member(ghshAuthenticatetenantPubkey)) {
+// if (is_auth_member(ghshAuthenticatetenantPubkey)) {
 
-    intAuthenticateTenantPubkeyFound = 1;
+//     intAuthenticateTenantPubkeyFound = 1;
 
     if (intAllDataChunksFound == 1) {
 
@@ -593,7 +593,7 @@ if (is_auth_member(ghshAuthenticatetenantPubkey)) {
 
     }
 
-}
+// }
 
                             
                             continue;
@@ -668,11 +668,11 @@ if (hasauth) {
     }
 
     // If authenticatetenant pubkey not found
-    if (intAuthenticateTenantPubkeyFound == 0) {
-        LogPrint (BCLog::ALL, "authenticatetenant pubkey not found for uuid %s\n", uuid);
-        error_level = ERR_CHUNKAUTHUNK;
-        return false;
-    }
+    // if (intAuthenticateTenantPubkeyFound == 0) {
+        // LogPrint (BCLog::ALL, "authenticatetenant pubkey not found for uuid %s\n", uuid);
+        // error_level = ERR_CHUNKAUTHUNK;
+        // return false;
+    // }
 
 #ifdef TIMING
     LogPrint (BCLog::ALL, "%d data chunks found.\n", chunktotal2);
