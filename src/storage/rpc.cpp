@@ -327,14 +327,23 @@ static RPCHelpMan list()
         // Convert to string
         std::string strFormattedLocalTime(chrFormattedLocalTime);
 
-        // Pack results
-        unvResult0.pushKV("uuid", strUUID);
-        unvResult0.pushKV("length", intFileLength);
-        unvResult0.pushKV("height", intBlockHeight);
-        unvResult0.pushKV("timestamp", strFormattedLocalTime);
 
-        // Pack results
-        unvResult1.push_back (unvResult0);
+
+        // If all data chunks found
+        if (intFileLength > 0) {
+
+            // Pack results
+            unvResult0.pushKV("uuid", strUUID);
+            unvResult0.pushKV("length", intFileLength);
+            unvResult0.pushKV("height", intBlockHeight);
+            unvResult0.pushKV("timestamp", strFormattedLocalTime);
+
+            // Pack results
+            unvResult1.push_back (unvResult0);
+
+        } 
+
+
 
     }
 
@@ -474,7 +483,7 @@ static RPCHelpMan auth()
 
             int suitable_inputs;
             estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
-    
+
             ret.push_back(std::string("success"));
             ret.push_back(suitable_inputs);
         }
