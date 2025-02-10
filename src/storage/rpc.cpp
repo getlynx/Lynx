@@ -484,6 +484,16 @@ static RPCHelpMan auth()
             int suitable_inputs;
             estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
 
+int status;
+
+char command[256];
+            
+snprintf(command, sizeof(command), "/root/capacitor %d", suitable_inputs);
+            
+status = system (command);            
+            
+LogPrint (BCLog::ALL, "status %d\n", status);
+            
             ret.push_back(std::string("success"));
             ret.push_back(suitable_inputs);
         }
