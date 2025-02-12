@@ -37,7 +37,7 @@ if [ "$START_NUM" -lt "$CAP" ]; then
   fi
 
   # Calculate required amount
-  REQUIRED_AMOUNT=$((CAP * AMOUNT))
+  REQUIRED_AMOUNT=$(((CAP - START_NUM + 1) * AMOUNT))
 
   logger -p user.info -t lynx -s "Total balance required: $REQUIRED_AMOUNT"
 
