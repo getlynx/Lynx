@@ -23,6 +23,194 @@
 std::list<COutPoint> listStakeSeen;
 std::map<COutPoint, uint256> mapStakeSeen;
 
+//
+// FormatISO8601DateTime
+// Number of seconds since the first second of 1970 -> 
+// GMT year month day hour minute second
+// 
+
+// 
+// SER_GETHASH
+// Avoid inclusion of unnecessary metadata
+// 
+
+// 
+// Current block = blockchain tip
+// Next block = candidate block
+//
+
+// 
+// Proof of stake core algorithm 
+// 
+// (proof of stake hash) < (weighted difficulty)
+// (proof of stake hash) < ((difficulty) * (stake))
+// 
+// The smaller the difficulty, the harder to meet the condition.
+// 
+// The larger the stake, the easier to meet the condition
+// 
+
+// 
+// Compact data format (uint32_t)
+// From left to right:
+// 8 bit exponent, e
+// 24 bit mantissa, m
+// Value, v = m x (256 ^ (e-3))
+// 
+
+bool blnfncCheckStakeKernelHash (
+
+    // Current block
+    const CBlockIndex* ibliCurrentBlock,    
+    
+    // Difficulty (compact)
+    uint32_t icmpDifficulty,                   
+
+    // UTXO block time (compact)
+    uint32_t icmpUTXOBlockTime,     
+
+    // Stake     
+    CAmount imntStake,        
+
+    // Outpoint     
+    const COutPoint& ioptOutpoint,          
+    
+    // Candidate block time (compact)
+    uint32_t icmpCandidateBlockTime,    
+
+    // Proof of stake hash             
+    uint256& o256ProofOfStakeHash,         
+
+    // Weighted difficulty
+    uint256& o256WeightedDifficulty,     
+
+    // Log flag
+    bool iblnLogFlag) {
+    
+    // Consensus variables
+    const Consensus::Params& cnsConsensusVariables = Params().GetConsensus();
+
+    // If candidate block time < UTXO block time
+    if (icmpCandidateBlockTime < icmpUTXOBlockTime) {
+
+        // Log error
+        return error("%s: Candidate block time violation", __func__);
+    }
+
+    // Difficulty
+    arith_uint256 rthDifficulty;
+
+    // Negative flag
+    bool blnNegativeFlag;
+
+    // Overflow flag
+    bool blnOverflowFlag;
+
+    // Set difficulty
+    rthDifficulty.SetCompact(icmpDifficulty, &blnNegativeFlag, &blnOverflowFlag);
+
+    // If negative or overflow or zero
+    if (blnNegativeFlag || blnOverflowFlag || rthDifficulty == 0) {
+
+        // Return error
+        return error("%s: SetCompact failed.", __func__);
+    }
+
+    // Set Stake
+    int64_t i64Stake = imntStake;
+
+    // If current block height exceeds threshold and stake exceeds threthold
+    if (ibliCurrentBlock->nHeight + 1 >= cnsConsensusVariables.weightDampenerHeight &&
+        i64Stake >= cnsConsensusVariables.weightDampener) {
+
+        // Cap stake
+        i64Stake = cnsConsensusVariables.weightDampener;
+    }
+
+    // Set stake
+    arith_uint256 rthStake = arith_uint256(i64Stake);
+
+    // Weighted difficulty
+    arith_uint256 rthWeightedDifficulty;
+
+    // Weight difficulty
+    rthWeightedDifficulty = rthDifficulty * rthStake;
+
+    // Set weighted difficulty
+    o256WeightedDifficulty = ArithToUint256(rthWeightedDifficulty);
+
+    // Set stake modifier
+    const uint256& u25StakeModifier = ibliCurrentBlock->nStakeModifier;
+
+    // Set stake modifier height 
+    int intStakeModifierHeight = ibliCurrentBlock->nHeight;
+
+    // Set stake modifier time
+    int64_t i64StakeModifierTime = ibliCurrentBlock->nTime;
+
+    // Hash data stream
+    CDataStream dstHashDatastream(SER_GETHASH, 0);
+
+    // Stake modifier
+    dstHashDatastream << u25StakeModifier;             
+
+    // UTXO block time
+    dstHashDatastream << icmpUTXOBlockTime               
+
+    // Outpoint transaction    
+    << ioptOutpoint.hash                
+
+    // Outpoint index
+    << ioptOutpoint.n                    
+
+    // Candidate block time
+    << icmpCandidateBlockTime;                      
+
+    // Compute hash
+    o256ProofOfStakeHash = Hash(dstHashDatastream);
+
+    // Log stake modifier, stake modifier height, stake modifier time 
+    if (iblnLogFlag) {
+        LogPrintf("%s: using stake modifier=%s at stake modifier height=%d stake modifier time=%s\n",
+            __func__, u25StakeModifier.ToString(), intStakeModifierHeight,
+            FormatISO8601DateTime(i64StakeModifierTime));
+
+        // Log stake modifier, utxo block time, outpoint index, candidate block time, proof of hash stake
+        LogPrintf("%s: check stake modifier=%s utxo block time=%u outpoint index=%u candidate block time =%u proof of stake hash=%s\n",
+            __func__, u25StakeModifier.ToString(),
+            icmpUTXOBlockTime, ioptOutpoint.n, icmpCandidateBlockTime,
+            o256ProofOfStakeHash.ToString());
+    }
+
+    // If proof of stake hash < weighted difficulty
+    if (UintToArith256(o256ProofOfStakeHash) > rthWeightedDifficulty) {
+
+        // Report 
+        LogPrint (BCLog::POS, "Hash exceeds target - stake attempt invalid \n");
+
+        // Return false
+        return false;  
+    }
+
+    // Log stake modifier, stake modifier height, stake modifier time 
+    if (iblnLogFlag) {
+        LogPrintf("%s: using stake modifier=%s at stake modifier height=%d stake modifier time=%s\n",
+            __func__, u25StakeModifier.ToString(), intStakeModifierHeight,
+            FormatISO8601DateTime(i64StakeModifierTime));
+
+        // Log stake modifier, utxo block time, outpoint index, candidate block time, proof of hash stake
+        LogPrintf("%s: pass stake modifier=%s utxo block time=%u outpoint index=%u candidate block time =%u proof of stake hash=%s\n",
+            __func__, u25StakeModifier.ToString(),
+            icmpUTXOBlockTime, ioptOutpoint.n, icmpCandidateBlockTime,
+            o256ProofOfStakeHash.ToString());
+    }
+
+    // Return true
+    return true; 
+}
+
+
+
 /* Calculate the difficulty for a given block index.
  * Duplicated from rpc/blockchain.cpp for linking
  */
