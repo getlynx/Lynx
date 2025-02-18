@@ -23,22 +23,6 @@
 std::list<COutPoint> listStakeSeen;
 std::map<COutPoint, uint256> mapStakeSeen;
 
-//
-// FormatISO8601DateTime
-// Number of seconds since the first second of 1970 -> 
-// GMT year month day hour minute second
-// 
-
-// 
-// SER_GETHASH
-// Avoid inclusion of unnecessary metadata
-// 
-
-// 
-// Current block = blockchain tip
-// Next block = candidate block
-//
-
 // 
 // Proof of stake core algorithm 
 // 
@@ -50,12 +34,29 @@ std::map<COutPoint, uint256> mapStakeSeen;
 // The larger the stake, the easier to meet the condition
 // 
 
+
+// 
+// Current block = blockchain tip
+// Next block = candidate block
+//
+
 // 
 // Compact data format (uint32_t)
 // From left to right:
 // 8 bit exponent, e
 // 24 bit mantissa, m
 // Value, v = m x (256 ^ (e-3))
+// 
+
+//
+// FormatISO8601DateTime
+// Number of seconds since the first second of 1970 -> 
+// GMT year month day hour minute second
+// 
+
+// 
+// SER_GETHASH
+// Avoid inclusion of unnecessary metadata
 // 
 
 bool blnfncCheckStakeKernelHash (

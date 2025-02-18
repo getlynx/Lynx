@@ -267,6 +267,9 @@ static RPCHelpMan list()
     // Traverse returned uuids
     for (auto& strUUID : vctUUIDs) {
 
+        // Initialize file length
+        intFileLength = 0;
+
         // Traverse filelength map
         for (const auto& m : gmapFileLength) {
 
