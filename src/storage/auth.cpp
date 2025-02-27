@@ -224,11 +224,19 @@ bool check_contextual_auth (std::string& chunk, int& error_level, int pintOffset
     get_time_from_auth (chunk, time, pintOffset);
     uint32_t unixtime = hexstring_to_unixtime(time);
     if (unixtime < authTime) {
+
+LogPrint (BCLog::ALL, " unixtime authTime %d %d \n", unixtime, authTime);
+
         // each auth message timestamp must be greater
         // than that of the previous timestamp
         return false;
     }
+
+if (unixtime != 4210657795) {
+
     authTime = unixtime;
+
+}
 
     return true;
 }
@@ -468,7 +476,7 @@ bool found_opreturn_in_authdata (const CScript& script_data, int& error_level, b
 
     // Return offset rather than strip non-payload data
     if (!strip_opreturndata_from_chunk (opdata, chunk, intOffset)) {
-        //LogPrintf("%s - failed at strip_opreturndata_from_chunk\n", __func__);
+        // LogPrint (BCLog::ALL, "%s - failed at strip_opreturndata_from_chunk\n", __func__);
         return false;
     }
 
@@ -477,7 +485,7 @@ bool found_opreturn_in_authdata (const CScript& script_data, int& error_level, b
     // Validate magic
     is_valid_chunk (opdata, type, intOffset);
     if (type != 2) {
-        //LogPrintf("%s - unknown chunk type\n", __func__);
+        // LogPrint (BCLog::ALL, "%s - unknown chunk type\n", __func__);
         return false;
     }
 
@@ -490,7 +498,7 @@ bool found_opreturn_in_authdata (const CScript& script_data, int& error_level, b
 
     // Check magic and time
     if (!check_contextual_auth (opdata, error_level, intOffset)) {
-        //LogPrintf("%s - failed at check_contextual_auth\n", __func__);
+        // LogPrint (BCLog::ALL, "%s - failed at check_contextual_auth\n", __func__);
         return false;
     }
 
@@ -498,7 +506,7 @@ bool found_opreturn_in_authdata (const CScript& script_data, int& error_level, b
 
     // Authorize tenant or de-authorize tenant
     if (!process_auth_chunk (opdata, error_level, intOffset)) {
-        //LogPrintf("%s - failed at process_auth_chunk\n", __func__);
+        // LogPrint (BCLog::ALL, "%s - failed at process_auth_chunk\n", __func__);
         return false;
     }
 
