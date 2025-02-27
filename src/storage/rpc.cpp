@@ -544,8 +544,8 @@ static RPCHelpMan allow()
         CMutableTransaction tx;
         std::string opreturn_payload;
 
-        // type = 0;
-        // time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+        type = 0;
+        time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
 
         // LogPrint (BCLog::ALL, "\n");
         // LogPrint (BCLog::ALL, "time in seconds since the first second of 1970 (3600*24*365*54 ..): %d\n", time);
