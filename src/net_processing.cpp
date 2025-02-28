@@ -5125,14 +5125,14 @@ void PeerManagerImpl::CheckForStaleTipAndEvictPeers()
             // Greater than five minutes old
       	    if (count_seconds(now - m_last_tip_update.load()) > 300) {            
 
-                // Greater than fifteen minutes old
-                if (count_seconds(now - m_last_tip_update.load()) > 900) {            
+                // Greater than 1 hour old
+                if (count_seconds(now - m_last_tip_update.load()) > 3600) {            
 
                     // Always log
                     LogPrintf("Potential stale tip detected, will try using extra outbound peer (last tip update: %d seconds ago)\n",
                               count_seconds(now - m_last_tip_update.load()));
 
-                // Between five and fifteen minutes old
+                // Between five and 60 minutes old
                 } else {
 
                     // Log if debug=pos

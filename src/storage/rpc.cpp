@@ -418,12 +418,12 @@ static RPCHelpMan status()
 static RPCHelpMan tenants()
 {
     return RPCHelpMan{"tenants",
-                "\nDisplay the current list of Tenants.\n",
+                "\nDisplay the current list of data storage tenants.\n",
                 {},
                 {
                     RPCResult{
                         RPCResult::Type::ARR, "", "",
-                        {{RPCResult::Type::STR_HEX, "", "The hash160 of the Tenant's authentication key."}}},
+                        {{RPCResult::Type::STR_HEX, "", "A list of current data storage tenant keys."}}},
                 },
                 RPCExamples{
                     HelpExampleCli("tenants", "")
@@ -433,7 +433,7 @@ static RPCHelpMan tenants()
 {
 
     if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
-        return std::string("not-authenticated as manager");
+        return std::string("Role-based restriction: Current role cannot perform this action");
     }
 
     UniValue ret(UniValue::VARR);
@@ -452,7 +452,7 @@ static RPCHelpMan tenants()
 static RPCHelpMan auth()
 {
     return RPCHelpMan{"auth",
-                "\nAuthenticate the data storage tenant for a 72 block (~6 hour) session.\n",
+                "\nAuthenticate a data storage tenant for a 72 block (~6 hour) session.\n",
                 {
                     {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO, "WIF-Format Privatekey."},
                 },
@@ -509,9 +509,9 @@ static RPCHelpMan auth()
 static RPCHelpMan allow()
 {
     return RPCHelpMan{"allow",
-                "\nAdd a new data storage Tenant.\n",
+                "\nAdd a new data storage tenant.\n",
                 {
-                    {"hash160", RPCArg::Type::STR, RPCArg::Optional::NO, "The hash160 of the Tenants key."},
+                    {"hash160", RPCArg::Type::STR, RPCArg::Optional::NO, "A new tenant key to be allowed to store data."},
                 },
                 RPCResult{
                     RPCResult::Type::STR, "", "success or failure"},
@@ -536,7 +536,7 @@ static RPCHelpMan allow()
     if (is_auth_member(authUser)) {
 
         if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
-            return std::string("not-authenticated as manager");
+            return std::string("Role-based restriction: Current role cannot perform this action");
         }
 
         int type;
@@ -574,9 +574,9 @@ static RPCHelpMan allow()
 static RPCHelpMan deny()
 {
     return RPCHelpMan{"deny",
-                "\nRemove a data storage Tenant.\n",
+                "\nRemove a data storage tenant.\n",
                 {
-                    {"hash160", RPCArg::Type::STR, RPCArg::Optional::NO, "The hash160 of the Tenants key."},
+                    {"hash160", RPCArg::Type::STR, RPCArg::Optional::NO, "The data storage tenant key to be removed."},
                 },
                 RPCResult{
                     RPCResult::Type::STR, "", "success or failure"},
@@ -601,7 +601,7 @@ static RPCHelpMan deny()
     if (is_auth_member(authUser)) {
 
         if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
-            return std::string("not-authenticated as manager");
+            return std::string("Role-based restriction: Current role cannot perform this action");
         }
 
         int type;
