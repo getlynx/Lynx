@@ -441,7 +441,9 @@ static RPCHelpMan tenants()
     std::vector<uint160> tempList;
     copy_auth_list(tempList);
     for (auto& l : tempList) {
-        ret.push_back(l.ToString());
+        if (l.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+            ret.push_back(l.ToString());
+        }
     }
 
     return ret;
