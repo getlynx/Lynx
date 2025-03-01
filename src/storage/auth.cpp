@@ -615,7 +615,8 @@ bool scan_blocks_for_authdata(ChainstateManager& chainman)
 
     // Scan most recent blockspan blocks
     // for (int height = Params().GetConsensus().nUUIDBlockStart; height < tip_height; height++) {
-    for (int height = u32Cutoff; height < tip_height; height++) {
+    // for (int height = u32Cutoff; height < tip_height; height++) {
+    for (uint32_t height = u32Cutoff; height < tip_height; height++) {
 
 gu32BlockHeight = height;        
 
