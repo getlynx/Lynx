@@ -35,6 +35,8 @@
 using namespace wallet;
 using node::ReadBlockFromDisk;
 
+extern bool gblnDisableStaking;
+
 extern uint160 authUser;
 extern WalletContext* storage_context;
 extern ChainstateManager* storage_chainman;
@@ -54,21 +56,102 @@ static RPCHelpMan store()
              {"filepath", RPCArg::Type::STR, RPCArg::Optional::NO, "Full path of file to be uploaded"},
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Custom unique identifier (32 characters, hexadecimal format, must be unique across all files)"},
          },
-         RPCResult{
-            RPCResult::Type::STR, "", "success or failure"},
-         RPCExamples{
+//          RPCResult{
+//             RPCResult::Type::STR, "", "success or failure"},
+
+
+            RPCResult{
+                RPCResult::Type::ARR, "", "",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                    {
+//                        {RPCResult::Type::STR_HEX, "txid", "the transaction id"},
+                          {RPCResult::Type::STR, "result", "result"},
+                          {RPCResult::Type::STR, "rmessage", "message"},
+                          {RPCResult::Type::STR, "identifier", "identifier"},
+                          {RPCResult::Type::STR, "tenant", "tenant"},
+                          {RPCResult::Type::NUM, "suitableinputs", "suitableinputs"},
+                          {RPCResult::Type::NUM, "storagefee", "storagefee"},
+                          {RPCResult::Type::STR, "storagetime", "storagetime"},
+                          {RPCResult::Type::NUM, "currentblock", "currentblock"},
+                          {RPCResult::Type::STR, "stakingstatus", "stakingstatus"},
+                          
+//                        {RPCResult::Type::STR, "address", /*optional=*/true, "the lynx address"},
+//                        {RPCResult::Type::STR, "label", /*optional=*/true, "The associated label, or \"\" for the default label"},
+//                        {RPCResult::Type::STR, "scriptPubKey", "the script key"},
+//                        {RPCResult::Type::STR_AMOUNT, "amount", "the transaction output amount in " + CURRENCY_UNIT},
+//                        {RPCResult::Type::NUM, "confirmations", "The number of confirmations"},
+//                        {RPCResult::Type::NUM, "ancestorcount", /*optional=*/true, "The number of in-mempool ancestor transactions, including this one (if transaction is in the mempool)"},
+//                        {RPCResult::Type::NUM, "ancestorsize", /*optional=*/true, "The virtual transaction size of in-mempool ancestors, including this one (if transaction is in the mempool)"},
+//                        {RPCResult::Type::STR_AMOUNT, "ancestorfees", /*optional=*/true, "The total fees of in-mempool ancestors (including this one) with fee deltas used for mining priority in " + CURRENCY_ATOM + " (if transaction is in the mempool)"},
+//                        {RPCResult::Type::STR_HEX, "redeemScript", /*optional=*/true, "The redeemScript if scriptPubKey is P2SH"},
+//                        {RPCResult::Type::BOOL, "spendable", "Whether we have the private keys to spend this output"},
+//                        {RPCResult::Type::BOOL, "solvable", "Whether we know how to spend this output, ignoring the lack of keys"},
+//                        {RPCResult::Type::BOOL, "reused", /*optional=*/true, "(only present if avoid_reuse is set) Whether this output is reused/dirty (sent to an address that was previously spent from)"},
+//                        {RPCResult::Type::STR, "desc", /*optional=*/true, "(only when solvable) A descriptor for spending this output"},
+//                        {RPCResult::Type::ARR, "parent_descs", /*optional=*/false, "List of parent descriptors for the scriptPubKey of this coin.", {
+//                            {RPCResult::Type::STR, "desc", "The descriptor string."},
+//                        }},
+//                        {RPCResult::Type::BOOL, "safe", "Whether this output is considered safe to spend. Unconfirmed transactions\n"
+//                                                        "from outside keys and unconfirmed replacement transactions are considered unsafe\n"
+//                                                        "and are not eligible for spending by fundrawtransaction and sendtoaddress."},
+                    }},
+                }
+            },
+
+
+            RPCExamples{
             "\nStore /home/username/documents/research.pdf on the Lynx blockchain.\n"
             + HelpExampleCli("store", "/home/username/documents/research.pdf")
         + HelpExampleRpc("store", "/home/username/documents/research.pdf")
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
+
+
+
+    std::string stakingstatus;
+    if (gblnDisableStaking) {
+        stakingstatus = "disabled";
+    } else {
+        stakingstatus = "enabled";
+    }
+
+
+
+    const CChain& active_chain = storage_chainman->ActiveChain();
+    const int tip_height = active_chain.Height();            
+    
+    
+    
+    UniValue results(UniValue::VARR);
+    UniValue entry(UniValue::VOBJ);
+
+//     entry.pushKV("str", "str");
+//     entry.pushKV("int", 1);
+
+//     results.push_back(entry);
+
+//     return results;
+
+
+
     if (!is_auth_member(authUser)) {
-        return std::string("Please authenticate to use this command.");
+        entry.pushKV("result", "failure");
+        entry.pushKV("rmessage", "Please authenticate to use this command.");
+        results.push_back(entry);
+        return results;
+    
+        // return std::string("Please authenticate to use this command.");
     }
 
     if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
-        return std::string("not-authenticated as tenant");
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "not-authenticated as tenant.");
+        results.push_back(entry);
+        return results;
+    
+        // return std::string("not-authenticated as tenant");
     }
 
     std::string put_filename = request.params[0].get_str();
@@ -94,15 +177,40 @@ static RPCHelpMan store()
 
             for (auto& uuid : uuid_found) {
                 if (uuid == put_uuid) {
-                    return std::string("A duplicate unique identifier was discovered.");
+                    entry.pushKV("result", "failure");
+                    entry.pushKV("message", "A duplicate unique identifier was discovered.");
+                        results.push_back(entry);
+                    return results;
+                
+//                     return std::string("A duplicate unique identifier was discovered.");
                 }     
             }
         } else {
             if (invalidity_type == 1) {
-                return std::string ("The custom unique identifier provided has an invalid length.");
+                entry.pushKV("result", "failure");
+                entry.pushKV("message", "The custom unique identifier provided has an invalid length.");
+                results.push_back(entry);
+                return results;
+            
+//                 return std::string ("The custom unique identifier provided has an invalid length.");
             }
+
+
+
             if (invalidity_type == 2) {
-                return std::string ("uuid_invalid_hex_notation");
+                entry.pushKV("result", "failure");
+                entry.pushKV("message", "uuid_invalid_hex_notation.");
+                entry.pushKV("identifier", "n/a");
+                entry.pushKV("tenant", authUser.ToString());
+                entry.pushKV("suitableinputs", 0);
+                entry.pushKV("storagefee", 0);
+                entry.pushKV("storagetime", "n/a");
+                entry.pushKV("currentblock", tip_height);
+                entry.pushKV("stakingstatus", stakingstatus);
+                results.push_back(entry);
+                return results;
+            
+//                 return std::string ("uuid_invalid_hex_notation");
             }
         }
     }
@@ -132,8 +240,53 @@ static RPCHelpMan store()
 
 LogPrint (BCLog::ALL, "uuid %s\n", put_uuid);
 
+
+
+//         auto vpwallets = GetWallets(*storage_context);
+//         size_t nWallets = vpwallets.size();
+//         if (nWallets < 1) {
+//             entry.pushKV("result", "failure");
+//             entry.pushKV("message", "No wallet.");
+//             entry.pushKV("identifier", "n/a");
+//             entry.pushKV("tenant", "n/a");
+//             results.push_back(entry);
+//             return results;
+//         }
+
+//         int suitable_inputs;
+//         estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
+
+
+
+int filelen = read_file_size(put_filename);
+int est_chunks = calculate_chunks_from_filesize(filelen);
+int suitable_inputs = ((est_chunks+(OPRETURN_PER_TX-1))/OPRETURN_PER_TX);
+
+
+
+uint32_t time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+time_t time2 = time;
+tm* time3 = localtime(&time2);
+char time4[80];
+strftime(time4, sizeof(time4), "%Y-%m-%d %H:%M:%S", time3);
+std::string storagetime(time4);
+
+
+
+        entry.pushKV("result", "success");
+        entry.pushKV("message", "n/a");
+        entry.pushKV("identifier", put_uuid);
+        entry.pushKV("tenant", authUser.ToString());
+        entry.pushKV("suitableinputs", suitable_inputs);
+        entry.pushKV("storagefee", filelen);
+        entry.pushKV("storagetime", storagetime);
+        entry.pushKV("currentblock", tip_height);
+        entry.pushKV("stakingstatus", stakingstatus);
+        results.push_back(entry);
+        return results;
+
         // return get_result_hash();
-        return put_uuid;
+        // return put_uuid;
     }
 
     return std::string("failure");

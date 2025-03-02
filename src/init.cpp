@@ -162,6 +162,8 @@ static const char* DEFAULT_ASMAP_FILENAME="ip_asn.map";
  */
 static const char* BITCOIN_PID_FILENAME = "bitcoind.pid";
 
+bool gblnDisableStaking;
+
 static fs::path GetPidFile(const ArgsManager& args)
 {
     return AbsPathForConfigVal(args, args.GetPathArg("-pid", BITCOIN_PID_FILENAME));
@@ -1860,8 +1862,11 @@ LogPrint (BCLog::ALL, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSAGE_L
         auto vpwallets = GetWallets(*node.wallet_loader->context());
         num_wallets = vpwallets.size();
     }
-    if (num_wallets > 0) {
+    if (num_wallets > 0) { 
         bool disablestaking = args.GetBoolArg("-disablestaking", DISABLE_STAKING);
+
+gblnDisableStaking = disablestaking;
+
         if (disablestaking) {
             LogPrintf("-disablestaking is enabled\n");
         } else {
