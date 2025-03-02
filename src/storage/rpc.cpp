@@ -516,7 +516,10 @@ static RPCHelpMan allow()
                     {"hash160", RPCArg::Type::STR, RPCArg::Optional::NO, "A new tenant key to be allowed to store data."},
                 },
                 RPCResult{
-                    RPCResult::Type::STR, "", "success or failure"},
+                    RPCResult::Type::ARR, "", "",
+                    {{RPCResult::Type::STR, "", "The status of the operation."}}},
+//              RPCResult{
+//                  RPCResult::Type::STR, "", "success or failure"},
                 RPCExamples{
                     HelpExampleCli("allow", "00112233445566778899aabbccddeeff00112233")
             + HelpExampleRpc("allow", "00112233445566778899aabbccddeeff00112233")
@@ -528,9 +531,13 @@ static RPCHelpMan allow()
         // return std::string("authtx-in-mempool");
     // }
 
+    UniValue ret(UniValue::VARR);
+
     std::string hash160 = request.params[0].get_str();
     if (hash160.size() != OPAUTH_HASHLEN*2) {
-        return std::string("hash160-wrong-size");
+        ret.push_back("hash160-wrong-size");
+        return ret;
+        // return std::string("hash160-wrong-size");
     }
     uint160 hash = uint160S(hash160);
 
@@ -538,7 +545,9 @@ static RPCHelpMan allow()
     if (is_auth_member(authUser)) {
 
         if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
-            return std::string("Role-based restriction: Current role cannot perform this action");
+            ret.push_back("Role-based restriction: Current role cannot perform this action");
+            return ret;
+            // return std::string("Role-based restriction: Current role cannot perform this action");
         }
 
         int type;
@@ -553,22 +562,33 @@ static RPCHelpMan allow()
         // LogPrint (BCLog::ALL, "time in seconds since the first second of 1970 (3600*24*365*54 ..): %d\n", time);
 
         if (!generate_auth_payload(opreturn_payload, type, time, hash160)) {
-            return std::string("error-generating-authpayload");
+            ret.push_back("error-generating-authpayload");
+            return ret;
+            // return std::string("error-generating-authpayload");
         }
 
         if (!generate_auth_transaction(*storage_context, tx, opreturn_payload)) {
-            return std::string("error-generating-authtransaction");
+            ret.push_back("error-generating-authtransaction");
+            return ret;
+            // return std::string("error-generating-authtransaction");
         }
 
         // add_auth_member(hash);
 
-        return std::string("success");
+        ret.push_back("success");
+        ret.push_back(hash160);
+        return ret;
+        // return std::string("success");
 
     } else {
-        return std::string("authentication failure");
+        ret.push_back("authentication failure");
+        return ret;
+        // return std::string("authentication failure");
     }
 
-    return std::string("failure");
+    ret.push_back("failure");
+    return ret;
+    // return std::string("failure");
 },
     };
 }
