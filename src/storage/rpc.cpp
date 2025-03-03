@@ -621,8 +621,8 @@ static RPCHelpMan auth()
                             {RPCResult::Type::OBJ, "", "",
                             {
                                   {RPCResult::Type::STR, "result", "success | failure"},
-                                  {RPCResult::Type::STR, "message", "Not authenticated as tenent | Not authenticated | Repeated UUID | Improper length UUID | Invalid hex notation UUID"},
-                                  {RPCResult::Type::STR, "identifier", "Universally unique asset identifier"},
+                                  {RPCResult::Type::STR, "message", "Authenticated as Manager | Authenticated as tenant | Invalid key | Unauthorized tenant | No wallet"},
+                                  {RPCResult::Type::NUM, "capacity", "Number of aqvailable store asset KB."},
                                   {RPCResult::Type::STR, "tenant", "Hashed public tenant key"},
                                   {RPCResult::Type::NUM, "suitableinputs", "Suitable inputs needed for store"},
                                   {RPCResult::Type::NUM, "storagefee", "Storage transaction fee in satoshi's"},
@@ -644,24 +644,18 @@ static RPCHelpMan auth()
     UniValue results(UniValue::VARR);
     UniValue entry(UniValue::VOBJ);
 
-    UniValue ret(UniValue::VARR);
-
     std::string privatewif = request.params[0].get_str();
     if (privatewif.empty() || !set_auth_user(privatewif)) {
         entry.pushKV("result", "failure");
-        entry.pushKV("message", "Key validation failure.");
+        entry.pushKV("message", "Invalid key.");
         results.push_back(entry);
         return results;
-    
-//         ret.push_back(std::string("key validation failure"));
     } else {
         if (!is_auth_member(authUser)) {
             entry.pushKV("result", "failure");
             entry.pushKV("message", "Unauthorized tenant.");
             results.push_back(entry);
             return results;
-        
-//             ret.push_back(std::string("Unauthorized tenant."));
         } else {
 
             auto vpwallets = GetWallets(*storage_context);
@@ -671,10 +665,7 @@ static RPCHelpMan auth()
                 entry.pushKV("message", "No wallet.");
                 results.push_back(entry);
                 return results;
-            
-//                 ret.push_back(std::string("No wallet."));
-//                 return ret;
-                }
+            }
 
             int suitable_inputs;
             estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
@@ -689,16 +680,17 @@ static RPCHelpMan auth()
             }
             
             entry.pushKV("result", "success");
-            entry.pushKV("message", "n/a");
+            if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+                entry.pushKV("message", "You are authenticated as a tenant.");
+            } else {                
+                entry.pushKV("message", "You are authenticated as the manager.");
+            }
             results.push_back(entry);
             return results;
         
-//             ret.push_back(std::string("success"));
-//             ret.push_back(suitable_inputs);
         }
     }
 
-//     return ret;
 },
     };
 }
