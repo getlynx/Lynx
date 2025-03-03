@@ -623,8 +623,8 @@ static RPCHelpMan auth()
                                   {RPCResult::Type::STR, "result", "success | failure"},
                                   {RPCResult::Type::STR, "message", "Authenticated as Manager | Authenticated as tenant | Invalid key | Unauthorized tenant | No wallet"},
                                   {RPCResult::Type::NUM, "capacity", "Number of aqvailable store asset KB."},
-                                  {RPCResult::Type::STR, "tenant", "Hashed public tenant key"},
-                                  {RPCResult::Type::NUM, "suitableinputs", "Suitable inputs needed for store"},
+                                  {RPCResult::Type::STR, "sessionstart", "Authentication session start timestamp."},
+                                  {RPCResult::Type::STR, "sessionend", "Authentication session end timestamp."},
                                   {RPCResult::Type::NUM, "storagefee", "Storage transaction fee in satoshi's"},
                                   {RPCResult::Type::STR, "storagetime", "Storage date and time"},
                                   {RPCResult::Type::NUM, "currentblock", "Current block"},
@@ -691,6 +691,30 @@ static RPCHelpMan auth()
                 u32Capacity = 0;
             }
             entry.pushKV("capacity", u32Capacity);
+
+            uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+            time_t tmtEpochTime = u32CurrentTime;
+            tm* timLocalTime = localtime(&tmtEpochTime);
+            char chrFormattedLocalTime[80];
+            strftime(chrFormattedLocalTime, sizeof(chrFormattedLocalTime), "%Y-%m-%d %H:%M:%S", timLocalTime);
+            std::string strFormattedLocalTime(chrFormattedLocalTime);
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                strFormattedLocalTime = "n/a";
+            }
+            entry.pushKV("sessionstart", strFormattedLocalTime);
+
+            uint32_t u32SessionEndTime = u32CurrentTime + 21600;
+            tmtEpochTime = u32SessionEndTime;
+            timLocalTime = localtime(&tmtEpochTime);
+            chrFormattedLocalTime[80];
+            strftime(chrFormattedLocalTime, sizeof(chrFormattedLocalTime), "%Y-%m-%d %H:%M:%S", timLocalTime);
+            std::string strFormattedLocalTime2(chrFormattedLocalTime);
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                strFormattedLocalTime2 = "n/a";
+            }
+            entry.pushKV("sessionend", strFormattedLocalTime2);
+
+
 
             results.push_back(entry);
             return results;
