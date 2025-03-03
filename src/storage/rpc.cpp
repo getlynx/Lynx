@@ -625,8 +625,8 @@ static RPCHelpMan auth()
                                   {RPCResult::Type::NUM, "capacity", "Number of aqvailable store asset KB."},
                                   {RPCResult::Type::STR, "sessionstart", "Authentication session start timestamp."},
                                   {RPCResult::Type::STR, "sessionend", "Authentication session end timestamp."},
-                                  {RPCResult::Type::NUM, "storagefee", "Storage transaction fee in satoshi's"},
-                                  {RPCResult::Type::STR, "storagetime", "Storage date and time"},
+                                  {RPCResult::Type::STR, "sessionstartblock", "Authentication session start block."},
+                                  {RPCResult::Type::STR, "sessionendtime", "Authentication session end block."},
                                   {RPCResult::Type::NUM, "currentblock", "Current block"},
                                   {RPCResult::Type::STR, "stakingstatus", "enabled | disabled"},
                             }},
@@ -714,6 +714,20 @@ static RPCHelpMan auth()
             }
             entry.pushKV("sessionend", strFormattedLocalTime2);
 
+            const CChain& active_chain = storage_chainman->ActiveChain();
+            const int tip_height = active_chain.Height();            
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                entry.pushKV("sessionstartblock", 0);
+            } else {                
+                entry.pushKV("sessionstartblock", tip_height);
+            }
+
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                entry.pushKV("sessionendblock", 0);
+            } else {                
+                entry.pushKV("sessionendblock", tip_height + 72);
+            }
+            
 
 
             results.push_back(entry);
