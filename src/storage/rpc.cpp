@@ -685,6 +685,13 @@ static RPCHelpMan auth()
             } else {                
                 entry.pushKV("message", "You are authenticated as the manager.");
             }
+
+            uint32_t u32Capacity = suitable_inputs * 512 * 256 / 1000;
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                u32Capacity = 0;
+            }
+            entry.pushKV("capacity", u32Capacity);
+
             results.push_back(entry);
             return results;
         
