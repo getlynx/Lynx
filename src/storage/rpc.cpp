@@ -32,6 +32,8 @@
 #include <wallet/transaction.h>
 #include <wallet/wallet.h>
 
+#include <pos/manager.h>
+
 using namespace wallet;
 using node::ReadBlockFromDisk;
 
@@ -627,7 +629,6 @@ static RPCHelpMan auth()
                                   {RPCResult::Type::STR, "sessionend", "Authentication session end timestamp."},
                                   {RPCResult::Type::STR, "sessionstartblock", "Authentication session start block."},
                                   {RPCResult::Type::STR, "sessionendtime", "Authentication session end block."},
-                                  {RPCResult::Type::NUM, "currentblock", "Current block"},
                                   {RPCResult::Type::STR, "stakingstatus", "enabled | disabled"},
                             }},
                         }
@@ -727,7 +728,21 @@ static RPCHelpMan auth()
             } else {                
                 entry.pushKV("sessionendblock", tip_height + 72);
             }
-            
+
+            std::string stakingstatus;
+            if (gblnDisableStaking) {
+                stakingstatus = "disabled";
+            } else {
+                stakingstatus = "enabled";
+            }
+        
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                entry.pushKV("stakingstatus", stakingstatus);
+            } else {                
+                stakeman_request_stop();
+                entry.pushKV("stakingstatus", "disabled");
+            }
+
 
 
             results.push_back(entry);
