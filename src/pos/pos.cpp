@@ -23,6 +23,41 @@
 std::list<COutPoint> listStakeSeen;
 std::map<COutPoint, uint256> mapStakeSeen;
 
+bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* pindexPrev, unsigned int nBits, int64_t nTime, const COutPoint& prevout, int64_t* pBlockTime)
+{
+    uint256 hashProofOfStake, targetProofOfStake;
+
+    Coin coin;
+    {
+        LOCK(::cs_main);
+        if (!chain_state.CoinsTip().GetCoin(prevout, coin)) {
+            return error("%s: prevout not found", __func__);
+        }
+    }
+    if (coin.IsSpent()) {
+        return error("%s: prevout is spent", __func__);
+    }
+
+    CBlockIndex* pindex = chain_state.m_chain[coin.nHeight];
+    if (!pindex) {
+        return false;
+    }
+
+    int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(pindexPrev->nHeight / 2));
+    int nDepth = pindexPrev->nHeight - coin.nHeight;
+
+    if (nRequiredDepth > nDepth) {
+        return false;
+    }
+    if (pBlockTime) {
+        *pBlockTime = pindex->GetBlockTime();
+    }
+
+    CAmount amount = coin.out.nValue;
+    return CheckStakeKernelHash(pindexPrev, nBits, *pBlockTime,
+        amount, prevout, nTime, hashProofOfStake, targetProofOfStake);
+}
+
 // 
 // Proof of stake core algorithm 
 // 
@@ -284,41 +319,6 @@ uint256 ComputeStakeModifier(const CBlockIndex* pindexPrev, const uint256& kerne
     CDataStream ss(SER_GETHASH, 0);
     ss << kernel << pindexPrev->nStakeModifier;
     return Hash(ss);
-}
-
-bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* pindexPrev, unsigned int nBits, int64_t nTime, const COutPoint& prevout, int64_t* pBlockTime)
-{
-    uint256 hashProofOfStake, targetProofOfStake;
-
-    Coin coin;
-    {
-        LOCK(::cs_main);
-        if (!chain_state.CoinsTip().GetCoin(prevout, coin)) {
-            return error("%s: prevout not found", __func__);
-        }
-    }
-    if (coin.IsSpent()) {
-        return error("%s: prevout is spent", __func__);
-    }
-
-    CBlockIndex* pindex = chain_state.m_chain[coin.nHeight];
-    if (!pindex) {
-        return false;
-    }
-
-    int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(pindexPrev->nHeight / 2));
-    int nDepth = pindexPrev->nHeight - coin.nHeight;
-
-    if (nRequiredDepth > nDepth) {
-        return false;
-    }
-    if (pBlockTime) {
-        *pBlockTime = pindex->GetBlockTime();
-    }
-
-    CAmount amount = coin.out.nValue;
-    return CheckStakeKernelHash(pindexPrev, nBits, *pBlockTime,
-        amount, prevout, nTime, hashProofOfStake, targetProofOfStake);
 }
 
 /**
