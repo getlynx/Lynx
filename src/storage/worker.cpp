@@ -293,7 +293,8 @@ void thread_storage_worker()
                 std::string stringbuf = std::string(buffer);
                 add_result_text(stringbuf);
             } else {
-                sprintf(buffer, "putTask %s completed successfully", putTask.first.c_str());
+                //sprintf(buffer, "putTask %s completed successfully", putTask.first.c_str());
+                sprintf(buffer, "putTask %s %s completed successfully", putTask.first.c_str(), putTask.second.c_str());
                 std::string stringbuf = std::string(buffer);
                 add_result_text(stringbuf);
             }

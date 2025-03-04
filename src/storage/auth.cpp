@@ -8,6 +8,7 @@
 #include <storage/chunk.h>
 #include <storage/util.h>
 #include <wallet/fees.h>
+#include <timedata.h>
 
 #include <time.h>
 
@@ -15,6 +16,9 @@ using namespace node;
 
 uint160 authUser;
 uint32_t authTime{0};
+
+uint32_t gu32AuthenticationTime;
+
 std::string authUserKey;
 
 RecursiveMutex authListLock;
@@ -97,7 +101,14 @@ bool set_auth_user(std::string& privatewif)
     LogPrint (BCLog::ALL, "setauth set_auth_user privkey authUserKey %s \n", authUserKey);
     LogPrint (BCLog::ALL, "\n");
 
+
+
+    gu32AuthenticationTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+
+
+
     return true;
+
 }
 
 void build_auth_list(const Consensus::Params& params)

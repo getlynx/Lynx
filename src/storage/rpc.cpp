@@ -32,8 +32,16 @@
 #include <wallet/transaction.h>
 #include <wallet/wallet.h>
 
+#include <pos/manager.h>
+
 using namespace wallet;
 using node::ReadBlockFromDisk;
+
+extern bool gblnDisableStaking;
+
+int gintAuthenticationFailures;
+
+extern uint32_t gu32AuthenticationTime;
 
 extern uint160 authUser;
 extern WalletContext* storage_context;
@@ -54,22 +62,125 @@ static RPCHelpMan store()
              {"filepath", RPCArg::Type::STR, RPCArg::Optional::NO, "Full path of file to be uploaded"},
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Custom unique identifier (32 characters, hexadecimal format, must be unique across all files)"},
          },
-         RPCResult{
-            RPCResult::Type::STR, "", "success or failure"},
-         RPCExamples{
+//          RPCResult{
+//             RPCResult::Type::STR, "", "success or failure"},
+
+
+            RPCResult{
+                RPCResult::Type::ARR, "", "",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                    {
+                          {RPCResult::Type::STR, "result", "success | failure"},
+                          {RPCResult::Type::STR, "message", "Not authenticated as tenent | Not authenticated | Repeated UUID | Improper length UUID | Invalid hex notation UUID"},
+                          {RPCResult::Type::STR, "identifier", "Universally unique asset identifier"},
+                          {RPCResult::Type::STR, "tenant", "Hashed public tenant key"},
+                          {RPCResult::Type::NUM, "filesize", "filesize (B)"},
+                          {RPCResult::Type::STR, "storagefee", "Storage transaction fee in lynx"},
+                          {RPCResult::Type::STR, "storagetime", "Storage date and time"},
+                          {RPCResult::Type::NUM, "currentblock", "Current block"},
+                          {RPCResult::Type::STR, "stakingstatus", "enabled | disabled"},
+                    }},
+                }
+            },
+
+
+            RPCExamples{
             "\nStore /home/username/documents/research.pdf on the Lynx blockchain.\n"
             + HelpExampleCli("store", "/home/username/documents/research.pdf")
         + HelpExampleRpc("store", "/home/username/documents/research.pdf")
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
-    if (!is_auth_member(authUser)) {
-        return std::string("Please authenticate to use this command.");
+
+
+
+    std::string stakingstatus;
+    if (gblnDisableStaking) {
+        stakingstatus = "disabled";
+    } else {
+        stakingstatus = "enabled";
     }
 
+
+
+    const CChain& active_chain = storage_chainman->ActiveChain();
+    const int tip_height = active_chain.Height();            
+    
+    
+    
+    UniValue results(UniValue::VARR);
+    UniValue entry(UniValue::VOBJ);
+
+//     entry.pushKV("str", "str");
+//     entry.pushKV("int", 1);
+
+//     results.push_back(entry);
+
+//     return results;
+
+
+
     if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
-        return std::string("not-authenticated as tenant");
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Not authenticated as tenant.");
+        entry.pushKV("identifier", "n/a");
+        entry.pushKV("tenant", "n/a");
+        entry.pushKV("filesize", 0);
+        entry.pushKV("storagefee", 0);
+        entry.pushKV("storagetime", "n/a");
+        entry.pushKV("currentblock", tip_height);
+        entry.pushKV("stakingstatus", stakingstatus);
+        results.push_back(entry);
+        return results;
+    
+        // return std::string("not-authenticated as tenant");
     }
+
+
+
+    if (!is_auth_member(authUser)) {
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Please authenticate to use this command.");
+        entry.pushKV("identifier", "n/a");
+        entry.pushKV("tenant", "n/a");
+        entry.pushKV("filesize", 0);
+        entry.pushKV("storagefee", 0);
+        entry.pushKV("storagetime", "n/a");
+        entry.pushKV("currentblock", tip_height);
+        entry.pushKV("stakingstatus", stakingstatus);
+        results.push_back(entry);
+        return results;
+    
+        // return std::string("Please authenticate to use this command.");
+    } else {
+
+
+
+        uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+
+LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32CurrentTime, gu32AuthenticationTime);
+
+        if ((u32CurrentTime - gu32AuthenticationTime) > 21600) {
+
+            entry.pushKV("result", "failure");
+            entry.pushKV("message", "Please authenticate to use this command.");
+            entry.pushKV("identifier", "n/a");
+            entry.pushKV("tenant", "n/a");
+            entry.pushKV("filesize", 0);
+            entry.pushKV("storagefee", 0);
+            entry.pushKV("storagetime", "n/a");
+            entry.pushKV("currentblock", tip_height);
+            entry.pushKV("stakingstatus", stakingstatus);
+            results.push_back(entry);
+            return results;
+        }
+
+
+
+    }
+
+
 
     std::string put_filename = request.params[0].get_str();
     std::string put_uuid = "";
@@ -94,15 +205,54 @@ static RPCHelpMan store()
 
             for (auto& uuid : uuid_found) {
                 if (uuid == put_uuid) {
-                    return std::string("A duplicate unique identifier was discovered.");
+                    entry.pushKV("result", "failure");
+                    entry.pushKV("message", "A duplicate unique identifier was discovered.");
+                    entry.pushKV("identifier", "n/a");
+                    entry.pushKV("tenant", authUser.ToString());
+                    entry.pushKV("filesize", 0);
+                    entry.pushKV("storagefee", 0);
+                    entry.pushKV("storagetime", "n/a");
+                    entry.pushKV("currentblock", tip_height);
+                    entry.pushKV("stakingstatus", stakingstatus);
+                    results.push_back(entry);
+                    return results;
+                
+//                     return std::string("A duplicate unique identifier was discovered.");
                 }     
             }
         } else {
             if (invalidity_type == 1) {
-                return std::string ("The custom unique identifier provided has an invalid length.");
+                entry.pushKV("result", "failure");
+                entry.pushKV("message", "The custom unique identifier provided has an invalid length.");
+                entry.pushKV("identifier", "n/a");
+                entry.pushKV("tenant", authUser.ToString());
+                entry.pushKV("filesize", 0);
+                entry.pushKV("storagefee", 0);
+                entry.pushKV("storagetime", "n/a");
+                entry.pushKV("currentblock", tip_height);
+                entry.pushKV("stakingstatus", stakingstatus);
+                results.push_back(entry);
+                return results;
+            
+//                 return std::string ("The custom unique identifier provided has an invalid length.");
             }
+
+
+
             if (invalidity_type == 2) {
-                return std::string ("uuid_invalid_hex_notation");
+                entry.pushKV("result", "failure");
+                entry.pushKV("message", "Invalid UUID hex notation.");
+                entry.pushKV("identifier", "n/a");
+                entry.pushKV("tenant", authUser.ToString());
+                entry.pushKV("filesize", 0);
+                entry.pushKV("storagefee", 0);
+                entry.pushKV("storagetime", "n/a");
+                entry.pushKV("currentblock", tip_height);
+                entry.pushKV("stakingstatus", stakingstatus);
+                results.push_back(entry);
+                return results;
+            
+//                 return std::string ("uuid_invalid_hex_notation");
             }
         }
     }
@@ -132,8 +282,57 @@ static RPCHelpMan store()
 
 LogPrint (BCLog::ALL, "uuid %s\n", put_uuid);
 
+
+
+//         auto vpwallets = GetWallets(*storage_context);
+//         size_t nWallets = vpwallets.size();
+//         if (nWallets < 1) {
+//             entry.pushKV("result", "failure");
+//             entry.pushKV("message", "No wallet.");
+//             entry.pushKV("identifier", "n/a");
+//             entry.pushKV("tenant", "n/a");
+//             results.push_back(entry);
+//             return results;
+//         }
+
+//         int suitable_inputs;
+//         estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
+
+
+
+int filelen = read_file_size(put_filename);
+int est_chunks = calculate_chunks_from_filesize(filelen);
+int suitable_inputs = ((est_chunks+(OPRETURN_PER_TX-1))/OPRETURN_PER_TX);
+
+
+
+uint32_t time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+time_t time2 = time;
+tm* time3 = localtime(&time2);
+char time4[80];
+strftime(time4, sizeof(time4), "%Y-%m-%d %H:%M:%S", time3);
+std::string storagetime(time4);
+
+std::ostringstream oss;
+oss << std::fixed << std::setprecision(8) << (double)filelen/100000000.0;
+std::string str_value = oss.str();
+
+
+
+        entry.pushKV("result", "success");
+        entry.pushKV("message", "n/a");
+        entry.pushKV("identifier", put_uuid);
+        entry.pushKV("tenant", authUser.ToString());
+        entry.pushKV("filesize", filelen);
+        entry.pushKV("storagefee", str_value);
+        entry.pushKV("storagetime", storagetime);
+        entry.pushKV("currentblock", tip_height);
+        entry.pushKV("stakingstatus", stakingstatus);
+        results.push_back(entry);
+        return results;
+
         // return get_result_hash();
-        return put_uuid;
+        // return put_uuid;
     }
 
     return std::string("failure");
@@ -441,7 +640,9 @@ static RPCHelpMan tenants()
     std::vector<uint160> tempList;
     copy_auth_list(tempList);
     for (auto& l : tempList) {
-        ret.push_back(l.ToString());
+        if (l.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+            ret.push_back(l.ToString());
+        }
     }
 
     return ret;
@@ -459,29 +660,101 @@ static RPCHelpMan auth()
                 {
                     RPCResult{
                         RPCResult::Type::ARR, "", "",
-                        {{RPCResult::Type::STR, "", "The status of the operation."}}},
+                        {
+                            {RPCResult::Type::OBJ, "", "",
+                            {
+                                  {RPCResult::Type::STR, "result", "success | failure"},
+                                  {RPCResult::Type::STR, "message", "Authenticated as Manager | Authenticated as tenant | Invalid key | Unauthorized tenant | No wallet"},
+                                  {RPCResult::Type::NUM, "capacity", "Number of aqvailable store asset KB."},
+                                  {RPCResult::Type::STR, "sessionstart", "Authentication session start timestamp."},
+                                  {RPCResult::Type::STR, "sessionend", "Authentication session end timestamp."},
+                                  {RPCResult::Type::STR, "sessionstartblock", "Authentication session start block."},
+                                  {RPCResult::Type::STR, "sessionendtime", "Authentication session end block."},
+                                  {RPCResult::Type::STR, "stakingstatus", "enabled | disabled"},
+                            }},
+                        }
+                    },
                 },
-                RPCExamples{
+
+    RPCExamples{
                     HelpExampleCli("auth", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo513hJazyCEj9s6eDiFj8")
             + HelpExampleRpc("auth", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo513hJazyCEj9s6eDiFj8")
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
-    UniValue ret(UniValue::VARR);
+
+    UniValue results(UniValue::VARR);
+    UniValue entry(UniValue::VOBJ);
+
+    int intSleep = 1;
+
+    std::string stakingstatus;
+    if (gblnDisableStaking) {
+        stakingstatus = "disabled";
+    } else {
+        stakingstatus = "enabled";
+    }
 
     std::string privatewif = request.params[0].get_str();
     if (privatewif.empty() || !set_auth_user(privatewif)) {
-        ret.push_back(std::string("key validation failure"));
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Invalid key.");
+        entry.pushKV("capacity", 0);
+        entry.pushKV("sessionstart", "n/a");
+        entry.pushKV("sessionend", "n/a");
+        entry.pushKV("sessionstartblock", "n/a");
+        entry.pushKV("sessionendblock", "n/a");
+        entry.pushKV("stakingstatus", stakingstatus);
+
+        gintAuthenticationFailures = gintAuthenticationFailures + 1;
+        for (int i = 0; i < gintAuthenticationFailures; i++) {
+            intSleep = intSleep * 2;
+        }
+        sleep (intSleep);
+
+        results.push_back(entry);
+        return results;
     } else {
         if (!is_auth_member(authUser)) {
-            ret.push_back(std::string("authorized user failure 1"));
+            entry.pushKV("result", "failure");
+            entry.pushKV("message", "Unauthorized tenant.");
+            entry.pushKV("capacity", 0);
+            entry.pushKV("sessionstart", "n/a");
+            entry.pushKV("sessionend", "n/a");
+            entry.pushKV("sessionstartblock", "n/a");
+            entry.pushKV("sessionendblock", "n/a");
+            entry.pushKV("stakingstatus", stakingstatus);
+
+            gintAuthenticationFailures = gintAuthenticationFailures + 1;
+            for (int i = 0; i < gintAuthenticationFailures; i++) {
+                intSleep = intSleep * 2;
+            }
+            sleep (intSleep);
+    
+            results.push_back(entry);
+            return results;
         } else {
 
             auto vpwallets = GetWallets(*storage_context);
             size_t nWallets = vpwallets.size();
             if (nWallets < 1) {
-                ret.push_back(std::string("no wallet"));
-                return ret;
+                entry.pushKV("result", "failure");
+                entry.pushKV("message", "No wallet.");
+                entry.pushKV("capacity", 0);
+                entry.pushKV("sessionstart", "n/a");
+                entry.pushKV("sessionend", "n/a");
+                entry.pushKV("sessionstartblock", "n/a");
+                entry.pushKV("sessionendblock", "n/a");
+                entry.pushKV("stakingstatus", stakingstatus);
+
+                gintAuthenticationFailures = gintAuthenticationFailures + 1;
+                for (int i = 0; i < gintAuthenticationFailures; i++) {
+                    intSleep = intSleep * 2;
+                }
+                sleep (intSleep);
+        
+                results.push_back(entry);
+                return results;
             }
 
             int suitable_inputs;
@@ -496,12 +769,76 @@ static RPCHelpMan auth()
                 LogPrint (BCLog::ALL, "status %d\n", status);
             }
             
-            ret.push_back(std::string("success"));
-            ret.push_back(suitable_inputs);
+            entry.pushKV("result", "success");
+            if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+                entry.pushKV("message", "You are authenticated as a tenant.");
+            } else {                
+                entry.pushKV("message", "You are authenticated as the manager.");
+            }
+
+            uint32_t u32Capacity = suitable_inputs * 512 * 256 / 1000;
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                u32Capacity = 0;
+            }
+            entry.pushKV("capacity", u32Capacity);
+
+            uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+            time_t tmtEpochTime = u32CurrentTime;
+            tm* timLocalTime = localtime(&tmtEpochTime);
+            char chrFormattedLocalTime[80];
+            strftime(chrFormattedLocalTime, sizeof(chrFormattedLocalTime), "%Y-%m-%d %H:%M:%S", timLocalTime);
+            std::string strFormattedLocalTime(chrFormattedLocalTime);
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                strFormattedLocalTime = "n/a";
+            }
+            entry.pushKV("sessionstart", strFormattedLocalTime);
+
+            uint32_t u32SessionEndTime = u32CurrentTime + 21600;
+            tmtEpochTime = u32SessionEndTime;
+            timLocalTime = localtime(&tmtEpochTime);
+            chrFormattedLocalTime[80];
+            strftime(chrFormattedLocalTime, sizeof(chrFormattedLocalTime), "%Y-%m-%d %H:%M:%S", timLocalTime);
+            std::string strFormattedLocalTime2(chrFormattedLocalTime);
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                strFormattedLocalTime2 = "n/a";
+            }
+            entry.pushKV("sessionend", strFormattedLocalTime2);
+
+            const CChain& active_chain = storage_chainman->ActiveChain();
+            const int tip_height = active_chain.Height();            
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                entry.pushKV("sessionstartblock", 0);
+            } else {                
+                entry.pushKV("sessionstartblock", tip_height);
+            }
+
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                entry.pushKV("sessionendblock", 0);
+            } else {                
+                entry.pushKV("sessionendblock", tip_height + 72);
+            }
+
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+                entry.pushKV("stakingstatus", stakingstatus);
+            } else {                
+                stakeman_request_stop();
+                entry.pushKV("stakingstatus", "disabled");
+            }
+
+
+
+            gintAuthenticationFailures = 0;
+            sleep (1);
+
+                results.push_back(entry);
+
+            
+
+            return results;
+        
         }
     }
 
-    return ret;
 },
     };
 }
@@ -514,7 +851,10 @@ static RPCHelpMan allow()
                     {"hash160", RPCArg::Type::STR, RPCArg::Optional::NO, "A new tenant key to be allowed to store data."},
                 },
                 RPCResult{
-                    RPCResult::Type::STR, "", "success or failure"},
+                    RPCResult::Type::ARR, "", "",
+                    {{RPCResult::Type::STR, "", "The status of the operation."}}},
+//              RPCResult{
+//                  RPCResult::Type::STR, "", "success or failure"},
                 RPCExamples{
                     HelpExampleCli("allow", "00112233445566778899aabbccddeeff00112233")
             + HelpExampleRpc("allow", "00112233445566778899aabbccddeeff00112233")
@@ -526,9 +866,13 @@ static RPCHelpMan allow()
         // return std::string("authtx-in-mempool");
     // }
 
+    UniValue ret(UniValue::VARR);
+
     std::string hash160 = request.params[0].get_str();
     if (hash160.size() != OPAUTH_HASHLEN*2) {
-        return std::string("hash160-wrong-size");
+        ret.push_back("hash160-wrong-size");
+        return ret;
+        // return std::string("hash160-wrong-size");
     }
     uint160 hash = uint160S(hash160);
 
@@ -536,7 +880,9 @@ static RPCHelpMan allow()
     if (is_auth_member(authUser)) {
 
         if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
-            return std::string("Role-based restriction: Current role cannot perform this action");
+            ret.push_back("Role-based restriction: Current role cannot perform this action");
+            return ret;
+            // return std::string("Role-based restriction: Current role cannot perform this action");
         }
 
         int type;
@@ -551,22 +897,33 @@ static RPCHelpMan allow()
         // LogPrint (BCLog::ALL, "time in seconds since the first second of 1970 (3600*24*365*54 ..): %d\n", time);
 
         if (!generate_auth_payload(opreturn_payload, type, time, hash160)) {
-            return std::string("error-generating-authpayload");
+            ret.push_back("error-generating-authpayload");
+            return ret;
+            // return std::string("error-generating-authpayload");
         }
 
         if (!generate_auth_transaction(*storage_context, tx, opreturn_payload)) {
-            return std::string("error-generating-authtransaction");
+            ret.push_back("error-generating-authtransaction");
+            return ret;
+            // return std::string("error-generating-authtransaction");
         }
 
         // add_auth_member(hash);
 
-        return std::string("success");
+        ret.push_back("success");
+        ret.push_back(hash160);
+        return ret;
+        // return std::string("success");
 
     } else {
-        return std::string("authentication failure");
+        ret.push_back("authentication failure");
+        return ret;
+        // return std::string("authentication failure");
     }
 
-    return std::string("failure");
+    ret.push_back("failure");
+    return ret;
+    // return std::string("failure");
 },
     };
 }

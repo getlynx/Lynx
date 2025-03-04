@@ -142,6 +142,8 @@ using node::fReindex;
 std::thread chunkman;
 std::thread stakeman;
 
+extern int gintAuthenticationFailures;
+
 static constexpr bool DEFAULT_PROXYRANDOMIZE{true};
 static constexpr bool DEFAULT_REST_ENABLE{false};
 static constexpr bool DEFAULT_I2P_ACCEPT_INCOMING{true};
@@ -161,6 +163,8 @@ static const char* DEFAULT_ASMAP_FILENAME="ip_asn.map";
  * The PID file facilities.
  */
 static const char* BITCOIN_PID_FILENAME = "bitcoind.pid";
+
+bool gblnDisableStaking;
 
 static fs::path GetPidFile(const ArgsManager& args)
 {
@@ -1849,6 +1853,8 @@ LogPrint (BCLog::ALL, "MAX_PACKAGE_COUNT %d\n", MAX_PACKAGE_COUNT);
 LogPrint (BCLog::ALL, "MAX_PACKAGE_SIZE %d\n", MAX_PACKAGE_SIZE);
 LogPrint (BCLog::ALL, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSAGE_LENGTH);
 
+    gintAuthenticationFailures = 0;
+
     if (!scan_blocks_for_authdata(chainman)) {
         return InitError(strprintf(_("Error while parsing authdata chunks")));
     }
@@ -1860,8 +1866,11 @@ LogPrint (BCLog::ALL, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSAGE_L
         auto vpwallets = GetWallets(*node.wallet_loader->context());
         num_wallets = vpwallets.size();
     }
-    if (num_wallets > 0) {
+    if (num_wallets > 0) { 
         bool disablestaking = args.GetBoolArg("-disablestaking", DISABLE_STAKING);
+
+gblnDisableStaking = disablestaking;
+
         if (disablestaking) {
             LogPrintf("-disablestaking is enabled\n");
         } else {
