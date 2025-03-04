@@ -123,7 +123,14 @@ static RPCHelpMan store()
 
     if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
         entry.pushKV("result", "failure");
-        entry.pushKV("message", "not-authenticated as tenant.");
+        entry.pushKV("message", "Not authenticated as tenant.");
+        entry.pushKV("identifier", "n/a");
+        entry.pushKV("tenant", "n/a");
+        entry.pushKV("suitableinputs", 0);
+        entry.pushKV("storagefee", 0);
+        entry.pushKV("storagetime", "n/a");
+        entry.pushKV("currentblock", tip_height);
+        entry.pushKV("stakingstatus", stakingstatus);
         results.push_back(entry);
         return results;
     
@@ -135,6 +142,13 @@ static RPCHelpMan store()
     if (!is_auth_member(authUser)) {
         entry.pushKV("result", "failure");
         entry.pushKV("message", "Please authenticate to use this command.");
+        entry.pushKV("identifier", "n/a");
+        entry.pushKV("tenant", "n/a");
+        entry.pushKV("suitableinputs", 0);
+        entry.pushKV("storagefee", 0);
+        entry.pushKV("storagetime", "n/a");
+        entry.pushKV("currentblock", tip_height);
+        entry.pushKV("stakingstatus", stakingstatus);
         results.push_back(entry);
         return results;
     
@@ -151,6 +165,13 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
 
             entry.pushKV("result", "failure");
             entry.pushKV("message", "Please authenticate to use this command.");
+            entry.pushKV("identifier", "n/a");
+            entry.pushKV("tenant", "n/a");
+            entry.pushKV("suitableinputs", 0);
+            entry.pushKV("storagefee", 0);
+            entry.pushKV("storagetime", "n/a");
+            entry.pushKV("currentblock", tip_height);
+            entry.pushKV("stakingstatus", stakingstatus);
             results.push_back(entry);
             return results;
         }
@@ -186,7 +207,14 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
                 if (uuid == put_uuid) {
                     entry.pushKV("result", "failure");
                     entry.pushKV("message", "A duplicate unique identifier was discovered.");
-                        results.push_back(entry);
+                    entry.pushKV("identifier", "n/a");
+                    entry.pushKV("tenant", authUser.ToString());
+                    entry.pushKV("suitableinputs", 0);
+                    entry.pushKV("storagefee", 0);
+                    entry.pushKV("storagetime", "n/a");
+                    entry.pushKV("currentblock", tip_height);
+                    entry.pushKV("stakingstatus", stakingstatus);
+                    results.push_back(entry);
                     return results;
                 
 //                     return std::string("A duplicate unique identifier was discovered.");
@@ -196,6 +224,13 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
             if (invalidity_type == 1) {
                 entry.pushKV("result", "failure");
                 entry.pushKV("message", "The custom unique identifier provided has an invalid length.");
+                entry.pushKV("identifier", "n/a");
+                entry.pushKV("tenant", authUser.ToString());
+                entry.pushKV("suitableinputs", 0);
+                entry.pushKV("storagefee", 0);
+                entry.pushKV("storagetime", "n/a");
+                entry.pushKV("currentblock", tip_height);
+                entry.pushKV("stakingstatus", stakingstatus);
                 results.push_back(entry);
                 return results;
             
@@ -206,7 +241,7 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
 
             if (invalidity_type == 2) {
                 entry.pushKV("result", "failure");
-                entry.pushKV("message", "uuid_invalid_hex_notation.");
+                entry.pushKV("message", "Invalid UUID hex notation.");
                 entry.pushKV("identifier", "n/a");
                 entry.pushKV("tenant", authUser.ToString());
                 entry.pushKV("suitableinputs", 0);
