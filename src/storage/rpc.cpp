@@ -204,32 +204,42 @@ static RPCHelpMan store()
     // Get asset filename
     std::string strAssetFilename = request.params[0].get_str();
 
-    // Initialize asset uuid
-    std::string strAssetUUID = "";
+    // Initialize asset custom uuid
+    std::string strAssetCustomUUID = "";
 
     // If custom uuid
     if(!request.params[1].isNull()) {
-        strAssetUUID = request.params[1].get_str();
+
+        // Get custom uuid
+        strAssetCustomUUID = request.params[1].get_str();
     }
 
-    // if tenant entered custom uuid
-    if (strAssetUUID != "") {
+    // If custom uuid
+    if (strAssetCustomUUID != "") {
 
-        int invalidity_type;
+        // uuid invalidity type
+        int intUUIDInvalidityType;
 
-        // if custom uuid valid (length, hex notation)
-        if (is_valid_uuid(strAssetUUID, invalidity_type)) {
-            std::vector<std::string> uuid_found;
+        // If uuid valid (length, hex notation)
+        if (is_valid_uuid(strAssetCustomUUID, intUUIDInvalidityType)) {
 
-            // -1 means all uuids, masquerading as manager
-            int intCount = -1;
-            scan_blocks_for_uuids(*storage_chainman, uuid_found, intCount);
+            // Existing uuid's
+            std::vector<std::string> vctExistingUUIDs;
 
-            for (auto& uuid : uuid_found) {
-                if (uuid == strAssetUUID) {
+            // Number uuid's asked for (-1 means all uuids, masquerading as manager)
+            int intNumberOfUUIDsAskedFor = -1;
+
+            // Get existing uuid's
+            scan_blocks_for_uuids(*storage_chainman, vctExistingUUIDs, intNumberOfUUIDsAskedFor);
+
+            // Traverse existing uuid's
+            for (auto& uuid : vctExistingUUIDs) {
+
+                // If current uuid = custom uuid
+                if (uuid == strAssetCustomUUID) {
                     entry.pushKV("result", "failure");
                     entry.pushKV("message", "A duplicate unique identifier was discovered.");
-                    entry.pushKV("identifier", "n/a");
+                    entry.pushKV("identifier", strAssetCustomUUID);
                     entry.pushKV("tenant", authUser.ToString());
                     entry.pushKV("filesize", 0);
                     entry.pushKV("storagefee", 0);
@@ -243,10 +253,10 @@ static RPCHelpMan store()
                 }     
             }
         } else {
-            if (invalidity_type == 1) {
+            if (intUUIDInvalidityType == 1) {
                 entry.pushKV("result", "failure");
                 entry.pushKV("message", "The custom unique identifier provided has an invalid length.");
-                entry.pushKV("identifier", "n/a");
+                entry.pushKV("identifier", strAssetCustomUUID);
                 entry.pushKV("tenant", authUser.ToString());
                 entry.pushKV("filesize", 0);
                 entry.pushKV("storagefee", 0);
@@ -261,10 +271,10 @@ static RPCHelpMan store()
 
 
 
-            if (invalidity_type == 2) {
+            if (intUUIDInvalidityType == 2) {
                 entry.pushKV("result", "failure");
                 entry.pushKV("message", "Invalid UUID hex notation.");
-                entry.pushKV("identifier", "n/a");
+                entry.pushKV("identifier", strAssetCustomUUID);
                 entry.pushKV("tenant", authUser.ToString());
                 entry.pushKV("filesize", 0);
                 entry.pushKV("storagefee", 0);
@@ -280,12 +290,12 @@ static RPCHelpMan store()
     }
 
     // if no custom uuid
-    if (strAssetUUID == "") {
+    if (strAssetCustomUUID == "") {
         // int uuid_not_found_to_not_exist = 1;
         // while (uuid_not_found_to_not_exist == 1) {
 
             // generate uuid
-            strAssetUUID = generate_uuid(OPENCODING_UUID);
+            strAssetCustomUUID = generate_uuid(OPENCODING_UUID);
             // std::vector<std::string> existing_uuids;
             // scan_blocks_for_uuids(*storage_chainman, existing_uuids);
             // int uuid_exists = 0;
@@ -300,9 +310,9 @@ static RPCHelpMan store()
     }
 
     if (read_file_size(strAssetFilename) > 0) {
-        add_put_task(strAssetFilename, strAssetUUID);
+        add_put_task(strAssetFilename, strAssetCustomUUID);
 
-LogPrint (BCLog::ALL, "uuid %s\n", strAssetUUID);
+LogPrint (BCLog::ALL, "uuid %s\n", strAssetCustomUUID);
 
 
 
@@ -327,7 +337,7 @@ std::string str_value = oss.str();
 
         entry.pushKV("result", "success");
         entry.pushKV("message", "n/a");
-        entry.pushKV("identifier", strAssetUUID);
+        entry.pushKV("identifier", strAssetCustomUUID);
         entry.pushKV("tenant", authUser.ToString());
         entry.pushKV("filesize", filelen);
         entry.pushKV("storagefee", str_value);
