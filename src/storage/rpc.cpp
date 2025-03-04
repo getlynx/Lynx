@@ -39,6 +39,8 @@ using node::ReadBlockFromDisk;
 
 extern bool gblnDisableStaking;
 
+int gintAuthenticationFailures;
+
 extern uint32_t gu32AuthenticationTime;
 
 extern uint160 authUser;
@@ -645,16 +647,51 @@ static RPCHelpMan auth()
     UniValue results(UniValue::VARR);
     UniValue entry(UniValue::VOBJ);
 
+    int intSleep = 1;
+
+    std::string stakingstatus;
+    if (gblnDisableStaking) {
+        stakingstatus = "disabled";
+    } else {
+        stakingstatus = "enabled";
+    }
+
     std::string privatewif = request.params[0].get_str();
     if (privatewif.empty() || !set_auth_user(privatewif)) {
         entry.pushKV("result", "failure");
         entry.pushKV("message", "Invalid key.");
+        entry.pushKV("capacity", 0);
+        entry.pushKV("sessionstart", "n/a");
+        entry.pushKV("sessionend", "n/a");
+        entry.pushKV("sessionstartblock", "n/a");
+        entry.pushKV("sessionendblock", "n/a");
+        entry.pushKV("stakingstatus", stakingstatus);
+
+        gintAuthenticationFailures = gintAuthenticationFailures + 1;
+        for (int i = 0; i < gintAuthenticationFailures; i++) {
+            intSleep = intSleep * 2;
+        }
+        sleep (intSleep);
+
         results.push_back(entry);
         return results;
     } else {
         if (!is_auth_member(authUser)) {
             entry.pushKV("result", "failure");
             entry.pushKV("message", "Unauthorized tenant.");
+            entry.pushKV("capacity", 0);
+            entry.pushKV("sessionstart", "n/a");
+            entry.pushKV("sessionend", "n/a");
+            entry.pushKV("sessionstartblock", "n/a");
+            entry.pushKV("sessionendblock", "n/a");
+            entry.pushKV("stakingstatus", stakingstatus);
+
+            gintAuthenticationFailures = gintAuthenticationFailures + 1;
+            for (int i = 0; i < gintAuthenticationFailures; i++) {
+                intSleep = intSleep * 2;
+            }
+            sleep (intSleep);
+    
             results.push_back(entry);
             return results;
         } else {
@@ -664,6 +701,19 @@ static RPCHelpMan auth()
             if (nWallets < 1) {
                 entry.pushKV("result", "failure");
                 entry.pushKV("message", "No wallet.");
+                entry.pushKV("capacity", 0);
+                entry.pushKV("sessionstart", "n/a");
+                entry.pushKV("sessionend", "n/a");
+                entry.pushKV("sessionstartblock", "n/a");
+                entry.pushKV("sessionendblock", "n/a");
+                entry.pushKV("stakingstatus", stakingstatus);
+
+                gintAuthenticationFailures = gintAuthenticationFailures + 1;
+                for (int i = 0; i < gintAuthenticationFailures; i++) {
+                    intSleep = intSleep * 2;
+                }
+                sleep (intSleep);
+        
                 results.push_back(entry);
                 return results;
             }
@@ -729,13 +779,6 @@ static RPCHelpMan auth()
                 entry.pushKV("sessionendblock", tip_height + 72);
             }
 
-            std::string stakingstatus;
-            if (gblnDisableStaking) {
-                stakingstatus = "disabled";
-            } else {
-                stakingstatus = "enabled";
-            }
-        
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
                 entry.pushKV("stakingstatus", stakingstatus);
             } else {                
@@ -745,7 +788,13 @@ static RPCHelpMan auth()
 
 
 
-            results.push_back(entry);
+            gintAuthenticationFailures = 0;
+            sleep (1);
+
+                results.push_back(entry);
+
+            
+
             return results;
         
         }

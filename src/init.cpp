@@ -142,6 +142,8 @@ using node::fReindex;
 std::thread chunkman;
 std::thread stakeman;
 
+extern int gintAuthenticationFailures;
+
 static constexpr bool DEFAULT_PROXYRANDOMIZE{true};
 static constexpr bool DEFAULT_REST_ENABLE{false};
 static constexpr bool DEFAULT_I2P_ACCEPT_INCOMING{true};
@@ -1850,6 +1852,8 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 LogPrint (BCLog::ALL, "MAX_PACKAGE_COUNT %d\n", MAX_PACKAGE_COUNT);
 LogPrint (BCLog::ALL, "MAX_PACKAGE_SIZE %d\n", MAX_PACKAGE_SIZE);
 LogPrint (BCLog::ALL, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSAGE_LENGTH);
+
+    gintAuthenticationFailures = 0;
 
     if (!scan_blocks_for_authdata(chainman)) {
         return InitError(strprintf(_("Error while parsing authdata chunks")));
