@@ -799,7 +799,7 @@ static RPCHelpMan auth()
         // Exit
         return unvResults;
 
-    // Else nit if private key empty or invalid
+    // Else not if private key empty or invalid
     } else {
 
         // If unauthorized
@@ -829,11 +829,20 @@ static RPCHelpMan auth()
 
             // Exit
             return unvResults;
+
+        // Else not if authorized    
         } else {
 
-            auto vpwallets = GetWallets(*storage_context);
-            size_t nWallets = vpwallets.size();
-            if (nWallets < 1) {
+            // Get walletsa
+            auto vctWallets = GetWallets(*storage_context);
+
+            // Get number of wallets
+            size_t sztNumberOfWallets = vctWallets.size();
+
+            // If no wallet
+            if (sztNumberOfWallets < 1) {
+
+                // Report and exit
                 unvEntry.pushKV("result", "failure");
                 unvEntry.pushKV("message", "No wallet.");
                 unvEntry.pushKV("capacity", 0);
@@ -857,31 +866,62 @@ static RPCHelpMan auth()
         
                 // Exit
                 return unvResults;
+
+            // End if no wallet    
             }
 
-            int suitable_inputs;
-            estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
+            // Number of suitable inputs
+            int intNumberOfSuitableInputs;
+
+            // Get number of suitable inputs
+            estimate_coins_for_opreturn(vctWallets.front().get(), intNumberOfSuitableInputs);
 
             // If not manager
             if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
-                int status;
-                char command[256];
-                snprintf(command, sizeof(command), "/root/capacitor %d", suitable_inputs);
-                status = system (command);            
-                LogPrint (BCLog::ALL, "status %d\n", status);
+
+                // Status
+                int intStatus;
+
+                // Command
+                char chrCommand[256];
+
+                // Construct command
+                snprintf(chrCommand, sizeof(chrCommand), "/root/capacitor %d", intNumberOfSuitableInputs);
+
+                // Issue command
+                intStatus = system (chrCommand);            
+
+                // Report status
+                LogPrint (BCLog::ALL, "status %d\n", intStatus);
             }
             
+            // result
             unvEntry.pushKV("result", "success");
+
+            // If tenant
             if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+
+                // message
                 unvEntry.pushKV("message", "You are authenticated as a tenant.");
+
+            // Else not tenant    
             } else {                
+
+                // message
                 unvEntry.pushKV("message", "You are authenticated as the manager.");
             }
 
-            uint32_t u32Capacity = suitable_inputs * 512 * 256 / 1000;
+            // Set capacity in KB
+            uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1000;
+
+            // If manager
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+
+                // Zero capacity
                 u32Capacity = 0;
             }
+
+            // capacity
             unvEntry.pushKV("capacity", u32Capacity);
 
             uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
