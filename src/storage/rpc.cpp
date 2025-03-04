@@ -37,10 +37,13 @@
 using namespace wallet;
 using node::ReadBlockFromDisk;
 
+// Staking state, set at daemon startup time
 extern bool gblnDisableStaking;
 
+// Nunber of consecutive authentication failures
 int gintAuthenticationFailures;
 
+// Authentication start time
 extern uint32_t gu32AuthenticationTime;
 
 extern uint160 authUser;
@@ -62,8 +65,6 @@ static RPCHelpMan store()
              {"filepath", RPCArg::Type::STR, RPCArg::Optional::NO, "Full path of file to be uploaded"},
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Custom unique identifier (32 characters, hexadecimal format, must be unique across all files)"},
          },
-//          RPCResult{
-//             RPCResult::Type::STR, "", "success or failure"},
 
 
             RPCResult{
@@ -95,33 +96,46 @@ static RPCHelpMan store()
 
 
 
-    std::string stakingstatus;
+    // Entry
+    UniValue entry(UniValue::VOBJ);
+
+    // Results
+    UniValue results(UniValue::VARR);
+
+
+
+    // Staking status
+    std::string strStakingslStatus;
+
+    // If staking disabled
     if (gblnDisableStaking) {
-        stakingstatus = "disabled";
+
+        // Set to disabled
+        strStakingslStatus = "disabled";
+
+    // Else not if staking disabled
     } else {
-        stakingstatus = "enabled";
+
+        // Set to enabled
+        strStakingslStatus = "enabled";
+
+    // End if staking disabled
     }
 
 
 
-    const CChain& active_chain = storage_chainman->ActiveChain();
-    const int tip_height = active_chain.Height();            
+    // Set active chain
+    const CChain& chnActiveChain = storage_chainman->ActiveChain();
+
+    // Set tip height
+    const int intTipHeight = chnActiveChain.Height();            
     
-    
-    
-    UniValue results(UniValue::VARR);
-    UniValue entry(UniValue::VOBJ);
-
-//     entry.pushKV("str", "str");
-//     entry.pushKV("int", 1);
-
-//     results.push_back(entry);
-
-//     return results;
 
 
-
+    // If manager
     if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+
+        // Report and exit
         entry.pushKV("result", "failure");
         entry.pushKV("message", "Not authenticated as tenant.");
         entry.pushKV("identifier", "n/a");
@@ -129,17 +143,18 @@ static RPCHelpMan store()
         entry.pushKV("filesize", 0);
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
-        entry.pushKV("currentblock", tip_height);
-        entry.pushKV("stakingstatus", stakingstatus);
+        entry.pushKV("currentblock", intTipHeight);
+        entry.pushKV("stakingstatus", strStakingslStatus);
         results.push_back(entry);
         return results;
-    
-        // return std::string("not-authenticated as tenant");
     }
 
 
 
+    // If not authenticated
     if (!is_auth_member(authUser)) {
+
+        // Report and exit
         entry.pushKV("result", "failure");
         entry.pushKV("message", "Please authenticate to use this command.");
         entry.pushKV("identifier", "n/a");
@@ -147,22 +162,25 @@ static RPCHelpMan store()
         entry.pushKV("filesize", 0);
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
-        entry.pushKV("currentblock", tip_height);
-        entry.pushKV("stakingstatus", stakingstatus);
+        entry.pushKV("currentblock", intTipHeight);
+        entry.pushKV("stakingstatus", strStakingslStatus);
         results.push_back(entry);
         return results;
-    
-        // return std::string("Please authenticate to use this command.");
+
+    // Else not if not authenticated
     } else {
 
 
 
+        // Get current time
         uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
 
-LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32CurrentTime, gu32AuthenticationTime);
+        // LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32CurrentTime, gu32AuthenticationTime);
 
+        // If authentication session expired
         if ((u32CurrentTime - gu32AuthenticationTime) > 21600) {
 
+            // Report and exit
             entry.pushKV("result", "failure");
             entry.pushKV("message", "Please authenticate to use this command.");
             entry.pushKV("identifier", "n/a");
@@ -170,33 +188,37 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
             entry.pushKV("filesize", 0);
             entry.pushKV("storagefee", 0);
             entry.pushKV("storagetime", "n/a");
-            entry.pushKV("currentblock", tip_height);
-            entry.pushKV("stakingstatus", stakingstatus);
+            entry.pushKV("currentblock", intTipHeight);
+            entry.pushKV("stakingstatus", strStakingslStatus);
             results.push_back(entry);
             return results;
         }
 
 
-
+ 
+    // End if not authenticatec
     }
 
 
 
-    std::string put_filename = request.params[0].get_str();
-    std::string put_uuid = "";
+    // Get asset filename
+    std::string strAssetFilename = request.params[0].get_str();
 
-    // if tenant entered custom uuid
+    // Initialize asset uuid
+    std::string strAssetUUID = "";
+
+    // If custom uuid
     if(!request.params[1].isNull()) {
-        put_uuid = request.params[1].get_str();
+        strAssetUUID = request.params[1].get_str();
     }
 
     // if tenant entered custom uuid
-    if (put_uuid != "") {
+    if (strAssetUUID != "") {
 
         int invalidity_type;
 
         // if custom uuid valid (length, hex notation)
-        if (is_valid_uuid(put_uuid, invalidity_type)) {
+        if (is_valid_uuid(strAssetUUID, invalidity_type)) {
             std::vector<std::string> uuid_found;
 
             // -1 means all uuids, masquerading as manager
@@ -204,7 +226,7 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
             scan_blocks_for_uuids(*storage_chainman, uuid_found, intCount);
 
             for (auto& uuid : uuid_found) {
-                if (uuid == put_uuid) {
+                if (uuid == strAssetUUID) {
                     entry.pushKV("result", "failure");
                     entry.pushKV("message", "A duplicate unique identifier was discovered.");
                     entry.pushKV("identifier", "n/a");
@@ -212,8 +234,8 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
                     entry.pushKV("filesize", 0);
                     entry.pushKV("storagefee", 0);
                     entry.pushKV("storagetime", "n/a");
-                    entry.pushKV("currentblock", tip_height);
-                    entry.pushKV("stakingstatus", stakingstatus);
+                    entry.pushKV("currentblock", intTipHeight);
+                    entry.pushKV("stakingstatus", strStakingslStatus);
                     results.push_back(entry);
                     return results;
                 
@@ -229,8 +251,8 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
                 entry.pushKV("filesize", 0);
                 entry.pushKV("storagefee", 0);
                 entry.pushKV("storagetime", "n/a");
-                entry.pushKV("currentblock", tip_height);
-                entry.pushKV("stakingstatus", stakingstatus);
+                entry.pushKV("currentblock", intTipHeight);
+                entry.pushKV("stakingstatus", strStakingslStatus);
                 results.push_back(entry);
                 return results;
             
@@ -247,8 +269,8 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
                 entry.pushKV("filesize", 0);
                 entry.pushKV("storagefee", 0);
                 entry.pushKV("storagetime", "n/a");
-                entry.pushKV("currentblock", tip_height);
-                entry.pushKV("stakingstatus", stakingstatus);
+                entry.pushKV("currentblock", intTipHeight);
+                entry.pushKV("stakingstatus", strStakingslStatus);
                 results.push_back(entry);
                 return results;
             
@@ -258,17 +280,17 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
     }
 
     // if no custom uuid
-    if (put_uuid == "") {
+    if (strAssetUUID == "") {
         // int uuid_not_found_to_not_exist = 1;
         // while (uuid_not_found_to_not_exist == 1) {
 
             // generate uuid
-            put_uuid = generate_uuid(OPENCODING_UUID);
+            strAssetUUID = generate_uuid(OPENCODING_UUID);
             // std::vector<std::string> existing_uuids;
             // scan_blocks_for_uuids(*storage_chainman, existing_uuids);
             // int uuid_exists = 0;
             // for (auto& uuid : existing_uuids) {
-                // if (uuid == put_uuid)
+                // if (uuid == strAssetUUID)
                 // uuid_exists = 1; 
             // }
             // if (uuid_exists == 0) {
@@ -277,30 +299,14 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
         //}
     }
 
-    if (read_file_size(put_filename) > 0) {
-        add_put_task(put_filename, put_uuid);
+    if (read_file_size(strAssetFilename) > 0) {
+        add_put_task(strAssetFilename, strAssetUUID);
 
-LogPrint (BCLog::ALL, "uuid %s\n", put_uuid);
-
-
-
-//         auto vpwallets = GetWallets(*storage_context);
-//         size_t nWallets = vpwallets.size();
-//         if (nWallets < 1) {
-//             entry.pushKV("result", "failure");
-//             entry.pushKV("message", "No wallet.");
-//             entry.pushKV("identifier", "n/a");
-//             entry.pushKV("tenant", "n/a");
-//             results.push_back(entry);
-//             return results;
-//         }
-
-//         int suitable_inputs;
-//         estimate_coins_for_opreturn(vpwallets.front().get(), suitable_inputs);
+LogPrint (BCLog::ALL, "uuid %s\n", strAssetUUID);
 
 
 
-int filelen = read_file_size(put_filename);
+int filelen = read_file_size(strAssetFilename);
 int est_chunks = calculate_chunks_from_filesize(filelen);
 int suitable_inputs = ((est_chunks+(OPRETURN_PER_TX-1))/OPRETURN_PER_TX);
 
@@ -321,18 +327,15 @@ std::string str_value = oss.str();
 
         entry.pushKV("result", "success");
         entry.pushKV("message", "n/a");
-        entry.pushKV("identifier", put_uuid);
+        entry.pushKV("identifier", strAssetUUID);
         entry.pushKV("tenant", authUser.ToString());
         entry.pushKV("filesize", filelen);
         entry.pushKV("storagefee", str_value);
         entry.pushKV("storagetime", storagetime);
-        entry.pushKV("currentblock", tip_height);
-        entry.pushKV("stakingstatus", stakingstatus);
+        entry.pushKV("currentblock", intTipHeight);
+        entry.pushKV("stakingstatus", strStakingslStatus);
         results.push_back(entry);
         return results;
-
-        // return get_result_hash();
-        // return put_uuid;
     }
 
     return std::string("failure");
@@ -822,6 +825,7 @@ static RPCHelpMan auth()
                 entry.pushKV("stakingstatus", stakingstatus);
             } else {                
                 stakeman_request_stop();
+                gblnDisableStaking = true;
                 entry.pushKV("stakingstatus", "disabled");
             }
 
