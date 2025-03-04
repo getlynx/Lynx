@@ -741,78 +741,122 @@ static RPCHelpMan auth()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
 
-    UniValue results(UniValue::VARR);
-    UniValue entry(UniValue::VOBJ);
+    // Results
+    UniValue unvResults(UniValue::VARR);
 
+    // Entry
+    UniValue unvEntry(UniValue::VOBJ);
+
+    // Initialize sleep time
     int intSleep = 1;
 
-    std::string stakingstatus;
+    // Staking status
+    std::string strStakingStatus;
+
+    // If staking disabled
     if (gblnDisableStaking) {
-        stakingstatus = "disabled";
+
+        // Set staking status to disabled
+        strStakingStatus = "disabled";
+
+    // Else not if staking disbled
     } else {
-        stakingstatus = "enabled";
+
+        // Set staking status to enabled
+        strStakingStatus = "enabled";
+
+    // End if staking disabled
     }
 
-    std::string privatewif = request.params[0].get_str();
-    if (privatewif.empty() || !set_auth_user(privatewif)) {
-        entry.pushKV("result", "failure");
-        entry.pushKV("message", "Invalid key.");
-        entry.pushKV("capacity", 0);
-        entry.pushKV("sessionstart", "n/a");
-        entry.pushKV("sessionend", "n/a");
-        entry.pushKV("sessionstartblock", "n/a");
-        entry.pushKV("sessionendblock", "n/a");
-        entry.pushKV("stakingstatus", stakingstatus);
+    // Get private key
+    std::string strPrivateKey = request.params[0].get_str();
 
+    // If private key empty or invalid
+    if (strPrivateKey.empty() || !set_auth_user(strPrivateKey)) {
+
+        // Report
+        unvEntry.pushKV("result", "failure");
+        unvEntry.pushKV("message", "Invalid key.");
+        unvEntry.pushKV("capacity", 0);
+        unvEntry.pushKV("sessionstart", "n/a");
+        unvEntry.pushKV("sessionend", "n/a");
+        unvEntry.pushKV("sessionstartblock", "n/a");
+        unvEntry.pushKV("sessionendblock", "n/a");
+        unvEntry.pushKV("stakingstatus", strStakingStatus);
+        unvResults.push_back(unvEntry);
+
+        // Increment number of consecutive failures
         gintAuthenticationFailures = gintAuthenticationFailures + 1;
+
+        // Double sleep time once per consecutive failure
         for (int i = 0; i < gintAuthenticationFailures; i++) {
             intSleep = intSleep * 2;
         }
+
+        // Sleep
         sleep (intSleep);
 
-        results.push_back(entry);
-        return results;
-    } else {
-        if (!is_auth_member(authUser)) {
-            entry.pushKV("result", "failure");
-            entry.pushKV("message", "Unauthorized tenant.");
-            entry.pushKV("capacity", 0);
-            entry.pushKV("sessionstart", "n/a");
-            entry.pushKV("sessionend", "n/a");
-            entry.pushKV("sessionstartblock", "n/a");
-            entry.pushKV("sessionendblock", "n/a");
-            entry.pushKV("stakingstatus", stakingstatus);
+        // Exit
+        return unvResults;
 
+    // Else nit if private key empty or invalid
+    } else {
+
+        // If unauthorized
+        if (!is_auth_member(authUser)) {
+
+            // Report
+            unvEntry.pushKV("result", "failure");
+            unvEntry.pushKV("message", "Unauthorized tenant.");
+            unvEntry.pushKV("capacity", 0);
+            unvEntry.pushKV("sessionstart", "n/a");
+            unvEntry.pushKV("sessionend", "n/a");
+            unvEntry.pushKV("sessionstartblock", "n/a");
+            unvEntry.pushKV("sessionendblock", "n/a");
+            unvEntry.pushKV("stakingstatus", strStakingStatus);
+            unvResults.push_back(unvEntry);
+
+            // Increment number of consecutive failures
             gintAuthenticationFailures = gintAuthenticationFailures + 1;
+            
+            // Double sleep time once per consecutive failure
             for (int i = 0; i < gintAuthenticationFailures; i++) {
                 intSleep = intSleep * 2;
             }
+
+            // Sleep
             sleep (intSleep);
-    
-            results.push_back(entry);
-            return results;
+
+            // Exit
+            return unvResults;
         } else {
 
             auto vpwallets = GetWallets(*storage_context);
             size_t nWallets = vpwallets.size();
             if (nWallets < 1) {
-                entry.pushKV("result", "failure");
-                entry.pushKV("message", "No wallet.");
-                entry.pushKV("capacity", 0);
-                entry.pushKV("sessionstart", "n/a");
-                entry.pushKV("sessionend", "n/a");
-                entry.pushKV("sessionstartblock", "n/a");
-                entry.pushKV("sessionendblock", "n/a");
-                entry.pushKV("stakingstatus", stakingstatus);
+                unvEntry.pushKV("result", "failure");
+                unvEntry.pushKV("message", "No wallet.");
+                unvEntry.pushKV("capacity", 0);
+                unvEntry.pushKV("sessionstart", "n/a");
+                unvEntry.pushKV("sessionend", "n/a");
+                unvEntry.pushKV("sessionstartblock", "n/a");
+                unvEntry.pushKV("sessionendblock", "n/a");
+                unvEntry.pushKV("stakingstatus", strStakingStatus);
+                unvResults.push_back(unvEntry);
 
+                // Increment number of consecutive failures
                 gintAuthenticationFailures = gintAuthenticationFailures + 1;
+
+                // Double sleep time once per consecutive failure
                 for (int i = 0; i < gintAuthenticationFailures; i++) {
                     intSleep = intSleep * 2;
                 }
+
+                // Sleep
                 sleep (intSleep);
         
-                results.push_back(entry);
-                return results;
+                // Exit
+                return unvResults;
             }
 
             int suitable_inputs;
@@ -827,18 +871,18 @@ static RPCHelpMan auth()
                 LogPrint (BCLog::ALL, "status %d\n", status);
             }
             
-            entry.pushKV("result", "success");
+            unvEntry.pushKV("result", "success");
             if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
-                entry.pushKV("message", "You are authenticated as a tenant.");
+                unvEntry.pushKV("message", "You are authenticated as a tenant.");
             } else {                
-                entry.pushKV("message", "You are authenticated as the manager.");
+                unvEntry.pushKV("message", "You are authenticated as the manager.");
             }
 
             uint32_t u32Capacity = suitable_inputs * 512 * 256 / 1000;
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
                 u32Capacity = 0;
             }
-            entry.pushKV("capacity", u32Capacity);
+            unvEntry.pushKV("capacity", u32Capacity);
 
             uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
             time_t tmtEpochTime = u32CurrentTime;
@@ -849,7 +893,7 @@ static RPCHelpMan auth()
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
                 strFormattedLocalTime = "n/a";
             }
-            entry.pushKV("sessionstart", strFormattedLocalTime);
+            unvEntry.pushKV("sessionstart", strFormattedLocalTime);
 
             uint32_t u32SessionEndTime = u32CurrentTime + 21600;
             tmtEpochTime = u32SessionEndTime;
@@ -860,28 +904,28 @@ static RPCHelpMan auth()
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
                 strFormattedLocalTime2 = "n/a";
             }
-            entry.pushKV("sessionend", strFormattedLocalTime2);
+            unvEntry.pushKV("sessionend", strFormattedLocalTime2);
 
             const CChain& active_chain = storage_chainman->ActiveChain();
             const int tip_height = active_chain.Height();            
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
-                entry.pushKV("sessionstartblock", 0);
+                unvEntry.pushKV("sessionstartblock", 0);
             } else {                
-                entry.pushKV("sessionstartblock", tip_height);
+                unvEntry.pushKV("sessionstartblock", tip_height);
             }
 
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
-                entry.pushKV("sessionendblock", 0);
+                unvEntry.pushKV("sessionendblock", 0);
             } else {                
-                entry.pushKV("sessionendblock", tip_height + 72);
+                unvEntry.pushKV("sessionendblock", tip_height + 72);
             }
 
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
-                entry.pushKV("stakingstatus", stakingstatus);
+                unvEntry.pushKV("stakingstatus", strStakingStatus);
             } else {                
                 stakeman_request_stop();
                 gblnDisableStaking = true;
-                entry.pushKV("stakingstatus", "disabled");
+                unvEntry.pushKV("stakingstatus", "disabled");
             }
 
 
@@ -889,11 +933,11 @@ static RPCHelpMan auth()
             gintAuthenticationFailures = 0;
             sleep (1);
 
-                results.push_back(entry);
+            unvResults.push_back(unvEntry);
 
             
 
-            return results;
+            return unvResults;
         
         }
     }
