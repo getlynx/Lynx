@@ -75,8 +75,8 @@ static RPCHelpMan store()
                           {RPCResult::Type::STR, "message", "Not authenticated as tenent | Not authenticated | Repeated UUID | Improper length UUID | Invalid hex notation UUID"},
                           {RPCResult::Type::STR, "identifier", "Universally unique asset identifier"},
                           {RPCResult::Type::STR, "tenant", "Hashed public tenant key"},
-                          {RPCResult::Type::NUM, "suitableinputs", "Suitable inputs needed for store"},
-                          {RPCResult::Type::NUM, "storagefee", "Storage transaction fee in satoshi's"},
+                          {RPCResult::Type::NUM, "filesize", "filesize (B)"},
+                          {RPCResult::Type::STR, "storagefee", "Storage transaction fee in lynx"},
                           {RPCResult::Type::STR, "storagetime", "Storage date and time"},
                           {RPCResult::Type::NUM, "currentblock", "Current block"},
                           {RPCResult::Type::STR, "stakingstatus", "enabled | disabled"},
@@ -126,7 +126,7 @@ static RPCHelpMan store()
         entry.pushKV("message", "Not authenticated as tenant.");
         entry.pushKV("identifier", "n/a");
         entry.pushKV("tenant", "n/a");
-        entry.pushKV("suitableinputs", 0);
+        entry.pushKV("filesize", 0);
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", tip_height);
@@ -144,7 +144,7 @@ static RPCHelpMan store()
         entry.pushKV("message", "Please authenticate to use this command.");
         entry.pushKV("identifier", "n/a");
         entry.pushKV("tenant", "n/a");
-        entry.pushKV("suitableinputs", 0);
+        entry.pushKV("filesize", 0);
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", tip_height);
@@ -167,7 +167,7 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
             entry.pushKV("message", "Please authenticate to use this command.");
             entry.pushKV("identifier", "n/a");
             entry.pushKV("tenant", "n/a");
-            entry.pushKV("suitableinputs", 0);
+            entry.pushKV("filesize", 0);
             entry.pushKV("storagefee", 0);
             entry.pushKV("storagetime", "n/a");
             entry.pushKV("currentblock", tip_height);
@@ -209,7 +209,7 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
                     entry.pushKV("message", "A duplicate unique identifier was discovered.");
                     entry.pushKV("identifier", "n/a");
                     entry.pushKV("tenant", authUser.ToString());
-                    entry.pushKV("suitableinputs", 0);
+                    entry.pushKV("filesize", 0);
                     entry.pushKV("storagefee", 0);
                     entry.pushKV("storagetime", "n/a");
                     entry.pushKV("currentblock", tip_height);
@@ -226,7 +226,7 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
                 entry.pushKV("message", "The custom unique identifier provided has an invalid length.");
                 entry.pushKV("identifier", "n/a");
                 entry.pushKV("tenant", authUser.ToString());
-                entry.pushKV("suitableinputs", 0);
+                entry.pushKV("filesize", 0);
                 entry.pushKV("storagefee", 0);
                 entry.pushKV("storagetime", "n/a");
                 entry.pushKV("currentblock", tip_height);
@@ -244,7 +244,7 @@ LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32Curre
                 entry.pushKV("message", "Invalid UUID hex notation.");
                 entry.pushKV("identifier", "n/a");
                 entry.pushKV("tenant", authUser.ToString());
-                entry.pushKV("suitableinputs", 0);
+                entry.pushKV("filesize", 0);
                 entry.pushKV("storagefee", 0);
                 entry.pushKV("storagetime", "n/a");
                 entry.pushKV("currentblock", tip_height);
@@ -313,14 +313,18 @@ char time4[80];
 strftime(time4, sizeof(time4), "%Y-%m-%d %H:%M:%S", time3);
 std::string storagetime(time4);
 
+std::ostringstream oss;
+oss << std::fixed << std::setprecision(8) << (double)filelen/100000000.0;
+std::string str_value = oss.str();
+
 
 
         entry.pushKV("result", "success");
         entry.pushKV("message", "n/a");
         entry.pushKV("identifier", put_uuid);
         entry.pushKV("tenant", authUser.ToString());
-        entry.pushKV("suitableinputs", suitable_inputs);
-        entry.pushKV("storagefee", filelen);
+        entry.pushKV("filesize", filelen);
+        entry.pushKV("storagefee", str_value);
         entry.pushKV("storagetime", storagetime);
         entry.pushKV("currentblock", tip_height);
         entry.pushKV("stakingstatus", stakingstatus);
