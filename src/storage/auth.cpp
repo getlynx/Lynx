@@ -243,11 +243,13 @@ LogPrint (BCLog::ALL, " unixtime authTime %d %d \n", unixtime, authTime);
         return false;
     }
 
-if (unixtime != 4210657795) {
+    uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
 
-    authTime = unixtime;
+    if (unixtime < u32CurrentTime) {
 
-}
+        authTime = unixtime;
+
+    }
 
     return true;
 }
