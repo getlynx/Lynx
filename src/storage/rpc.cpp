@@ -924,59 +924,119 @@ static RPCHelpMan auth()
             // capacity
             unvEntry.pushKV("capacity", u32Capacity);
 
+            // Get current time
             uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
-            time_t tmtEpochTime = u32CurrentTime;
-            tm* timLocalTime = localtime(&tmtEpochTime);
-            char chrFormattedLocalTime[80];
-            strftime(chrFormattedLocalTime, sizeof(chrFormattedLocalTime), "%Y-%m-%d %H:%M:%S", timLocalTime);
-            std::string strFormattedLocalTime(chrFormattedLocalTime);
-            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
-                strFormattedLocalTime = "n/a";
-            }
-            unvEntry.pushKV("sessionstart", strFormattedLocalTime);
 
+            // Convert to time_t
+            time_t tmtCurrentTime = u32CurrentTime;
+
+            // Localize current time
+            tm* tmsLocalizedCurrentTime = localtime(&tmtCurrentTime);
+
+            // Formatted current time
+            char chrFormattedCurrentTime[80];
+
+            // Format current time
+            strftime(chrFormattedCurrentTime, sizeof(chrFormattedCurrentTime), "%Y-%m-%d %H:%M:%S", tmsLocalizedCurrentTime);
+
+            // Convert to string
+            std::string strFormattedCurrentTime(chrFormattedCurrentTime);
+
+            // If manager
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+
+                // Lose session start time
+                strFormattedCurrentTime = "n/a";
+            }
+
+            // Session start
+            unvEntry.pushKV("sessionstart", strFormattedCurrentTime);
+
+            // Set session end time 
             uint32_t u32SessionEndTime = u32CurrentTime + 21600;
-            tmtEpochTime = u32SessionEndTime;
-            timLocalTime = localtime(&tmtEpochTime);
-            chrFormattedLocalTime[80];
-            strftime(chrFormattedLocalTime, sizeof(chrFormattedLocalTime), "%Y-%m-%d %H:%M:%S", timLocalTime);
-            std::string strFormattedLocalTime2(chrFormattedLocalTime);
-            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
-                strFormattedLocalTime2 = "n/a";
-            }
-            unvEntry.pushKV("sessionend", strFormattedLocalTime2);
 
-            const CChain& active_chain = storage_chainman->ActiveChain();
-            const int tip_height = active_chain.Height();            
+            // Convert to time_t
+            time_t tmtSessionEndTime = u32SessionEndTime;
+
+            // Localize session end time
+            tm* tmsLocalizedSessionEndTime = localtime(&tmtSessionEndTime);
+
+            char chrFormattedSessionEndTime[80];
+
+            // Format session end time
+            strftime(chrFormattedSessionEndTime, sizeof(chrFormattedSessionEndTime), "%Y-%m-%d %H:%M:%S", tmsLocalizedSessionEndTime);
+
+            // Convert to string
+            std::string strFormattedSessionEndTime(chrFormattedSessionEndTime);
+
+            // If manager
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+
+                // Lose session end time
+                strFormattedSessionEndTime = "n/a";
+            }
+
+            // session end
+            unvEntry.pushKV("sessionend", strFormattedSessionEndTime);
+
+            // Get active chain
+            const CChain& chnActiveChain = storage_chainman->ActiveChain();
+
+            // Get tip height
+            const int intTipHeight = chnActiveChain.Height();          
+            
+            // If manager
+            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+
+                // Lose session start block
                 unvEntry.pushKV("sessionstartblock", 0);
             } else {                
-                unvEntry.pushKV("sessionstartblock", tip_height);
+
+                // sessionstartblock
+                unvEntry.pushKV("sessionstartblock", intTipHeight);
             }
 
+            // If manager
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+
+                // Lose session end block
                 unvEntry.pushKV("sessionendblock", 0);
             } else {                
-                unvEntry.pushKV("sessionendblock", tip_height + 72);
+
+                // sessionendblock (72 blocks = 6 hours)
+                unvEntry.pushKV("sessionendblock", intTipHeight + 72);
             }
 
+            // If manager
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+
+                // stakingstatus
                 unvEntry.pushKV("stakingstatus", strStakingStatus);
-            } else {                
+
+            // Else not if manager
+            } else {            
+                
+                // Disable staking
                 stakeman_request_stop();
+
+                // Record staking status
                 gblnDisableStaking = true;
+
+                // stakingstatus
                 unvEntry.pushKV("stakingstatus", "disabled");
             }
 
 
 
+            // Reset number of consecutive failures
             gintAuthenticationFailures = 0;
+
+            // Sleep
             sleep (1);
 
             unvResults.push_back(unvEntry);
 
-            
-
+            // Exit
             return unvResults;
         
         }
