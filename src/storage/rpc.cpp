@@ -73,7 +73,7 @@ static RPCHelpMan store()
                     {RPCResult::Type::OBJ, "", "",
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
-                          {RPCResult::Type::STR, "message", "Not authenticated as tenent | Not authenticated | Repeated UUID | Improper length UUID | Invalid hex notation UUID"},
+                          {RPCResult::Type::STR, "message", "Not authenticated as tenent | Not authenticated | Repeated UUID | Improper length UUID | Invalid hex notation UUID | Zero length asset filesize"},
                           {RPCResult::Type::STR, "identifier", "Universally unique asset identifier"},
                           {RPCResult::Type::STR, "tenant", "Hashed public tenant key"},
                           {RPCResult::Type::NUM, "filesize", "filesize (B)"},
@@ -205,23 +205,23 @@ static RPCHelpMan store()
     std::string strAssetFilename = request.params[0].get_str();
 
     // Initialize asset custom uuid
-    std::string strAssetCustomUUID = "";
+    std::string strAssetUUID = "";
 
     // If custom uuid
     if(!request.params[1].isNull()) {
 
         // Get custom uuid
-        strAssetCustomUUID = request.params[1].get_str();
+        strAssetUUID = request.params[1].get_str();
     }
 
     // If custom uuid
-    if (strAssetCustomUUID != "") {
+    if (strAssetUUID != "") {
 
         // uuid invalidity type
         int intUUIDInvalidityType;
 
         // If uuid valid (length, hex notation)
-        if (is_valid_uuid(strAssetCustomUUID, intUUIDInvalidityType)) {
+        if (is_valid_uuid(strAssetUUID, intUUIDInvalidityType)) {
 
             // Existing uuid's
             std::vector<std::string> vctExistingUUIDs;
@@ -236,10 +236,12 @@ static RPCHelpMan store()
             for (auto& uuid : vctExistingUUIDs) {
 
                 // If current uuid = custom uuid
-                if (uuid == strAssetCustomUUID) {
+                if (uuid == strAssetUUID) {
+
+                    // Report and exit
                     entry.pushKV("result", "failure");
                     entry.pushKV("message", "A duplicate unique identifier was discovered.");
-                    entry.pushKV("identifier", strAssetCustomUUID);
+                    entry.pushKV("identifier", strAssetUUID);
                     entry.pushKV("tenant", authUser.ToString());
                     entry.pushKV("filesize", 0);
                     entry.pushKV("storagefee", 0);
@@ -248,15 +250,21 @@ static RPCHelpMan store()
                     entry.pushKV("stakingstatus", strStakingslStatus);
                     results.push_back(entry);
                     return results;
-                
-//                     return std::string("A duplicate unique identifier was discovered.");
                 }     
+
+            // End traverse existing uuid's
             }
+
+        // Else not if uuid valid (length, hex notation)
         } else {
+
+            // If invalid length
             if (intUUIDInvalidityType == 1) {
+
+                // Report and exit
                 entry.pushKV("result", "failure");
                 entry.pushKV("message", "The custom unique identifier provided has an invalid length.");
-                entry.pushKV("identifier", strAssetCustomUUID);
+                entry.pushKV("identifier", strAssetUUID);
                 entry.pushKV("tenant", authUser.ToString());
                 entry.pushKV("filesize", 0);
                 entry.pushKV("storagefee", 0);
@@ -265,16 +273,17 @@ static RPCHelpMan store()
                 entry.pushKV("stakingstatus", strStakingslStatus);
                 results.push_back(entry);
                 return results;
-            
-//                 return std::string ("The custom unique identifier provided has an invalid length.");
             }
 
 
 
+            // If invalid hex notation
             if (intUUIDInvalidityType == 2) {
+
+                // Report and exit
                 entry.pushKV("result", "failure");
                 entry.pushKV("message", "Invalid UUID hex notation.");
-                entry.pushKV("identifier", strAssetCustomUUID);
+                entry.pushKV("identifier", strAssetUUID);
                 entry.pushKV("tenant", authUser.ToString());
                 entry.pushKV("filesize", 0);
                 entry.pushKV("storagefee", 0);
@@ -283,19 +292,17 @@ static RPCHelpMan store()
                 entry.pushKV("stakingstatus", strStakingslStatus);
                 results.push_back(entry);
                 return results;
-            
-//                 return std::string ("uuid_invalid_hex_notation");
             }
         }
     }
 
     // if no custom uuid
-    if (strAssetCustomUUID == "") {
+    if (strAssetUUID == "") {
         // int uuid_not_found_to_not_exist = 1;
         // while (uuid_not_found_to_not_exist == 1) {
 
             // generate uuid
-            strAssetCustomUUID = generate_uuid(OPENCODING_UUID);
+            strAssetUUID = generate_uuid(OPENCODING_UUID);
             // std::vector<std::string> existing_uuids;
             // scan_blocks_for_uuids(*storage_chainman, existing_uuids);
             // int uuid_exists = 0;
@@ -309,46 +316,84 @@ static RPCHelpMan store()
         //}
     }
 
+    // If asset filesize > 0
     if (read_file_size(strAssetFilename) > 0) {
-        add_put_task(strAssetFilename, strAssetCustomUUID);
 
-LogPrint (BCLog::ALL, "uuid %s\n", strAssetCustomUUID);
+        // Add put task
+        add_put_task(strAssetFilename, strAssetUUID);
 
-
-
-int filelen = read_file_size(strAssetFilename);
-int est_chunks = calculate_chunks_from_filesize(filelen);
-int suitable_inputs = ((est_chunks+(OPRETURN_PER_TX-1))/OPRETURN_PER_TX);
+        // LogPrint (BCLog::ALL, "uuid %s\n", strAssetUUID);
 
 
 
-uint32_t time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
-time_t time2 = time;
-tm* time3 = localtime(&time2);
-char time4[80];
-strftime(time4, sizeof(time4), "%Y-%m-%d %H:%M:%S", time3);
-std::string storagetime(time4);
+        // Get asset filesize
+        int intAssetFilesize = read_file_size(strAssetFilename);
 
-std::ostringstream oss;
-oss << std::fixed << std::setprecision(8) << (double)filelen/100000000.0;
-std::string str_value = oss.str();
+        // Get estimated number of chunks
+        // int intEstimatedNumberOfChunks = calculate_chunks_from_filesize(intAssetFilesize);
+        // int suitable_inputs = ((intEstimatedNumberOfChunks+(OPRETURN_PER_TX-1))/OPRETURN_PER_TX);
 
 
 
+        // Get current timestamp
+        uint32_t intCurentTimestamp = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+
+        // Convert to time_t
+        time_t tmtCurrentTimestamp = intCurentTimestamp;
+
+        // Localize current timestamp
+        tm* tmsLocalizedCurrentTimestamp = localtime(&tmtCurrentTimestamp);
+
+        // Formatted current timestamp
+        char chrFormattedCurrentTmestamp[80];
+
+        // Format current timestamp
+        strftime(chrFormattedCurrentTmestamp, sizeof(chrFormattedCurrentTmestamp), "%Y-%m-%d %H:%M:%S", tmsLocalizedCurrentTimestamp);
+
+        // Convert to string
+        std::string strFormattedCurrentTimestamp(chrFormattedCurrentTmestamp);
+
+        // Transaction fee in lynx
+        std::ostringstream ossTransactionFee;
+
+        // Convert satoshi's to lynx (transaction fee is one satoshi per byte)
+        ossTransactionFee << std::fixed << std::setprecision(8) << (double)intAssetFilesize/100000000.0;
+
+        // Convert to string 
+        std::string strTransactionFee = ossTransactionFee.str();
+
+
+
+        // Report and exit
         entry.pushKV("result", "success");
         entry.pushKV("message", "n/a");
-        entry.pushKV("identifier", strAssetCustomUUID);
+        entry.pushKV("identifier", strAssetUUID);
         entry.pushKV("tenant", authUser.ToString());
-        entry.pushKV("filesize", filelen);
-        entry.pushKV("storagefee", str_value);
-        entry.pushKV("storagetime", storagetime);
+        entry.pushKV("filesize", intAssetFilesize);
+        entry.pushKV("storagefee", strTransactionFee);
+        entry.pushKV("storagetime", strFormattedCurrentTimestamp);
+        entry.pushKV("currentblock", intTipHeight);
+        entry.pushKV("stakingstatus", strStakingslStatus);
+        results.push_back(entry);
+        return results;
+
+    // Else not if asset filesize > 0
+    } else {
+
+        // Report and exit
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Zero length asset filesize.");
+        entry.pushKV("identifier", "n/a");
+        entry.pushKV("tenant", authUser.ToString());
+        entry.pushKV("filesize", 0);
+        entry.pushKV("storagefee", 0);
+        entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", intTipHeight);
         entry.pushKV("stakingstatus", strStakingslStatus);
         results.push_back(entry);
         return results;
     }
 
-    return std::string("failure");
 },
     };
 }
