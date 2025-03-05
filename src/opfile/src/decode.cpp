@@ -224,11 +224,10 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
 //    start = clock ();    
 
         // perform contextual checks
-        //if (!check_chunk_contextual(chunk, protocol, error_level)) {
-        // if (!check_chunk_contextual (chunk, protocol, error_level, offset)) {
-            //pass error_level back
-            // return false;
-        // }
+        if (!check_chunk_contextual (chunk, protocol, error_level, offset)) {
+            // pass error_level back
+            return false;
+        }
 
 //    end = clock ();    
 //    t_ccc = t_ccc + (double) (end - start) / CLOCKS_PER_SEC;
