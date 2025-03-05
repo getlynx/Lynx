@@ -407,7 +407,24 @@ static RPCHelpMan fetch()
              {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the file."},
          },
          RPCResult{
-            RPCResult::Type::STR, "", "success or failure"},
+//             RPCResult::Type::STR, "", "success or failure"},
+
+            RPCResult{
+                RPCResult::Type::ARR, "", "",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                    {
+                          {RPCResult::Type::STR, "result", "success | failure"},
+                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID length"},
+                          {RPCResult::Type::STR, "tenant", "Authenticated store tenant public key"},
+                    }},
+                }
+            },
+
+         },    
+
+
+
          RPCExamples{
             "\nRetrieve file 00112233445566778899aabbccddeeff and store in /home/username/downloads.\n"
             + HelpExampleCli("fetch", "00112233445566778899aabbccddeeff /home/username/downloads")
@@ -415,19 +432,44 @@ static RPCHelpMan fetch()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
+    // Results
+    UniValue unvResults(UniValue::VARR);
+
+    // Entry
+    UniValue unvEntry(UniValue::VOBJ);
+
     std::string uuid = request.params[0].get_str();
     std::string path = request.params[1].get_str();
     if (!does_path_exist(path)) {
-        return std::string("invalid-path");
+        unvEntry.pushKV("result", "failure");
+        unvEntry.pushKV("message", "Invalid path.");
+        unvResults.push_back(unvEntry);
+
+        // Exit
+        return unvResults;
+
+//         return std::string("Invalid path.");
     }
     if (uuid.size() == OPENCODING_UUID*2) {
         add_get_task(std::make_pair(uuid, path));
-        return get_result_hash();
+        unvEntry.pushKV("result", "success");
+        unvEntry.pushKV("message", "n/a");
+        unvResults.push_back(unvEntry);
+
+        // Exit
+        return unvResults;
+
+//         return get_result_hash();
     } else {
-        return std::string("invalid-length");
+        unvEntry.pushKV("result", "failure");
+        unvEntry.pushKV("message", "Invalid UUID length.");
+        unvResults.push_back(unvEntry);
+
+        // Exit
+        return unvResults;
+
     } 
 
-    return NullUniValue;
 },
     };
 }
