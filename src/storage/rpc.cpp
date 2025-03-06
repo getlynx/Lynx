@@ -405,7 +405,7 @@ static RPCHelpMan fetch()
     return RPCHelpMan{"fetch",
         "\nRetrieve an file stored on the Lynx blockchain.\nLearn more at https://docs.getlynx.io/\n",
          {
-             {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The unique identifier of the file."},
+             {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The unique identifier of the file (enter x to fetch x most recent assets, 0 for all)."},
              {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the file."},
              {"pubkeyflag", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant."},
          },
@@ -418,7 +418,7 @@ static RPCHelpMan fetch()
                     {RPCResult::Type::OBJ, "", "",
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
-                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID length"},
+                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID length | Not authenticated"},
                           {RPCResult::Type::NUM, "tenant", "Authenticated store tenant public key"},
                     }},
                 }
@@ -441,12 +441,44 @@ static RPCHelpMan fetch()
     // Entry
     UniValue unvEntry(UniValue::VOBJ);
 
-// scan_blocks_for_authdata(*storage_chainman);
-
     std::string uuid = request.params[0].get_str();
     std::string path = request.params[1].get_str();
     std::string strTenantFlag;
     int intTenantFlag = 1;
+
+    if (uuid.size() == 1) {
+
+        if (authUser.ToString() == "0000000000000000000000000000000000000000") {
+
+            unvEntry.pushKV("result", "failure");
+            unvEntry.pushKV("message", "Not authenticated.");
+            unvEntry.pushKV("tenant", "n/a");
+            unvResults.push_back(unvEntry);
+    
+            // Exit
+            return unvResults;
+        }
+
+        int intCount = stoi(uuid);
+        std::vector<std::string> vctUUIDs;
+        scan_blocks_for_uuids(*storage_chainman, vctUUIDs, intCount);
+        std::string strUUID;
+        for (auto& uuid : vctUUIDs) {
+            strUUID = uuid;
+            add_get_task(std::make_pair(uuid, path));
+            sleep (2);
+        }
+
+        std::string strMessage = "Number of assets fetched: " + std::to_string(intCount);
+
+        unvEntry.pushKV("result", "success");
+        unvEntry.pushKV("message", strMessage);
+        unvEntry.pushKV("tenant", "n/a");
+        unvResults.push_back(unvEntry);
+        
+        // Exit
+        return unvResults;            
+}
 
     if (!request.params[2].isNull()) {
         strTenantFlag = request.params[2].get_str();
