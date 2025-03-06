@@ -407,7 +407,7 @@ static RPCHelpMan fetch()
          {
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The unique identifier of the file."},
              {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the file."},
-             {"pubkeyflag8", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant."},
+             {"pubkeyflag", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant."},
          },
          RPCResult{
 //             RPCResult::Type::STR, "", "success or failure"},
@@ -419,7 +419,7 @@ static RPCHelpMan fetch()
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
                           {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID length"},
-                          {RPCResult::Type::STR, "tenant", "Authenticated store tenant public key"},
+                          {RPCResult::Type::NUM, "tenant", "Authenticated store tenant public key"},
                     }},
                 }
             },
@@ -445,6 +445,14 @@ static RPCHelpMan fetch()
 
     std::string uuid = request.params[0].get_str();
     std::string path = request.params[1].get_str();
+    std::string strTenantFlag;
+    int intTenantFlag = 1;
+
+    if (!request.params[2].isNull()) {
+        strTenantFlag = request.params[2].get_str();
+        intTenantFlag = stoi (strTenantFlag);
+    }
+
     if (!does_path_exist(path)) {
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid path.");
@@ -458,31 +466,50 @@ static RPCHelpMan fetch()
     }
     if (uuid.size() == OPENCODING_UUID*2) {
 
-if (!scan_blocks_for_pubkey (*storage_chainman, uuid)) {
+        if (intTenantFlag == 1) {
 
-        unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "UUID not found.");
-        unvEntry.pushKV("tenant", "n/a");
-        unvResults.push_back(unvEntry);
+            if (!scan_blocks_for_pubkey (*storage_chainman, uuid)) {
 
-        // Exit
-        return unvResults;
+                unvEntry.pushKV("result", "failure");
+                unvEntry.pushKV("message", "UUID not found.");
+                unvEntry.pushKV("tenant", "n/a");
+                unvResults.push_back(unvEntry);
 
-} else {
+                // Exit
+                return unvResults;
 
-        add_get_task(std::make_pair(uuid, path));
-        unvEntry.pushKV("result", "success");
-        unvEntry.pushKV("message", "n/a");
-        unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
-//        unvEntry.pushKV("tenant", "n/a");
-        unvResults.push_back(unvEntry);
+            } else {
 
-        // Exit
-        return unvResults;
+               add_get_task(std::make_pair(uuid, path));
+//                 sleep (7);
+//                 add_get_task(std::make_pair(uuid, path));
 
-//         return get_result_hash();
+                unvEntry.pushKV("result", "success");
+                unvEntry.pushKV("message", "n/a");
+                unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
+//                unvEntry.pushKV("tenant", "n/a");
+                unvResults.push_back(unvEntry);
 
-}
+                // Exit
+                return unvResults;
+
+//                 return get_result_hash();
+
+            }
+
+        } else {
+
+            add_get_task(std::make_pair(uuid, path));
+            
+            unvEntry.pushKV("result", "success");
+            unvEntry.pushKV("message", "n/a");
+            unvEntry.pushKV("tenant", "n/a");
+            unvResults.push_back(unvEntry);
+            
+            // Exit
+            return unvResults;            
+
+        }
 
     } else {
         unvEntry.pushKV("result", "failure");
