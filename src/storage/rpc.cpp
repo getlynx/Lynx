@@ -40,6 +40,8 @@ using node::ReadBlockFromDisk;
 // Staking state, set at daemon startup time
 extern bool gblnDisableStaking;
 
+extern uint160 ghshAuthenticatetenantPubkey;
+
 // Nunber of consecutive authentication failures
 int gintAuthenticationFailures;
 
@@ -405,6 +407,7 @@ static RPCHelpMan fetch()
          {
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The unique identifier of the file."},
              {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the file."},
+             {"pubkeyflag8", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant."},
          },
          RPCResult{
 //             RPCResult::Type::STR, "", "success or failure"},
@@ -438,11 +441,14 @@ static RPCHelpMan fetch()
     // Entry
     UniValue unvEntry(UniValue::VOBJ);
 
+// scan_blocks_for_authdata(*storage_chainman);
+
     std::string uuid = request.params[0].get_str();
     std::string path = request.params[1].get_str();
     if (!does_path_exist(path)) {
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid path.");
+        unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
 
         // Exit
@@ -451,18 +457,37 @@ static RPCHelpMan fetch()
 //         return std::string("Invalid path.");
     }
     if (uuid.size() == OPENCODING_UUID*2) {
+
+// if (!scan_blocks_for_pubkey (*storage_chainman)) {
+
+//         unvEntry.pushKV("result", "failure");
+//         unvEntry.pushKV("message", "UUID not found.");
+//         unvEntry.pushKV("tenant", "n/a");
+//         unvResults.push_back(unvEntry);
+
+        // Exit
+///         return unvResults;
+
+// } else {
+
         add_get_task(std::make_pair(uuid, path));
         unvEntry.pushKV("result", "success");
         unvEntry.pushKV("message", "n/a");
+        // unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
+        unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
 
         // Exit
         return unvResults;
 
 //         return get_result_hash();
+
+// }
+
     } else {
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid UUID length.");
+        unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
 
         // Exit
