@@ -58,6 +58,328 @@ std::map<std::string, int> gmapBlockHeight;
 // Asset timestamp (seconds since 1970)
 std::map<std::string, int> gmapTimeStamp;
 
+
+
+
+// Extract uuid
+bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
+{
+
+    clock_t start, end;
+
+    double t_hs = 0.0;
+    double t_rbfd = 0.0;
+    double t_sofc = 0.0;
+    double t_ccc = 0.0;
+    double t_iva = 0.0;
+    double t_gctfc = 0.0;
+    double t_gcnfc = 0.0;
+    double t_gufc = 0.0;
+    double t_gclfc = 0.0;
+
+    int error_level;
+
+    bool hasauth;
+    const CChain& active_chain = chainman.ActiveChain();
+    const int tip_height = active_chain.Height();
+
+    hasauth = false;
+
+    int chunktotal2 = 0;
+
+    int offset;
+
+    int count = 0;
+
+    CBlock block{};
+    CBlockIndex* pindex = nullptr;
+
+    std::string magic;
+    std::string strProtocol;
+    std::string uuid2;
+    std::string signature;
+    std::string chunklen;
+
+    int intAllDataChunksFound = 0;
+
+    int intAuthenticateTenantPubkeyFound = 0;
+
+    std::string strAuthenticatetenantPubkeyCandidate;
+                        
+    long lngCutoff = Params().GetConsensus().nUUIDBlockStart;
+
+    // In reverse, skip POW blocks
+    for (int height = (tip_height - 1); height > lngCutoff; height--) {
+
+        pindex = active_chain[height];
+
+#ifdef TIMING
+    start = clock ();    
+#endif
+
+        if (!ReadBlockFromDisk(block, pindex, chainman.GetConsensus())) {
+            return false;
+        }
+
+#ifdef TIMING
+    end = clock ();    
+    t_rbfd = t_rbfd + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+    
+        // Traverse transactions
+        for (unsigned int vtx = 0; vtx < block.vtx.size(); vtx++) {
+    
+            if (block.vtx[vtx]->IsCoinBase() || block.vtx[vtx]->IsCoinStake()) {
+                continue;
+            }
+    
+            // Traverse outputs
+            for (unsigned int vout = 0; vout < block.vtx[vtx]->vout.size(); vout++) {
+    
+                // If OP_RETURN
+                if (block.vtx[vtx]->vout[vout].scriptPubKey.IsOpReturn()) {
+    
+                    std::string opdata, chunk, this_uuid;
+    
+#ifdef TIMING
+    start = clock ();    
+#endif
+    
+                    opdata = HexStr(block.vtx[vtx]->vout[vout].scriptPubKey);
+    
+#ifdef TIMING
+    end = clock ();    
+    t_hs = t_hs + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+    
+#ifdef TIMING
+    start = clock ();    
+#endif
+    
+                    // Return offset, rather then strip OP_RETURN + metadata
+                    if (!strip_opreturndata_from_chunk (opdata, chunk, offset)) {
+                        // LogPrintf ("%s - failed at strip_opreturndata_from_chunk\n", __func__);
+                        continue;
+                    }    
+
+#ifdef TIMING
+    end = clock ();    
+    t_sofc = t_sofc + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+                        
+                    int protocol;
+                                            
+#ifdef TIMING
+    start = clock ();    
+#endif
+                        
+                    // Check for chunk data, check for valid protocal, return protocol
+                    if (!check_chunk_contextual (opdata, protocol, error_level, offset)) {
+                        // LogPrintf ("%s - failed at check_chunk_contextual. error_level %d\n", __func__, error_level);
+                        continue;
+                    }
+                        
+#ifdef TIMING
+    end = clock ();    
+    t_ccc = t_ccc + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+                        
+#ifdef TIMING
+    start = clock ();    
+#endif
+                        
+                    // Extract UUID
+                    get_uuid_from_chunk (opdata, this_uuid, offset);
+                        
+#ifdef TIMING
+     end = clock ();    
+    t_gufc = t_gufc + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+                        
+                    // If chunk UUID equals fetchasset UUID
+                    if (uuid == this_uuid) {
+                        int chunklen2;
+
+#ifdef TIMING
+    start = clock ();    
+#endif
+                                                
+                        get_chunklen_from_chunk (opdata, chunklen, offset);
+                                                
+                        chunklen2 = std::stoul(chunklen, nullptr, 16);
+                                                
+#ifdef TIMING
+    end = clock ();    
+    t_gclfc = t_gclfc + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+                                                
+                        if (chunklen2 == 0) {
+                                                
+#ifdef TIMING
+    start = clock ();    
+#endif
+                                                
+                            if (!is_valid_authchunk (opdata, error_level, offset)) {
+                                                
+                                LogPrint (BCLog::ALL, "error_level from is_valid_authchunk %d\n", error_level);
+                                continue;
+                            }
+                                                
+#ifdef TIMING
+    end = clock ();    
+    t_iva = t_iva + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+
+                            get_magic_from_chunk (opdata, magic, offset);
+                            get_version_from_chunk (opdata, strProtocol, offset);
+                            get_uuid_from_chunk (opdata, uuid2, offset);
+                            get_chunklen_from_chunk (opdata, chunklen, offset);
+                            get_signature_from_chunk (opdata, signature, offset);
+                    
+                            LogPrint (BCLog::ALL, "Found valid header chunk for UUID: %s\n", this_uuid);
+                            LogPrint (BCLog::ALL, "\n");
+                            LogPrint (BCLog::ALL, "Header Chunk Magic: %s\n", magic);
+                            LogPrint (BCLog::ALL, "Header Chunk Protocol: %s\n", strProtocol);
+                            LogPrint (BCLog::ALL, "Header Chunk UUID: %s\n", uuid2);
+                            LogPrint (BCLog::ALL, "Header Chunk Length: %s\n", chunklen);
+                            LogPrint (BCLog::ALL, "Header Chunk Signature: %s\n", signature);
+                            LogPrint (BCLog::ALL, "\n");
+                    
+                            hasauth = true;
+                    
+                    
+                            // Extract authenticated tenant at storeasset time from header chunk (ghshAuthenticatetenantPubkey)
+                            extract_pubkey_from_signature (opdata, offset); 
+                    
+                            // if (is_auth_member(ghshAuthenticatetenantPubkey)) {
+                    
+                            //     intAuthenticateTenantPubkeyFound = 1;
+                    
+                            if (intAllDataChunksFound == 1) {
+                    
+                                height = lngCutoff;
+                    
+                            }
+                    
+                            // }
+                    
+                                                
+                            continue;
+                        } else {
+                            count++;
+                        }
+                    
+#ifdef TIMING
+    start = clock ();    
+#endif
+                    
+                        std::string chunktotal;
+                        get_chunktotal_from_chunk (opdata, chunktotal, offset);
+                        chunktotal2 = std::stoul(chunktotal, nullptr, 16);
+
+//                     chunks.resize(chunktotal2);
+
+#ifdef TIMING
+    end = clock ();    
+    t_gctfc = t_gctfc + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+
+#ifdef TIMING
+    start = clock ();    
+#endif
+
+                        int chunknum2;
+                        std::string chunknum;
+                        get_chunknum_from_chunk (opdata, chunknum, offset);
+                        chunknum2 = std::stoul(chunknum, nullptr, 16);
+
+                        if (count == chunktotal2) {
+
+                            intAllDataChunksFound = 1;
+
+                            if (hasauth) {
+
+                                height = lngCutoff;
+
+                            }
+    
+                        }
+
+                    // put chunk in correct position
+//                     chunks[chunknum2-1] = opdata;
+
+#ifdef TIMING
+    end = clock ();    
+    t_gcnfc = t_gcnfc + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+
+                    }
+                }
+            }
+        }
+    }
+
+    // If header chunk not found
+    if (!hasauth) {
+        LogPrintf("Header chunk not found for uuid %s\n", uuid);
+        //error_level = ERR_CHUNKAUTHNONE;
+        return false;
+    }
+
+    // If not all data chunks
+    if (count != chunktotal2) {
+        LogPrint (BCLog::ALL, "Not all data chunks found for uuid %s\n", uuid);
+        // error_level = ERR_NOTALLDATACHUNKS;
+        return false;
+    }
+
+    // If authenticatetenant pubkey not found
+    // if (intAuthenticateTenantPubkeyFound == 0) {
+        // LogPrint (BCLog::ALL, "authenticatetenant pubkey not found for uuid %s\n", uuid);
+        // error_level = ERR_CHUNKAUTHUNK;
+        // return false;
+    // }
+
+
+#ifdef TIMING
+    LogPrint (BCLog::ALL, "%d data chunks found.\n", chunktotal2);
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "elapsed time ReadBlockFromDisk %ld \n", t_rbfd);
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "elapsed time HexStr %ld \n", t_hs);
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "elapsed time strip_opreturn_from_chunk %ld \n", t_sofc);
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "elapsed time check_chunk_contextual %ld \n", t_ccc);
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "elapsed time get_chunklen_from_chunk %ld \n", t_gclfc);
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "elapsed time get_uuid_from_chunk %ld \n", t_gufc);
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "elapsed time is_valid_authchunk %ld \n", t_iva);
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "elapsed time get_chunktotal_from_chunk %ld \n", t_gctfc);
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "elapsed time get_chunknumber_from_chunk %ld \n", t_gcnfc);
+    LogPrint (BCLog::ALL, "\n");
+#endif
+
+    return true;
+}
+
+                                                                                            
+
+
+
 // Scan blockchain for unique uuids
 bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>& pvctUUIDs, int pintCount) {
 

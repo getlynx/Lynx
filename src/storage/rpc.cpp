@@ -458,23 +458,23 @@ static RPCHelpMan fetch()
     }
     if (uuid.size() == OPENCODING_UUID*2) {
 
-// if (!scan_blocks_for_pubkey (*storage_chainman)) {
+if (!scan_blocks_for_pubkey (*storage_chainman, uuid)) {
 
-//         unvEntry.pushKV("result", "failure");
-//         unvEntry.pushKV("message", "UUID not found.");
-//         unvEntry.pushKV("tenant", "n/a");
-//         unvResults.push_back(unvEntry);
+        unvEntry.pushKV("result", "failure");
+        unvEntry.pushKV("message", "UUID not found.");
+        unvEntry.pushKV("tenant", "n/a");
+        unvResults.push_back(unvEntry);
 
         // Exit
-///         return unvResults;
+        return unvResults;
 
-// } else {
+} else {
 
         add_get_task(std::make_pair(uuid, path));
         unvEntry.pushKV("result", "success");
         unvEntry.pushKV("message", "n/a");
-        // unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
-        unvEntry.pushKV("tenant", "n/a");
+        unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
+//        unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
 
         // Exit
@@ -482,7 +482,7 @@ static RPCHelpMan fetch()
 
 //         return get_result_hash();
 
-// }
+}
 
     } else {
         unvEntry.pushKV("result", "failure");

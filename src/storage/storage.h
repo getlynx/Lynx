@@ -14,6 +14,8 @@ using namespace wallet;
 
 bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>& uuid_found, int intCount);
 
+bool scan_blocks_for_pubkey(ChainstateManager& chainman, std::string& uuid);
+
 // bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>& uuid_found);
 //bool scan_blocks_for_specific_uuid(ChainstateManager& chainman, std::string& uuid, int& error_level, std::vector<std::string>& chunks,;
 //bool scan_blocks_for_specific_uuid(ChainstateManager& chainman, std::string& uuid, int& error_level, std::vector<std::string>& chunks, int& pintOffset);
