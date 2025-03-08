@@ -147,7 +147,9 @@ std::string CRPCTable::help(const std::string& strCommand, const JSONRPCRequest&
                             strRet += strHelp + "\n";
                         }
                     } else {
-                        strRet += strHelp + "\n";
+                        if (strHelp.substr(0,5) != "store") {
+                            strRet += strHelp + "\n";
+			}
                     }
                 } else {
                     strRet += strHelp + "\n";
@@ -155,7 +157,7 @@ std::string CRPCTable::help(const std::string& strCommand, const JSONRPCRequest&
 
             } else { 
                 if (Capitalize(category) == "Storage") {
-                    if ((strHelp.substr(0,5) == "fetch") || (strHelp.substr(0,6) == "status")) {
+                    if (((strHelp.substr(0,5) == "fetch") || (strHelp.substr(0,6) == "status")) && (strHelp.substr(0,6) != "fetcha")) {
                         strRet += strHelp + "\n";
                     }
                 }

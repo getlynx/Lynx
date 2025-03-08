@@ -400,10 +400,166 @@ static RPCHelpMan store()
     };
 }
 
+static RPCHelpMan fetchall()
+{
+    return RPCHelpMan{"fetchall",
+        "\nRetrieve asset(s) stored on the Lynx blockchain in reverse chronological order\nLearn more at https://docs.getlynx.io/\n",
+         {
+             {"count", RPCArg::Type::STR, RPCArg::Optional::NO, "The number of assets to fetch (enter 0 to signify all)."}, 
+             {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the file."},
+         },
+         RPCResult{
+//             RPCResult::Type::STR, "", "success or failure"},
+
+            RPCResult{
+                RPCResult::Type::ARR, "", "",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                    {
+                          {RPCResult::Type::STR, "result", "success | failure"},
+                          {RPCResult::Type::STR, "message", "invslid path | Not authenticated | Nunber of assets fetched: x"},
+                    }},
+                }
+            },
+
+         },    
+
+
+
+         RPCExamples{
+            "\nRetrieve file 00112233445566778899aabbccddeeff and store in /home/username/downloads.\n"
+            + HelpExampleCli("fetchall", "00112233445566778899aabbccddeeff /home/username/downloads")
+        + HelpExampleRpc("fetchall", "00112233445566778899aabbccddeeff /home/username/downloads")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    // Results
+    UniValue unvResults(UniValue::VARR);
+
+    // Entry
+    UniValue unvEntry(UniValue::VOBJ);
+
+    std::string uuid = request.params[0].get_str();
+    std::string path = request.params[1].get_str();
+    std::string strTenantFlag;
+    int intTenantFlag = 1;
+
+    if (uuid.size() == 1) {
+
+        if (authUser.ToString() == "0000000000000000000000000000000000000000") {
+
+            unvEntry.pushKV("result", "failure");
+            unvEntry.pushKV("message", "Not authenticated.");
+            unvEntry.pushKV("tenant", "n/a");
+            unvResults.push_back(unvEntry);
+    
+            // Exit
+            return unvResults;
+        }
+
+        int intCount = stoi(uuid);
+        std::vector<std::string> vctUUIDs;
+        scan_blocks_for_uuids(*storage_chainman, vctUUIDs, intCount);
+        std::string strUUID;
+        for (auto& uuid : vctUUIDs) {
+            strUUID = uuid;
+            add_get_task(std::make_pair(uuid, path));
+            sleep (2);
+        }
+
+        std::string strMessage = "Number of assets fetched: " + std::to_string(intCount);
+
+        unvEntry.pushKV("result", "success");
+        unvEntry.pushKV("message", strMessage);
+        unvEntry.pushKV("tenant", "n/a");
+        unvResults.push_back(unvEntry);
+        
+        // Exit
+        return unvResults;            
+}
+
+    if (!request.params[2].isNull()) {
+        strTenantFlag = request.params[2].get_str();
+        intTenantFlag = stoi (strTenantFlag);
+    }
+
+    if (!does_path_exist(path)) {
+        unvEntry.pushKV("result", "failure");
+        unvEntry.pushKV("message", "Invalid path.");
+        unvEntry.pushKV("tenant", "n/a");
+        unvResults.push_back(unvEntry);
+
+        // Exit
+        return unvResults;
+
+//         return std::string("Invalid path.");
+    }
+    if (uuid.size() == OPENCODING_UUID*2) {
+
+        if (intTenantFlag == 1) {
+
+            if (!scan_blocks_for_pubkey (*storage_chainman, uuid)) {
+
+                unvEntry.pushKV("result", "failure");
+                unvEntry.pushKV("message", "UUID not found.");
+                unvEntry.pushKV("tenant", "n/a");
+                unvResults.push_back(unvEntry);
+
+                // Exit
+                return unvResults;
+
+            } else {
+
+               add_get_task(std::make_pair(uuid, path));
+//                 sleep (7);
+//                 add_get_task(std::make_pair(uuid, path));
+
+                unvEntry.pushKV("result", "success");
+                unvEntry.pushKV("message", "n/a");
+                unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
+//                unvEntry.pushKV("tenant", "n/a");
+                unvResults.push_back(unvEntry);
+
+                // Exit
+                return unvResults;
+
+//                 return get_result_hash();
+
+            }
+
+        } else {
+
+            add_get_task(std::make_pair(uuid, path));
+            
+            unvEntry.pushKV("result", "success");
+            unvEntry.pushKV("message", "n/a");
+            unvEntry.pushKV("tenant", "n/a");
+            unvResults.push_back(unvEntry);
+            
+            // Exit
+            return unvResults;            
+
+        }
+
+    } else {
+        unvEntry.pushKV("result", "failure");
+        unvEntry.pushKV("message", "Invalid UUID length.");
+        unvEntry.pushKV("tenant", "n/a");
+        unvResults.push_back(unvEntry);
+
+        // Exit
+        return unvResults;
+
+    } 
+
+},
+    };
+}
+
 static RPCHelpMan fetch()
 {
     return RPCHelpMan{"fetch",
-        "\nRetrieve an file stored on the Lynx blockchain.\nLearn more at https://docs.getlynx.io/\n",
+        "\nRetrieve a file stored on the Lynx blockchain.\nLearn more at https://docs.getlynx.io/\n",
          {
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The unique identifier of the file (enter x to fetch x most recent assets, 0 for all)."},
              {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the file."},
@@ -1321,6 +1477,7 @@ void RegisterStorageRPCCommands(CRPCTable& t)
 {
     static const CRPCCommand commands[]{
         {"storage", &store},
+        {"storage", &fetchall},
         {"storage", &fetch},
         {"storage", &list},
         {"storage", &status},
