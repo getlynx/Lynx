@@ -567,7 +567,7 @@ static RPCHelpMan fetch()
 
     if (!does_path_exist(path)) {
         unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid path.");
+        unvEntry.pushKV("message", "Invalid path " + path + ".");
         unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
 
