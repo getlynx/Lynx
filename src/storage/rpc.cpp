@@ -439,118 +439,42 @@ static RPCHelpMan fetchall()
     // Entry
     UniValue unvEntry(UniValue::VOBJ);
 
-    std::string uuid = request.params[0].get_str();
+    std::string strCount = request.params[0].get_str();
     std::string path = request.params[1].get_str();
     std::string strTenantFlag;
     int intTenantFlag = 1;
 
-    if (uuid.size() == 1) {
+    if (authUser.ToString() == "0000000000000000000000000000000000000000") {
 
-        if (authUser.ToString() == "0000000000000000000000000000000000000000") {
-
-            unvEntry.pushKV("result", "failure");
-            unvEntry.pushKV("message", "Not authenticated.");
-            unvEntry.pushKV("tenant", "n/a");
-            unvResults.push_back(unvEntry);
-    
-            // Exit
-            return unvResults;
-        }
-
-        int intCount = stoi(uuid);
-        std::vector<std::string> vctUUIDs;
-        scan_blocks_for_uuids(*storage_chainman, vctUUIDs, intCount);
-        std::string strUUID;
-        for (auto& uuid : vctUUIDs) {
-            strUUID = uuid;
-            add_get_task(std::make_pair(uuid, path));
-            sleep (2);
-        }
-
-        std::string strMessage = "Number of assets fetched: " + std::to_string(intCount);
-
-        unvEntry.pushKV("result", "success");
-        unvEntry.pushKV("message", strMessage);
-        unvEntry.pushKV("tenant", "n/a");
+        unvEntry.pushKV("result", "failure");
+        unvEntry.pushKV("message", "Not authenticated.");
         unvResults.push_back(unvEntry);
-        
-        // Exit
-        return unvResults;            
-}
-
-    if (!request.params[2].isNull()) {
-        strTenantFlag = request.params[2].get_str();
-        intTenantFlag = stoi (strTenantFlag);
+        return unvResults;
     }
 
     if (!does_path_exist(path)) {
         unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid path.");
-        unvEntry.pushKV("tenant", "n/a");
+        unvEntry.pushKV("message", "Invalid path " + path + ".");
         unvResults.push_back(unvEntry);
-
-        // Exit
         return unvResults;
-
-//         return std::string("Invalid path.");
     }
-    if (uuid.size() == OPENCODING_UUID*2) {
 
-        if (intTenantFlag == 1) {
+    int intCount = stoi(strCount);
+    std::vector<std::string> vctUUIDs;
+    scan_blocks_for_uuids(*storage_chainman, vctUUIDs, intCount);
+    std::string strUUID;
+    for (auto& uuid : vctUUIDs) {
+        strUUID = uuid;
+        add_get_task(std::make_pair(uuid, path));
+        sleep (2);
+    }
 
-            if (!scan_blocks_for_pubkey (*storage_chainman, uuid)) {
+    std::string strMessage = "Number of assets fetched: " + std::to_string(intCount);
 
-                unvEntry.pushKV("result", "failure");
-                unvEntry.pushKV("message", "UUID not found.");
-                unvEntry.pushKV("tenant", "n/a");
-                unvResults.push_back(unvEntry);
-
-                // Exit
-                return unvResults;
-
-            } else {
-
-               add_get_task(std::make_pair(uuid, path));
-//                 sleep (7);
-//                 add_get_task(std::make_pair(uuid, path));
-
-                unvEntry.pushKV("result", "success");
-                unvEntry.pushKV("message", "n/a");
-                unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
-//                unvEntry.pushKV("tenant", "n/a");
-                unvResults.push_back(unvEntry);
-
-                // Exit
-                return unvResults;
-
-//                 return get_result_hash();
-
-            }
-
-        } else {
-
-            add_get_task(std::make_pair(uuid, path));
-            
-            unvEntry.pushKV("result", "success");
-            unvEntry.pushKV("message", "n/a");
-            unvEntry.pushKV("tenant", "n/a");
-            unvResults.push_back(unvEntry);
-            
-            // Exit
-            return unvResults;            
-
-        }
-
-    } else {
-        unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid UUID length.");
-        unvEntry.pushKV("tenant", "n/a");
-        unvResults.push_back(unvEntry);
-
-        // Exit
-        return unvResults;
-
-    } 
+    unvEntry.pushKV("result", "success");
+    unvEntry.pushKV("message", strMessage);
+    unvResults.push_back(unvEntry);
+    return unvResults;            
 
 },
     };
