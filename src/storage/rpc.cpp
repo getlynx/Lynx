@@ -441,8 +441,6 @@ static RPCHelpMan fetchall()
 
     std::string strCount = request.params[0].get_str();
     std::string path = request.params[1].get_str();
-    std::string strTenantFlag;
-    int intTenantFlag = 1;
 
     if (authUser.ToString() == "0000000000000000000000000000000000000000") {
 
@@ -454,12 +452,22 @@ static RPCHelpMan fetchall()
 
     if (!does_path_exist(path)) {
         unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid path " + path + ".");
+        unvEntry.pushKV("message", "Invalid path: " + path + ".");
         unvResults.push_back(unvEntry);
         return unvResults;
     }
 
-    int intCount = stoi(strCount);
+    int intCount;
+
+    try {
+        intCount = stoi(strCount);
+    } catch (const std::invalid_argument& e) {
+        unvEntry.pushKV("result", "failure");
+        unvEntry.pushKV("message", "Invalid count: " + strCount + ".");
+        unvResults.push_back(unvEntry);
+        return unvResults;
+    }
+
     std::vector<std::string> vctUUIDs;
     scan_blocks_for_uuids(*storage_chainman, vctUUIDs, intCount);
     std::string strUUID;
