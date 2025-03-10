@@ -20,8 +20,6 @@
 #include <util/system.h>
 #include <validation.h>
 
-// Test
-
 std::list<COutPoint> listStakeSeen;
 std::map<COutPoint, uint256> mapStakeSeen;
 
