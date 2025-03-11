@@ -61,6 +61,8 @@ extern std::map<std::string, int> gmapTimeStamp;
 
 extern std::map<std::string, std::string> gmapExtension;
 
+int gintFetchDone;
+
 static RPCHelpMan store()
 {
     return RPCHelpMan{"store",
@@ -486,26 +488,51 @@ static RPCHelpMan fetchall()
         return unvResults;
     }
 
+    // Vector of uuid's
     std::vector<std::string> vctUUIDs;
+
+    // Get uuid's plus metadata
     scan_blocks_for_uuids(*storage_chainman, vctUUIDs, intCount);
+
+    // uuid
     std::string strUUID;
+
+    // Traverse uuid's
     for (auto& uuid : vctUUIDs) {
+
+        // Get uuid
         strUUID = uuid;
-        add_get_task(std::make_pair(uuid, strPath));
+
+        // Perform fetch
+        add_get_task(std::make_pair(strUUID, strPath));
         sleep (7);
     }
 
+    // Construct message
     std::string strMessage = "Number of assets fetched: " + std::to_string(intCount);
 
+    // Report 
     unvEntry.pushKV("result", "success");
     unvEntry.pushKV("message", strMessage);
 
+    // If manager
     if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+
+        // No tenant
         unvEntry.pushKV("tenant", "n/a");
+
+    // Else not if manager
     } else {
+
+        // Tenant
         unvEntry.pushKV("tenant", authUser.ToString());
+
+    // end if manager
     }
+
     unvResults.push_back(unvEntry);
+
+    // Exit
     return unvResults;            
 
 },

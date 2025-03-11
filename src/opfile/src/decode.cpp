@@ -18,6 +18,8 @@ extern uint32_t authTime;
 
 extern uint160 ghshAuthenticatetenantPubkey;
 
+extern int gintFetchDone;
+
 /*
 bool check_chunk_contextual(std::string chunk, int& protocol, int& error_level)
 {
