@@ -420,6 +420,7 @@ static RPCHelpMan fetchall()
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
                           {RPCResult::Type::STR, "message", "invslid path | Not authenticated | Nunber of assets fetched: x"},
+                          {RPCResult::Type::STR, "tenant", "Store asset authenticated tenant"},
                     }},
                 }
             },
@@ -448,6 +449,7 @@ static RPCHelpMan fetchall()
 
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Not authenticated.");
+        unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
         return unvResults;
     }
@@ -455,6 +457,7 @@ static RPCHelpMan fetchall()
     if (!does_path_exist(path)) {
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid path: " + path + ".");
+        unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
         return unvResults;
     }
@@ -466,6 +469,7 @@ static RPCHelpMan fetchall()
     } catch (const std::invalid_argument& e) {
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid count: " + strCount + ".");
+        unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
         return unvResults;
     }
@@ -483,6 +487,12 @@ static RPCHelpMan fetchall()
 
     unvEntry.pushKV("result", "success");
     unvEntry.pushKV("message", strMessage);
+
+    if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+        unvEntry.pushKV("tenant", "n/a");
+    } else {
+        unvEntry.pushKV("tenant", authUser.ToString());
+    }
     unvResults.push_back(unvEntry);
     return unvResults;            
 
