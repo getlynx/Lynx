@@ -673,53 +673,65 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                         // If final data chunk
                         if (strChunkNumber == strChunkTotal) {
 
-std::string e2 = "n/a";
 
-LogPrint (BCLog::ALL, "intExtension intChunkLength %d %d \n", intExtension, intChunkLength);
 
-std::string strChunkData;
 
-get_chunkdata_from_chunk (strOpreturnOutput, strChunkData, intChunkLength, intOffset);
 
-LogPrint (BCLog::ALL, "strChunkData %s %d \n", strChunkData, strChunkData.size());
+                            std::string strExtension = "n/a";
 
-unsigned char buffer[OPENCODING_CHUNKMAX*2];
+                            // LogPrint (BCLog::ALL, "intExtension intChunkLength %d %d \n", intExtension, intChunkLength);
 
-binlify_from_hex(&buffer[0], strChunkData.c_str(), strChunkData.size());
+                            std::string strChunkData;
 
-LogPrint (BCLog::ALL, "buffer %s \n", buffer);
+                            get_chunkdata_from_chunk (strOpreturnOutput, strChunkData, intChunkLength, intOffset);
 
-if (intExtension == 1) {
+                            // LogPrint (BCLog::ALL, "strChunkData %s %d \n", strChunkData, strChunkData.size());
 
-    std::string extension;
-    int extoffset = (strChunkData.size() / 2) - 4;
-    for (int extwrite = extoffset; extwrite < extoffset + OPENCODING_EXTENSION; extwrite++) {
-        extension += buffer[extwrite];
-    }
+                            unsigned char buffer[OPENCODING_CHUNKMAX*2];
 
-    LogPrint (BCLog::ALL, "extension %s \n", extension);
+                            binlify_from_hex(&buffer[0], strChunkData.c_str(), strChunkData.size());
 
-    if (extension[3] == '\x00') {
+                            // LogPrint (BCLog::ALL, "buffer %s \n", buffer);
 
-        LogPrint (BCLog::ALL, "true \n");
+                            if (intExtension == 1) {
 
-        e2 = extension.substr(0,3);;
+                                std::string extension;
+                                int extoffset = (strChunkData.size() / 2) - 4;
+                                for (int extwrite = extoffset; extwrite < extoffset + OPENCODING_EXTENSION; extwrite++) {
+                                    extension += buffer[extwrite];
+                                }
 
-        extension[3] = '\0';
+                                // LogPrint (BCLog::ALL, "extension %s \n", extension);
 
-    }
+                                if (extension[3] == '\x00') {
 
-}
+                                    // LogPrint (BCLog::ALL, "true \n");
 
-LogPrint (BCLog::ALL, "extension %s \n", e2);
+                                    strExtension = extension.substr(0,3);;
 
-gmapExtension[strUUID] = e2;
+                                    extension[3] = '\0';
+
+                                }
+
+                            }
+
+                            // LogPrint (BCLog::ALL, "extension %s \n", strExtension);
+
+                            gmapExtension[strUUID] = strExtension;
+
+
+
+
 
                             // Convert total number of chunks to integer
                             intChunkTotal = std::stoul(strChunkTotal, nullptr, 16);
 
                             // Filelength is (totalchunks - 1) * 512 + finalchunklength
                             int intFileLengthInBytes = (intChunkTotal - 1) * 512 + intChunkLength;
+
+                            if (intExtension == 1) {
+                                intFileLengthInBytes = intFileLengthInBytes - 4;
+                            }
 
                             // Record filelength in global map for processing in calling routine
                             gmapFileLength[strUUID] = intFileLengthInBytes;
