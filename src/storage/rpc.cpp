@@ -503,7 +503,7 @@ static RPCHelpMan fetchall()
         // Get uuid
         strUUID = uuid;
 
-        if (scan_blocks_for_pubkey (*storage_chainman, strUUID)) {
+        // if (scan_blocks_for_pubkey (*storage_chainman, strUUID)) {
 
             // Perform fetch
             add_get_task(std::make_pair(strUUID, strPath));
@@ -513,7 +513,7 @@ static RPCHelpMan fetchall()
                 sleep (1);
             }
 
-        }
+        // }
 
     }
 
