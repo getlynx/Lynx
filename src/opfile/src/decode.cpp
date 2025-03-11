@@ -435,5 +435,7 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
     LogPrint (BCLog::ALL, "\n");
 #endif
 
+    gintFetchDone = 1;   
+
     return true;
 }
