@@ -442,11 +442,14 @@ static RPCHelpMan fetchall()
     // Entry
     UniValue unvEntry(UniValue::VOBJ);
 
+    // Get input parameters
     std::string strCount = request.params[0].get_str();
-    std::string path = request.params[1].get_str();
+    std::string strPath = request.params[1].get_str();
 
+    // If unauthenticated
     if (authUser.ToString() == "0000000000000000000000000000000000000000") {
 
+        // Report and exit
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Not authenticated.");
         unvEntry.pushKV("tenant", "n/a");
@@ -454,19 +457,28 @@ static RPCHelpMan fetchall()
         return unvResults;
     }
 
-    if (!does_path_exist(path)) {
+    // If bad path
+    if (!does_path_exist(strPath)) {
+
+        // Report and exit
         unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid path: " + path + ".");
+        unvEntry.pushKV("message", "Invalid path: " + strPath + ".");
         unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
         return unvResults;
     }
 
+    // Number of assets to fetch
     int intCount;
 
+    // Attempt to convert to integer
     try {
         intCount = stoi(strCount);
+
+    // Invalid integer    
     } catch (const std::invalid_argument& e) {
+
+        // Report and exit
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid count: " + strCount + ".");
         unvEntry.pushKV("tenant", "n/a");
@@ -479,7 +491,7 @@ static RPCHelpMan fetchall()
     std::string strUUID;
     for (auto& uuid : vctUUIDs) {
         strUUID = uuid;
-        add_get_task(std::make_pair(uuid, path));
+        add_get_task(std::make_pair(uuid, strPath));
         sleep (7);
     }
 
