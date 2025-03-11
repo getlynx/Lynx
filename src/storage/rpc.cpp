@@ -617,10 +617,10 @@ static RPCHelpMan fetch()
 static RPCHelpMan list()
 {
     return RPCHelpMan{"list",
-                "\nLists metadata for tenant's blockchain assets in chronological order (newest first).\n",
+                "\nLists metadata for tenants's blockchain assets in chronological order (newest first).\n",
                 {
                     // Optional number of uuid's to return, defaults to all.
-                    {"count", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Number of results to display. If omitted, shows all results."},
+                    {"count", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Number of results to return (0 for all).  If omitted, shows most recent 10 results."},
                 }, {
 
                     RPCResult{
@@ -628,6 +628,7 @@ static RPCHelpMan list()
                             RPCResult::Type::ARR, "", "", {{
                                 RPCResult::Type::OBJ, "", "", {
                                 {RPCResult::Type::STR, "uuid", "Unique identifier of the asset"},
+                                {RPCResult::Type::STR, "message", "Not authenticated"},
                                 {RPCResult::Type::NUM, "length", "Asset filesize in bytes"},
                                 {RPCResult::Type::NUM, "height", "Starting block number for asset storage (may span multiple blocks)"},
                                 {RPCResult::Type::STR, "timestamp", "Date and time asset storage began"},
@@ -645,11 +646,30 @@ static RPCHelpMan list()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
 
+    // Output data structures
+    UniValue unvResult0(UniValue::VOBJ);
+    UniValue unvResult1(UniValue::VARR);
+    UniValue unvResult2(UniValue::VARR);
+
     // If not authenticated
     if (authUser.ToString() == "0000000000000000000000000000000000000000") {
 
-        // Retuen message to command line
-        return "Not authenticated.";
+        // Pack results
+        unvResult0.pushKV("uuid", "n/a");
+        unvResult0.pushKV("message", "Not authenticated");
+        unvResult0.pushKV("length", 0);
+        unvResult0.pushKV("height", 0);
+        unvResult0.pushKV("timestamp", "n/a");
+        unvResult0.pushKV("extensiob", "n/a");
+
+        // Pack results
+        unvResult1.push_back (unvResult0);
+
+        // Pack results
+        unvResult2.push_back (unvResult1);
+
+        // Return results
+        return unvResult2;
 
     // End if not authenticated
     }
@@ -689,11 +709,6 @@ static RPCHelpMan list()
 
     // Get list of uuids
     scan_blocks_for_uuids(*storage_chainman, vctUUIDs, intCount);
-
-    // Output data structures
-    UniValue unvResult0(UniValue::VOBJ);
-    UniValue unvResult1(UniValue::VARR);
-    UniValue unvResult2(UniValue::VARR);
 
     // Asset filelength
     int intFileLength;
@@ -777,6 +792,7 @@ static RPCHelpMan list()
 
             // Pack results
             unvResult0.pushKV("uuid", strUUID);
+            unvResult0.pushKV("message", "n/a");
             unvResult0.pushKV("length", intFileLength);
             unvResult0.pushKV("height", intBlockHeight);
             unvResult0.pushKV("timestamp", strFormattedLocalTime);
