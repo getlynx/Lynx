@@ -59,6 +59,8 @@ extern std::map<std::string, int> gmapBlockHeight;
 
 extern std::map<std::string, int> gmapTimeStamp;
 
+extern std::map<std::string, std::string> gmapExtension;
+
 static RPCHelpMan store()
 {
     return RPCHelpMan{"store",
@@ -615,7 +617,7 @@ static RPCHelpMan fetch()
 static RPCHelpMan list()
 {
     return RPCHelpMan{"list",
-                "\nLists metadata for tenant's blockchain files in chronological order (newest first).\n",
+                "\nLists metadata for tenant's blockchain assets in chronological order (newest first).\n",
                 {
                     // Optional number of uuid's to return, defaults to all.
                     {"count", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Number of results to display. If omitted, shows all results."},
@@ -625,10 +627,11 @@ static RPCHelpMan list()
                         RPCResult::Type::ARR, "", "", {{
                             RPCResult::Type::ARR, "", "", {{
                                 RPCResult::Type::OBJ, "", "", {
-                                {RPCResult::Type::STR, "uuid", "Unique identifier of the file"},
-                                {RPCResult::Type::NUM, "length", "File size in bytes"},
-                                {RPCResult::Type::NUM, "height", "Starting block number for file storage (may span multiple blocks)"},
-                                {RPCResult::Type::STR, "timestamp", "Date and time file storage began"},
+                                {RPCResult::Type::STR, "uuid", "Unique identifier of the asset"},
+                                {RPCResult::Type::NUM, "length", "Asset filesize in bytes"},
+                                {RPCResult::Type::NUM, "height", "Starting block number for asset storage (may span multiple blocks)"},
+                                {RPCResult::Type::STR, "timestamp", "Date and time asset storage began"},
+                                {RPCResult::Type::STR, "extension", "Asset extension"},
                             }},
                         }},
                     }
@@ -777,6 +780,7 @@ static RPCHelpMan list()
             unvResult0.pushKV("length", intFileLength);
             unvResult0.pushKV("height", intBlockHeight);
             unvResult0.pushKV("timestamp", strFormattedLocalTime);
+            unvResult0.pushKV("extensiob", gmapExtension[strUUID]);
 
             // Pack results
             unvResult1.push_back (unvResult0);

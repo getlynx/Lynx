@@ -58,6 +58,9 @@ std::map<std::string, int> gmapBlockHeight;
 // Asset timestamp (seconds since 1970)
 std::map<std::string, int> gmapTimeStamp;
 
+// Asset extension
+std::map<std::string, std::string> gmapExtension;
+
 
 
 
@@ -669,6 +672,48 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
 
                         // If final data chunk
                         if (strChunkNumber == strChunkTotal) {
+
+std::string e2 = "n/a";
+
+LogPrint (BCLog::ALL, "intExtension intChunkLength %d %d \n", intExtension, intChunkLength);
+
+std::string strChunkData;
+
+get_chunkdata_from_chunk (strOpreturnOutput, strChunkData, intChunkLength, intOffset);
+
+LogPrint (BCLog::ALL, "strChunkData %s %d \n", strChunkData, strChunkData.size());
+
+unsigned char buffer[OPENCODING_CHUNKMAX*2];
+
+binlify_from_hex(&buffer[0], strChunkData.c_str(), strChunkData.size());
+
+LogPrint (BCLog::ALL, "buffer %s \n", buffer);
+
+if (intExtension == 1) {
+
+    std::string extension;
+    int extoffset = (strChunkData.size() / 2) - 4;
+    for (int extwrite = extoffset; extwrite < extoffset + OPENCODING_EXTENSION; extwrite++) {
+        extension += buffer[extwrite];
+    }
+
+    LogPrint (BCLog::ALL, "extension %s \n", extension);
+
+    if (extension[3] == '\x00') {
+
+        LogPrint (BCLog::ALL, "true \n");
+
+        e2 = extension.substr(0,3);;
+
+        extension[3] = '\0';
+
+    }
+
+}
+
+LogPrint (BCLog::ALL, "extension %s \n", e2);
+
+gmapExtension[strUUID] = e2;
 
                             // Convert total number of chunks to integer
                             intChunkTotal = std::stoul(strChunkTotal, nullptr, 16);
