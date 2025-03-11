@@ -480,7 +480,7 @@ static RPCHelpMan fetchall()
     for (auto& uuid : vctUUIDs) {
         strUUID = uuid;
         add_get_task(std::make_pair(uuid, path));
-        sleep (2);
+        sleep (7);
     }
 
     std::string strMessage = "Number of assets fetched: " + std::to_string(intCount);
