@@ -593,24 +593,32 @@ static RPCHelpMan fetch()
     std::string strUUID = request.params[0].get_str();
     std::string strPath = request.params[1].get_str();
     std::string strTenantFlag;
+
+    // Display tenant flag
     int intTenantFlag = 1;
 
+    // If optional third input
     if (!request.params[2].isNull()) {
+
+        // Get display tenant flag
         strTenantFlag = request.params[2].get_str();
+
+        // Convert to integer
         intTenantFlag = stoi (strTenantFlag);
     }
 
+    // If bad path
     if (!does_path_exist(strPath)) {
+
+        // Report and exit
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid path " + strPath + ".");
         unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
-
-        // Exit
         return unvResults;
-
-//         return std::string("Invalid path.");
     }
+
+
     if (strUUID.size() == OPENCODING_UUID*2) {
 
         if (intTenantFlag == 1) {
