@@ -618,61 +618,65 @@ static RPCHelpMan fetch()
         return unvResults;
     }
 
-
+    // If uuid correct length
     if (strUUID.size() == OPENCODING_UUID*2) {
 
+        // If display tenant
         if (intTenantFlag == 1) {
 
+            // If tenant unfound (bad uuid)
             if (!scan_blocks_for_pubkey (*storage_chainman, strUUID)) {
 
+                // Report and exit
                 unvEntry.pushKV("result", "failure");
                 unvEntry.pushKV("message", "UUID not found: " + strUUID + ".");
                 unvEntry.pushKV("tenant", "n/a");
                 unvResults.push_back(unvEntry);
-
-                // Exit
                 return unvResults;
 
+            // Else not if tenant unfound (bad uuid)
             } else {
 
+                // Fetch
                 add_get_task(std::make_pair(strUUID, strPath));
 
+                // Repoet and exit
                 unvEntry.pushKV("result", "success");
                 unvEntry.pushKV("message", "n/a");
                 unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
-//                unvEntry.pushKV("tenant", "n/a");
                 unvResults.push_back(unvEntry);
-
-                // Exit
                 return unvResults;
 
-//                 return get_result_hash();
-
+            // End if tenant unfound (bad uuid)
             }
 
+        // Else not if display tenant
         } else {
 
+            // Fetch
             add_get_task(std::make_pair(strUUID, strPath));
-            
+           
+            // Report and exit 
             unvEntry.pushKV("result", "success");
             unvEntry.pushKV("message", "n/a");
             unvEntry.pushKV("tenant", "n/a");
             unvResults.push_back(unvEntry);
-            
-            // Exit
             return unvResults;            
 
+        // End if display tenant
         }
 
+    // Else not if uuid correct length
     } else {
+
+        // Report and exit
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid UUID length: " + strUUID + ".");
         unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
-
-        // Exit
         return unvResults;
 
+    // End if uuid correct length
     } 
 
 },
