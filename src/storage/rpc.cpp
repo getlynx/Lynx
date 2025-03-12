@@ -591,7 +591,7 @@ static RPCHelpMan fetch()
 
     // Get input
     std::string strUUID = request.params[0].get_str();
-    std::string path = request.params[1].get_str();
+    std::string strPath = request.params[1].get_str();
     std::string strTenantFlag;
     int intTenantFlag = 1;
 
@@ -600,9 +600,9 @@ static RPCHelpMan fetch()
         intTenantFlag = stoi (strTenantFlag);
     }
 
-    if (!does_path_exist(path)) {
+    if (!does_path_exist(strPath)) {
         unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid path " + path + ".");
+        unvEntry.pushKV("message", "Invalid path " + strPath + ".");
         unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
 
@@ -627,7 +627,7 @@ static RPCHelpMan fetch()
 
             } else {
 
-                add_get_task(std::make_pair(strUUID, path));
+                add_get_task(std::make_pair(strUUID, strPath));
 
                 unvEntry.pushKV("result", "success");
                 unvEntry.pushKV("message", "n/a");
@@ -644,7 +644,7 @@ static RPCHelpMan fetch()
 
         } else {
 
-            add_get_task(std::make_pair(strUUID, path));
+            add_get_task(std::make_pair(strUUID, strPath));
             
             unvEntry.pushKV("result", "success");
             unvEntry.pushKV("message", "n/a");
