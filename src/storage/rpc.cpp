@@ -589,6 +589,7 @@ static RPCHelpMan fetch()
     // Entry
     UniValue unvEntry(UniValue::VOBJ);
 
+    // Get input
     std::string uuid = request.params[0].get_str();
     std::string path = request.params[1].get_str();
     std::string strTenantFlag;
@@ -617,7 +618,7 @@ static RPCHelpMan fetch()
             if (!scan_blocks_for_pubkey (*storage_chainman, uuid)) {
 
                 unvEntry.pushKV("result", "failure");
-                unvEntry.pushKV("message", "UUID not found.");
+                unvEntry.pushKV("message", "UUID not found: " + uuid + ".");
                 unvEntry.pushKV("tenant", "n/a");
                 unvResults.push_back(unvEntry);
 
@@ -659,7 +660,7 @@ static RPCHelpMan fetch()
 
     } else {
         unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid UUID length.");
+        unvEntry.pushKV("message", "Invalid UUID length: " + uuid + ".");
         unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
 
