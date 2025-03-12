@@ -566,7 +566,7 @@ static RPCHelpMan fetch()
                     {RPCResult::Type::OBJ, "", "",
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
-                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID length"},
+                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID length | UUID not found"},
                           {RPCResult::Type::NUM, "tenant", "Authenticated store tenant public key"},
                     }},
                 }
@@ -590,7 +590,7 @@ static RPCHelpMan fetch()
     UniValue unvEntry(UniValue::VOBJ);
 
     // Get input
-    std::string uuid = request.params[0].get_str();
+    std::string strUUID = request.params[0].get_str();
     std::string path = request.params[1].get_str();
     std::string strTenantFlag;
     int intTenantFlag = 1;
@@ -611,14 +611,14 @@ static RPCHelpMan fetch()
 
 //         return std::string("Invalid path.");
     }
-    if (uuid.size() == OPENCODING_UUID*2) {
+    if (strUUID.size() == OPENCODING_UUID*2) {
 
         if (intTenantFlag == 1) {
 
-            if (!scan_blocks_for_pubkey (*storage_chainman, uuid)) {
+            if (!scan_blocks_for_pubkey (*storage_chainman, strUUID)) {
 
                 unvEntry.pushKV("result", "failure");
-                unvEntry.pushKV("message", "UUID not found: " + uuid + ".");
+                unvEntry.pushKV("message", "UUID not found: " + strUUID + ".");
                 unvEntry.pushKV("tenant", "n/a");
                 unvResults.push_back(unvEntry);
 
@@ -627,9 +627,7 @@ static RPCHelpMan fetch()
 
             } else {
 
-               add_get_task(std::make_pair(uuid, path));
-//                 sleep (7);
-//                 add_get_task(std::make_pair(uuid, path));
+                add_get_task(std::make_pair(strUUID, path));
 
                 unvEntry.pushKV("result", "success");
                 unvEntry.pushKV("message", "n/a");
@@ -646,7 +644,7 @@ static RPCHelpMan fetch()
 
         } else {
 
-            add_get_task(std::make_pair(uuid, path));
+            add_get_task(std::make_pair(strUUID, path));
             
             unvEntry.pushKV("result", "success");
             unvEntry.pushKV("message", "n/a");
@@ -660,7 +658,7 @@ static RPCHelpMan fetch()
 
     } else {
         unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid UUID length: " + uuid + ".");
+        unvEntry.pushKV("message", "Invalid UUID length: " + strUUID + ".");
         unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
 
