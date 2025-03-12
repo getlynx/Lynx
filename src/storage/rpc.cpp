@@ -410,7 +410,7 @@ static RPCHelpMan fetchall()
         "\nRetrieve asset(s) stored on the Lynx blockchain in reverse chronological order\nLearn more at https://docs.getlynx.io/\n",
          {
              {"count", RPCArg::Type::STR, RPCArg::Optional::NO, "The number of assets to fetch (enter 0 to signify all)."}, 
-             {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the file."},
+             {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "Fully qualified asset download path."},
          },
          RPCResult{
 //             RPCResult::Type::STR, "", "success or failure"},
@@ -421,7 +421,7 @@ static RPCHelpMan fetchall()
                     {RPCResult::Type::OBJ, "", "",
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
-                          {RPCResult::Type::STR, "message", "invslid path | Not authenticated | Nunber of assets fetched: x"},
+                          {RPCResult::Type::STR, "message", "invalid path | Not authenticated | Nunber of assets fetched: x"},
                           {RPCResult::Type::STR, "tenant", "Store asset authenticated tenant"},
                     }},
                 }
@@ -508,13 +508,21 @@ static RPCHelpMan fetchall()
             // Perform fetch
             add_get_task(std::make_pair(strUUID, strPath));
 
+            // Initialize to fetch not done
             gintFetchDone = 0;
+
+            // Whikle fetch not done
             while (gintFetchDone == 0) {
+
+                // Sleep
                 sleep (1);
+
+            // End while fetch not done
             }
 
         // }
-
+    
+    // End traverse uuid's
     }
 
     // Construct message
