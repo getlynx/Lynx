@@ -713,9 +713,9 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
 
                                 } else {
 
-				    strExtension = extension;
+				                    strExtension = extension;
 
-				}
+                                }
 
                             }
 

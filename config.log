@@ -1943,7 +1943,7 @@ configure:28415: $? = 0
 configure:28415: result: yes
 configure:28425: checking for timingsafe_bcmp
 configure:28425: g++ -m64 -std=c++17 -o conftest -pipe -std=c++17 -O2  -I/root/dkdkfjfjdkdk/Lynx/depends/x86_64-pc-linux-gnu/include/  -L/root/dkdkfjfjdkdk/Lynx/depends/x86_64-pc-linux-gnu/lib  conftest.cpp  >&5
-/usr/bin/ld: /tmp/ccZXaP10.o: in function `main':
+/usr/bin/ld: /tmp/ccLQRLph.o: in function `main':
 conftest.cpp:(.text.startup+0x5): undefined reference to `timingsafe_bcmp'
 collect2: error: ld returned 1 exit status
 configure:28425: $? = 1
