@@ -737,7 +737,7 @@ static RPCHelpMan list()
         unvResult0.pushKV("length", 0);
         unvResult0.pushKV("height", 0);
         unvResult0.pushKV("timestamp", "n/a");
-        unvResult0.pushKV("extensiob", "n/a");
+        unvResult0.pushKV("extension", "n/a");
 
         // Pack results
         unvResult1.push_back (unvResult0);
@@ -873,7 +873,7 @@ static RPCHelpMan list()
             unvResult0.pushKV("length", intFileLength);
             unvResult0.pushKV("height", intBlockHeight);
             unvResult0.pushKV("timestamp", strFormattedLocalTime);
-            unvResult0.pushKV("extensiob", gmapExtension[strUUID]);
+            unvResult0.pushKV("extension", gmapExtension[strUUID]);
 
             // Pack results
             unvResult1.push_back (unvResult0);
