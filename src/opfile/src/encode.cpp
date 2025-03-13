@@ -29,7 +29,8 @@ bool file_to_hexchunks(std::string filepath, int& protocol, int& error_level, in
     filelenext += (protocol == 1 ? OPENCODING_EXTENSION : 0);
 
     int estchunks = calculate_chunks_from_filesize(filelenext);
-    char* buffer = (char*)malloc(filelenext);
+    // char* buffer = (char*)malloc(filelenext);
+    char* buffer = (char*)malloc(filelenext + 1);
     if (!buffer) {
         error_level = ERR_MALLOC;
         free(buffer);
@@ -137,6 +138,7 @@ bool build_chunks_with_headers(std::pair<std::string, std::string>& putinfo, int
     protocol = 0;
 
     if (!file_to_hexchunks(filepath, protocol, error_level, total_chunks, data_chunks)) {
+
         // pass error_level through
         return false;
     }
@@ -147,6 +149,7 @@ bool build_chunks_with_headers(std::pair<std::string, std::string>& putinfo, int
 
     //if (!build_chunks_auth_header(header, encoded_chunks)) {
     if (!build_chunks_auth_header(header, encoded_chunks, error_level)) {
+	    
         return false;
     }
 
