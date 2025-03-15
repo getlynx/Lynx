@@ -597,39 +597,48 @@ bool check_mempool_for_authdata(const CTxMemPool& mempool)
     return false;
 }
 
-// noop
-
+// Scan blocks for allow and deny transactions
 bool scan_blocks_for_authdata(ChainstateManager& chainman)
 {
-    const CChain& active_chain = chainman.ActiveChain();
-    const int tip_height = active_chain.Height();
+
+    // Active chain
+    const CChain& chnActiveChain = chainman.ActiveChain();
+
+    // Tip height
+    const int intTipHeight = chnActiveChain.Height();
 
     // Timing
     clock_t start, end;
     clock_t start_t, end_t;
-    double time_taken;
+    double dblComprehensiveFunctionTime;
     double t_rbfd = 0.0;
     double t_ioaa = 0.0;
     double t_foia = 0.0;
 
-    CBlock block{};
-    CBlockIndex* pindex = nullptr;
+    // Block
+    CBlock blkBlock{};
 
+    // Initialize block index
+    CBlockIndex* bliBlockIndex = nullptr;
+
+    // Start comprehensive function timing
     start_t = clock ();    
 
-    // uint32_t u32Cutoff =  Params().GetConsensus().nUUIDBlockStart;
-    // uint32_t u32BlockSpan =  8301;
+    // Set block span ( (12 blocks/hr) * (24 hr/day) * (365 day/yr) = 105,120 blocks/yr )
     uint32_t u32BlockSpan =  105120;
-    uint32_t u32Cutoff =  tip_height - u32BlockSpan;
 
+    // Set cutoff
+    uint32_t u32Cutoff =  intTipHeight - u32BlockSpan;
+
+    // If cutoff is below pos start
     if (u32Cutoff < Params().GetConsensus().nUUIDBlockStart) {
+
+        // Set cutoff to pos start
         u32Cutoff = Params().GetConsensus().nUUIDBlockStart;
     }
 
     // Scan most recent blockspan blocks
-    // for (int height = Params().GetConsensus().nUUIDBlockStart; height < tip_height; height++) {
-    // for (int height = u32Cutoff; height < tip_height; height++) {
-    for (uint32_t height = u32Cutoff; height < tip_height; height++) {
+    for (uint32_t height = u32Cutoff; height < intTipHeight; height++) {
 
 gu32BlockHeight = height;        
 
@@ -637,8 +646,11 @@ gu32BlockHeight = height;
     start = clock ();    
 #endif
 
-        pindex = active_chain[height];
-        if (!ReadBlockFromDisk(block, pindex, chainman.GetConsensus())) {
+        // Set block index to current block
+        bliBlockIndex  = chnActiveChain[height];
+
+        // Read block from disk
+        if (!ReadBlockFromDisk(blkBlock, bliBlockIndex , chainman.GetConsensus())) {
             return false;
         }
 
@@ -648,22 +660,24 @@ gu32BlockHeight = height;
 #endif
 
         // Loop on block transactions
-        for (unsigned int vtx = 0; vtx < block.vtx.size(); vtx++) {
+        for (unsigned int vtx = 0; vtx < blkBlock.vtx.size(); vtx++) {
 
-            if (block.vtx[vtx]->IsCoinBase() || block.vtx[vtx]->IsCoinStake()) {
+            // Skip irrelevant transactions
+            if (blkBlock.vtx[vtx]->IsCoinBase() || blkBlock.vtx[vtx]->IsCoinStake()) {
                 continue;
             }
 
             // If not chunk data
-            if (block.vtx[vtx]->vout.size() < 5) {            
+            if (blkBlock.vtx[vtx]->vout.size() < 5) {            
 
                 // Loop on transaction outputs
-                for (unsigned int vout = 0; vout < block.vtx[vtx]->vout.size(); vout++) {
+                for (unsigned int vout = 0; vout < blkBlock.vtx[vtx]->vout.size(); vout++) {
 
-                    const CScript opreturn_out = block.vtx[vtx]->vout[vout].scriptPubKey;
+                    // OP_RETURN data
+                    const CScript scrOpreturnData = blkBlock.vtx[vtx]->vout[vout].scriptPubKey;
 
                     // If OP_RETURN
-                    if (opreturn_out.IsOpReturn()) {
+                    if (scrOpreturnData.IsOpReturn()) {
                         int error_level;
 
 #ifdef TIMING
@@ -671,7 +685,7 @@ gu32BlockHeight = height;
 #endif
 
                         // If auth chunk, rather than data chunk
-                        if (!is_opreturn_an_authdata (opreturn_out, error_level)) {
+                        if (!is_opreturn_an_authdata (scrOpreturnData, error_level)) {
 
 #ifdef TIMING
     end = clock ();    
@@ -690,13 +704,13 @@ gu32BlockHeight = height;
     start = clock ();    
 #endif
 
-                         // Validate authdata, and popoulate authList
-                        if (!found_opreturn_in_authdata (opreturn_out, error_level)) {
+                        // Validate authdata, and popoulate authList
+                        if (!found_opreturn_in_authdata (scrOpreturnData, error_level)) {
                             LogPrint (BCLog::ALL, "\n");
-                            LogPrint (BCLog::ALL, "An invalid Tenant public key was found in TX %s (vout %d).\n", block.vtx[vtx]->GetHash().ToString(), vout);
+                            LogPrint (BCLog::ALL, "An invalid Tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
                         } else {
                             //LogPrint (BCLog::ALL, "\n");
-                            //LogPrint (BCLog::ALL, "A valid Tenant public key was found in TX %s (vout %d).\n", block.vtx[vtx]->GetHash().ToString(), vout);
+                            //LogPrint (BCLog::ALL, "A valid Tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
                         }
 
 #ifdef TIMING
@@ -712,9 +726,11 @@ gu32BlockHeight = height;
         }
     }
 
-    // stop clock
+    // End comprehensive function timing
     end_t = clock ();    
-    time_taken = (double) (end_t - start_t) / CLOCKS_PER_SEC;
+
+    // Compute comprehensive function time
+    dblComprehensiveFunctionTime = (double) (end_t - start_t) / CLOCKS_PER_SEC;
 
 #ifdef TIMING
     LogPrint (BCLog::ALL, "\n");
@@ -728,7 +744,7 @@ gu32BlockHeight = height;
 #endif
 
     LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "The elapsed time to complete the scan_blocks_for_authdata() function was %ld seconds.\n", time_taken);
+    LogPrint (BCLog::ALL, "The elapsed time to complete the scan_blocks_for_authdata() function was %ld seconds.\n", dblComprehensiveFunctionTime);
 
     return true;
 }
