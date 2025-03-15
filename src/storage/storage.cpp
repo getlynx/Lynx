@@ -434,9 +434,6 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
     // Total number of unique uuids found so far
     int intUUIDCount = 0;
 
-    // clock_t start, end;
-    // double time_taken = 0.0;
-
     // Empty vector of uuids
     pvctUUIDs.clear();
 
@@ -483,25 +480,14 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                     // Convert OP_RETURN output to hex string
                     strOpreturnOutput = HexStr(block.vtx[vtx]->vout[vout].scriptPubKey);
 
-                    // Start timer
-                    // start = clock ();    
-
                     // Offset to payload
                     int intOffset;
 
                     // Return offset, rather then strip OP_RETURN + metadata
                     if (!strip_opreturndata_from_chunk (strOpreturnOutput, chunk, intOffset)) {
 
-                        // End timer
-                        // end = clock ();    
-                        // time_taken = time_taken + (double) (end - start) / CLOCKS_PER_SEC;
-
                         continue;
                     }
-
-                    // End timer
-                    // end = clock ();    
-                    // time_taken = time_taken + (double) (end - start) / CLOCKS_PER_SEC;
 
                     // Error
                     int intError;
