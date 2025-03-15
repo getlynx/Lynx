@@ -412,9 +412,6 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
     std::string strUUID;
 
     // If authenticatedc user is not manager
-    // if (authUser.ToString() != "2eba8c3d9038b739d4b2a85fa40eb91648ee2366") {
-    // if (authUser.ToString() != "ee78c09ab25ea0f5df7112968ce6592019dd9401") {
-    // if (authUser.ToString() != "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d") {
     if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
 
         // Set is tenant
@@ -455,10 +452,10 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
     // Initialize index
     CBlockIndex* pindex = nullptr;
 
+    // Set cutoff
     long lngCutoff = Params().GetConsensus().nUUIDBlockStart;
 
     // Skip POW blocks in reverse
-    // for (int height = (tip_height - 1); height > 6000; height--) {
     for (int height = (tip_height - 1); height > lngCutoff; height--) {
     
         // Convert block number to index
@@ -489,6 +486,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                     // Start timer
                     // start = clock ();    
 
+                    // Offset to payload
                     int intOffset;
 
                     // Return offset, rather then strip OP_RETURN + metadata
@@ -677,32 +675,44 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
 
 
 
+                            // Initialize extension to no extension
                             std::string strExtension = "n/a";
 
                             // LogPrint (BCLog::ALL, "intExtension intChunkLength %d %d \n", intExtension, intChunkLength);
 
+                            // Chunk data
                             std::string strChunkData;
 
+                            // Get chunk data
                             get_chunkdata_from_chunk (strOpreturnOutput, strChunkData, intChunkLength, intOffset);
 
                             // LogPrint (BCLog::ALL, "strChunkData %s %d \n", strChunkData, strChunkData.size());
 
+                            // Buffer
                             unsigned char buffer[OPENCODING_CHUNKMAX*2];
 
+                            // Convert chunk data from hex
                             binlify_from_hex(&buffer[0], strChunkData.c_str(), strChunkData.size());
 
                             // LogPrint (BCLog::ALL, "buffer %s \n", buffer);
 
+                            // If extension
                             if (intExtension == 1) {
 
+                                // Extension
                                 std::string extension;
+
+                                // Extension offset
                                 int extoffset = (strChunkData.size() / 2) - 4;
+
+                                // Snatch extension
                                 for (int extwrite = extoffset; extwrite < extoffset + OPENCODING_EXTENSION; extwrite++) {
                                     extension += buffer[extwrite];
                                 }
 
                                 // LogPrint (BCLog::ALL, "extension %s \n", extension);
 
+                                // Convert '\x00' to '\0' in 4th extension position, if present
                                 if (extension[3] == '\x00') {
 
                                     // LogPrint (BCLog::ALL, "true \n");
@@ -721,6 +731,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
 
                             // LogPrint (BCLog::ALL, "extension %s \n", strExtension);
 
+                            // Record extension for caller
                             gmapExtension[strUUID] = strExtension;
 
 
