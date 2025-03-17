@@ -229,6 +229,26 @@ static RPCHelpMan store()
         // If uuid valid (length, hex notation)
         if (is_valid_uuid(strAssetUUID, intUUIDInvalidityType)) {
 
+
+
+
+
+            std::string strUUID1 = strAssetUUID;
+            LogPrint (BCLog::ALL, "UUID1 %s \n", strUUID1);
+            std::vector<uint8_t> vctUUID1(strUUID1.begin(), strUUID1.end());
+            uint160 u16UUID2(Hash160(vctUUID1));
+            LogPrint (BCLog::ALL, "UUID2 %s \n", u16UUID2.ToString());
+            std::string strUUID2 = u16UUID2.ToString();
+            std::string strUUID3 = strUUID2;
+            for (int i = 0; i < 8; i++) {
+                strUUID3[i] = strUUID1[i];
+            }
+            LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
+            
+
+            
+    
+    
             // Existing uuid's
             std::vector<std::string> vctExistingUUIDs;
 
@@ -320,6 +340,27 @@ static RPCHelpMan store()
                 // uuid_not_found_to_not_exist = 0;
             //}
         //}
+
+
+
+
+
+        std::string strUUID1 = strAssetUUID;
+        LogPrint (BCLog::ALL, "UUID1 %s \n", strUUID1);
+        std::vector<uint8_t> vctUUID1(strUUID1.begin(), strUUID1.end());
+        uint160 u16UUID2(Hash160(vctUUID1));
+        LogPrint (BCLog::ALL, "UUID2 %s \n", u16UUID2.ToString());
+        std::string strUUID2 = u16UUID2.ToString();
+        std::string strUUID3 = strUUID2;
+        for (int i = 0; i < 8; i++) {
+            strUUID3[i] = strUUID1[i];
+        }
+        LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
+        
+        
+
+
+
     }
 
     // If asset filesize > 0
@@ -631,6 +672,26 @@ static RPCHelpMan fetch()
 
         // If display tenant
         if (intTenantFlag == 1) {
+
+
+
+
+
+            std::string strUUID1 = strUUID;
+            LogPrint (BCLog::ALL, "UUID1 %s \n", strUUID1);
+            std::vector<uint8_t> vctUUID1(strUUID1.begin(), strUUID1.end());
+            uint160 u16UUID2(Hash160(vctUUID1));
+            LogPrint (BCLog::ALL, "UUID2 %s \n", u16UUID2.ToString());
+            std::string strUUID2 = u16UUID2.ToString();
+            std::string strUUID3 = strUUID2;
+            for (int i = 0; i < 8; i++) {
+                strUUID3[i] = strUUID1[i];
+            }
+            LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
+            
+            
+    
+    
 
             // If tenant unfound (bad uuid)
             if (!scan_blocks_for_pubkey (*storage_chainman, strUUID)) {
