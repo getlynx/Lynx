@@ -210,7 +210,7 @@ bool blnfncCheckStakeKernelHash (
     return true; 
 }
 
-bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* pindexPrev, unsigned int nBits, int64_t nTime, const COutPoint& prevout, int64_t* pBlockTime)
+bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBlock, unsigned int nBits, int64_t nTime, const COutPoint& prevout, int64_t* pBlockTime)
 {
     uint256 hashProofOfStake, targetProofOfStake;
 
@@ -230,8 +230,8 @@ bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* pindexPrev, u
         return false;
     }
 
-    int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(pindexPrev->nHeight / 2));
-    int nDepth = pindexPrev->nHeight - coin.nHeight;
+    int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(ibliCurrentBlock->nHeight / 2));
+    int nDepth = ibliCurrentBlock->nHeight - coin.nHeight;
 
     if (nRequiredDepth > nDepth) {
         return false;
@@ -241,7 +241,7 @@ bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* pindexPrev, u
     }
 
     CAmount amount = coin.out.nValue;
-    return CheckStakeKernelHash(pindexPrev, nBits, *pBlockTime,
+    return CheckStakeKernelHash(ibliCurrentBlock, nBits, *pBlockTime,
         amount, prevout, nTime, hashProofOfStake, targetProofOfStake);
 }
 
