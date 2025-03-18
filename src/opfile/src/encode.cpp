@@ -87,83 +87,73 @@ bool file_to_hexchunks(std::string filepath, int& protocol, int& error_level, in
     // Report asset plaintext size
     LogPrint (BCLog::ALL, "Asset plaintext size %d \n", strAssetPlaintext.size());
     LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "\n");
 
 
 
 
 
     // Key (aes-256 rwquires 32-byte key)
-    unsigned char key[32]; 
+    unsigned char chrKey[32]; 
 
-    // Prepare the IV (Initialization Vector) (aes block size is 16 bytes)
-    unsigned char iv[16];  
+    // IV (Initialization Vector) (aes block size is 16 bytes)
+    // unsigned char chrIV[16];  
 
     // Example key (use a secure key in practice)
-    memset(key, 0x01, sizeof(key)); 
+    memset(chrKey, 0x01, sizeof(chrKey)); 
 
     // Example iv (should be random for each encryption)
-    memset(iv, 0x02, sizeof(iv));   
+    // memset(chrIV, 0x02, sizeof(chrIV));   
 
-    // Set plaintext
-    // std::string plaintext = "Hello, Bitcoin AES Encryption!";
-
-    // Report
-    LogPrint (BCLog::ALL, "%s \n", strAssetPlaintext);
-
-    // Vectorize
-    std::vector<unsigned char> input(strAssetPlaintext.begin(), strAssetPlaintext.end());
+    // Vectorize asset plaintext
+    std::vector<unsigned char> vctAssetPlaintext(strAssetPlaintext.begin(), strAssetPlaintext.end());
 
     // Pad to a multiple of 16 bytes (aes block size)
-    size_t pad_len = 16 - (input.size() % 16);
-    input.insert(input.end(), pad_len, static_cast<unsigned char>(pad_len));
+    size_t sztPadLength = 16 - (vctAssetPlaintext.size() % 16);
+    vctAssetPlaintext.insert(vctAssetPlaintext.end(), sztPadLength, static_cast<unsigned char>(sztPadLength));
 
-    // Encrypted output
-    std::vector<unsigned char> encrypted(input.size());
+    // Encrypted asset
+    std::vector<unsigned char> vctEncryptedAsset(vctAssetPlaintext.size());
 
-    // Create a class instance, and initialize it with a key and a key size
-    AES256Encrypt aes_encrypt(key);
+    // Create a class instance, and initialize it with a key
+    AES256Encrypt aes_encrypt(chrKey);
 
     // Encrypt input
-    for (size_t i = 0; i < input.size(); i += 16) {
-        aes_encrypt.Encrypt(&encrypted[i], &input[i]);
+    for (size_t i = 0; i < vctAssetPlaintext.size(); i += 16) {
+        aes_encrypt.Encrypt(&vctEncryptedAsset[i], &vctAssetPlaintext[i]);
     }
 
     // Report encrypted output
-    // std::cout << "Encrypted Data: ";
-    // print_hex(encrypted);
-    for (unsigned char c : encrypted) {
-        // printf("%02x", c);
+    LogPrint (BCLog::ALL, "Encrypted asset \n");
+    for (unsigned char c : vctEncryptedAsset) {
         LogPrint (BCLog::ALL, "%02x", c);
     }
     LogPrint (BCLog::ALL, "\n");
     LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "\n");
-    
 
-    // Decrypted output
-    std::vector<unsigned char> decrypted(encrypted.size());
+    // Decrypted asset
+    std::vector<unsigned char> vctDecyptedAsset(vctEncryptedAsset.size());
 
     // Create a class instance, and initialize it with a key
-    AES256Decrypt aes_decrypt(key);
+    AES256Decrypt aes_decrypt(chrKey);
 
     // Decrypt
-    for (size_t i = 0; i < encrypted.size(); i += 16) {
-        aes_decrypt.Decrypt(&decrypted[i], &encrypted[i]);
+    for (size_t i = 0; i < vctEncryptedAsset.size(); i += 16) {
+        aes_decrypt.Decrypt(&vctDecyptedAsset[i], &vctEncryptedAsset[i]);
     }
 
     // Remove padding 
-    unsigned char pad_value = decrypted.back();
-    decrypted.resize(decrypted.size() - pad_value);
+    unsigned char chrPadValue = vctDecyptedAsset.back();
+    vctDecyptedAsset.resize(vctDecyptedAsset.size() - chrPadValue);
 
-    for (size_t i = 0; i < decrypted.size(); ++i) {
-        LogPrint (BCLog::ALL, "%s",decrypted[i]);
-        // printf("%u ", decrypted[i]);  // Print as unsigned int
+    // Report decrypted asset
+    LogPrint (BCLog::ALL, "Decrypted asset \n");
+    for (size_t i = 0; i < vctDecyptedAsset.size(); ++i) {
+        LogPrint (BCLog::ALL, "%s",vctDecyptedAsset[i]);
     }
-    LogPrint (BCLog::ALL, "%d \n", decrypted.size());
-    LogPrint (BCLog::ALL, "%d \n", decrypted.size());
-    LogPrint (BCLog::ALL, "%d \n", decrypted[4]);
-    // printf("\n");
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "Decrypted asset length %d \n", vctDecyptedAsset.size());
+    LogPrint (BCLog::ALL, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
+    LogPrint (BCLog::ALL, "\n");
 
 
 
