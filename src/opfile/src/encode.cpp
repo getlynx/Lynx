@@ -184,6 +184,17 @@ for (int i = 0; i < filelenext2; i++) {
 LogPrint (BCLog::ALL, "\n");
 LogPrint (BCLog::ALL, "\n");
 
+// Report snatched extension in decimal
+if (protocol == 1) {
+    LogPrint (BCLog::ALL, "Snatched extension in decimal \n");
+    for (int i = 0; i < 4; i++) {
+        LogPrint (BCLog::ALL, "%d ", buffer2[vctEncryptedAsset.size()+i]);
+    }
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "\n");
+}
+
+
 
 
 
@@ -231,6 +242,18 @@ LogPrint (BCLog::ALL, "\n");
         sprintf(buffer+filelen, "%s", extension.c_str());
 
     }
+
+// Report extension in decimal
+if (protocol == 1) {
+    LogPrint (BCLog::ALL, "Extension in decimal \n");
+    for (int i = 0; i < 4; i++) {
+        LogPrint (BCLog::ALL, "%d ", buffer[filelen+i]);
+    }
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "\n");
+}
+
+
 
     int chunk = 0;
     while (chunk * OPENCODING_CHUNKMAX < filelenext) {
