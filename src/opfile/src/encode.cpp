@@ -117,12 +117,78 @@ bool file_to_hexchunks(std::string filepath, int& protocol, int& error_level, in
     // Create a class instance, and initialize it with a key
     AES256Encrypt aes_encrypt(chrKey);
 
-    // Encrypt input
+    // Encrypt asset
     for (size_t i = 0; i < vctAssetPlaintext.size(); i += 16) {
         aes_encrypt.Encrypt(&vctEncryptedAsset[i], &vctAssetPlaintext[i]);
     }
 
-    // Report encrypted output
+
+
+
+
+// Report encrypted asset in decimal
+LogPrint (BCLog::ALL, "Encrypted asset in decimal \n");
+for (int i = 0; i < vctEncryptedAsset.size(); i++) {
+    LogPrint (BCLog::ALL, "%d ", vctEncryptedAsset[i]);
+}
+LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::ALL, "\n");
+
+// Encrypted asset size
+int filelenext2 = vctEncryptedAsset.size();
+
+// Report encrypted asset size
+LogPrint (BCLog::ALL, "Encrypted asset size %d \n", vctEncryptedAsset.size());
+LogPrint (BCLog::ALL, "\n");
+
+
+
+
+
+// Extensiom
+filelenext2 += (protocol == 1 ? OPENCODING_EXTENSION : 0);
+
+// encrypted asset
+unsigned char* buffer2 = (unsigned char*)malloc(filelenext + 1);
+
+// Snatch encrypted asset
+for (int i = 0; i < vctEncryptedAsset.size(); i++) {
+    buffer2[i] = vctEncryptedAsset[i];
+}
+
+// Report snatched encrypted asset in decimal
+LogPrint (BCLog::ALL, "Snatched encrypted asset in decimal \n");
+for (int i = 0; i < vctEncryptedAsset.size(); i++) {
+    LogPrint (BCLog::ALL, "%d ", buffer2[i]);
+}
+LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::ALL, "\n");
+
+
+
+
+
+// Extension
+if (protocol == 1) {
+    for (int i = 0; i < 4; i++) {
+        buffer2[vctEncryptedAsset.size() + i] = extension[i];
+    }
+    // sprintf(buffer2+vctEncryptedAsset.size(), "%s", extension.c_str());
+}
+
+// Report snatched encrypted asset
+LogPrint (BCLog::ALL, "Snatched encrypted asset \n");
+for (int i = 0; i < filelenext2; i++) {
+    LogPrint (BCLog::ALL, "%02x", buffer2[i]);
+}
+LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::ALL, "\n");
+
+
+
+
+
+    // Report encrypted asset
     LogPrint (BCLog::ALL, "Encrypted asset \n");
     for (unsigned char c : vctEncryptedAsset) {
         LogPrint (BCLog::ALL, "%02x", c);
