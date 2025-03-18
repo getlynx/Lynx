@@ -243,6 +243,10 @@ if (protocol == 1) {
 
     }
 
+
+
+
+
 // Report extension in decimal
 if (protocol == 1) {
     LogPrint (BCLog::ALL, "Extension in decimal \n");
@@ -252,6 +256,8 @@ if (protocol == 1) {
     LogPrint (BCLog::ALL, "\n");
     LogPrint (BCLog::ALL, "\n");
 }
+
+
 
 
 
