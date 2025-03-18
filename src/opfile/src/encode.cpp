@@ -7,6 +7,14 @@
 
 #include <key_io.h>
 
+#include <iostream>
+#include <vector>
+#include <cstring>  
+#include "crypto/aes.h"
+#include "crypto/sha256.h"  
+
+
+
 extern std::string authUserKey;
 
 bool file_to_hexchunks(std::string filepath, int& protocol, int& error_level, int& total_chunks, std::vector<std::string>& data_chunks) {
@@ -42,6 +50,124 @@ bool file_to_hexchunks(std::string filepath, int& protocol, int& error_level, in
         free(buffer);
         return false;
     }
+
+
+
+    
+
+    // Set asset length
+    int intAssetLength = filelen;
+
+    // Report asset in decimal
+    LogPrint (BCLog::ALL, "Asset in decimal \n");
+    for (int i = 0; i < intAssetLength; i++) {
+        LogPrint (BCLog::ALL, "%d", buffer[i]);
+    }
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "\n");
+
+    // Report asset length
+    LogPrint (BCLog::ALL, "Asset length %d \n", intAssetLength);
+    LogPrint (BCLog::ALL, "\n");
+
+    // Asset plaintext
+    std::string strAssetPlaintext;
+
+    // Snatch asset
+    for (int i = 0; i < intAssetLength; i++) {
+        strAssetPlaintext = strAssetPlaintext + buffer[i];
+    }
+
+    // Report asset plaintext
+    LogPrint (BCLog::ALL, "Asset plaintext %s \n", strAssetPlaintext);
+
+    // Report asset plaintext position 5 in decimal
+    LogPrint (BCLog::ALL, "Asset plaintext position 5 in decimal %d \n", strAssetPlaintext[4]);
+
+    // Report asset plaintext size
+    LogPrint (BCLog::ALL, "Asset plaintext size %d \n", strAssetPlaintext.size());
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "\n");
+
+
+
+
+
+    // Key (aes-256 rwquires 32-byte key)
+    unsigned char key[32]; 
+
+    // Prepare the IV (Initialization Vector) (aes block size is 16 bytes)
+    unsigned char iv[16];  
+
+    // Example key (use a secure key in practice)
+    memset(key, 0x01, sizeof(key)); 
+
+    // Example iv (should be random for each encryption)
+    memset(iv, 0x02, sizeof(iv));   
+
+    // Set plaintext
+    // std::string plaintext = "Hello, Bitcoin AES Encryption!";
+
+    // Report
+    LogPrint (BCLog::ALL, "%s \n", strAssetPlaintext);
+
+    // Vectorize
+    std::vector<unsigned char> input(strAssetPlaintext.begin(), strAssetPlaintext.end());
+
+    // Pad to a multiple of 16 bytes (aes block size)
+    size_t pad_len = 16 - (input.size() % 16);
+    input.insert(input.end(), pad_len, static_cast<unsigned char>(pad_len));
+
+    // Encrypted output
+    std::vector<unsigned char> encrypted(input.size());
+
+    // Create a class instance, and initialize it with a key and a key size
+    AES256Encrypt aes_encrypt(key);
+
+    // Encrypt input
+    for (size_t i = 0; i < input.size(); i += 16) {
+        aes_encrypt.Encrypt(&encrypted[i], &input[i]);
+    }
+
+    // Report encrypted output
+    // std::cout << "Encrypted Data: ";
+    // print_hex(encrypted);
+    for (unsigned char c : encrypted) {
+        // printf("%02x", c);
+        LogPrint (BCLog::ALL, "%02x", c);
+    }
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "\n");
+    
+
+    // Decrypted output
+    std::vector<unsigned char> decrypted(encrypted.size());
+
+    // Create a class instance, and initialize it with a key
+    AES256Decrypt aes_decrypt(key);
+
+    // Decrypt
+    for (size_t i = 0; i < encrypted.size(); i += 16) {
+        aes_decrypt.Decrypt(&decrypted[i], &encrypted[i]);
+    }
+
+    // Remove padding 
+    unsigned char pad_value = decrypted.back();
+    decrypted.resize(decrypted.size() - pad_value);
+
+    for (size_t i = 0; i < decrypted.size(); ++i) {
+        LogPrint (BCLog::ALL, "%s",decrypted[i]);
+        // printf("%u ", decrypted[i]);  // Print as unsigned int
+    }
+    LogPrint (BCLog::ALL, "%d \n", decrypted.size());
+    LogPrint (BCLog::ALL, "%d \n", decrypted.size());
+    LogPrint (BCLog::ALL, "%d \n", decrypted[4]);
+    // printf("\n");
+
+
+
+
 
     // protocol 01 appends 4 byte extension to filestream
     if (protocol == 1) {
