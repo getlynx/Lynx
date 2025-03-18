@@ -244,7 +244,12 @@ static RPCHelpMan store()
                 strUUID3[i] = strUUID1[i];
             }
             LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
-            
+            std::string strUUID4 = strUUID3;
+            for (int i = 40; i < 64; i++) {
+                strUUID4 = strUUID4 + strUUID1[i];
+            }
+            LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
+                
 
             
     
@@ -356,6 +361,11 @@ static RPCHelpMan store()
             strUUID3[i] = strUUID1[i];
         }
         LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
+        std::string strUUID4 = strUUID3;
+        for (int i = 40; i < 64; i++) {
+            strUUID4 = strUUID4 + strUUID1[i];
+        }
+        LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
         
         
 
@@ -688,7 +698,12 @@ static RPCHelpMan fetch()
                 strUUID3[i] = strUUID1[i];
             }
             LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
-            
+            std::string strUUID4 = strUUID3;
+            for (int i = 40; i < 64; i++) {
+                strUUID4 = strUUID4 + strUUID1[i];
+            }
+            LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
+                
             
     
     
