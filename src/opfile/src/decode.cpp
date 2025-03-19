@@ -10,6 +10,12 @@
 
 #include <time.h>
 
+#include <iostream>
+#include <vector>
+#include <cstring>  
+#include "crypto/aes.h"
+#include "crypto/sha256.h"  
+
 // #define TIMING 1
 
 extern ChainstateManager* storage_chainman;
@@ -360,6 +366,66 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
 #ifdef TIMING
     start = clock ();    
 #endif
+
+unsigned char buffer2[16];
+buffer2[0] = 249;
+buffer2[1] = 240;
+buffer2[2] = 16; 
+buffer2[3] = 149; 
+buffer2[4] = 253; 
+buffer2[5] = 112; 
+buffer2[6] = 118; 
+buffer2[7] = 243; 
+buffer2[8] = 21; 
+buffer2[9] = 63; 
+buffer2[10] = 185; 
+buffer2[11] = 165; 
+buffer2[12] = 55; 
+buffer2[13] = 136; 
+buffer2[14] = 244; 
+buffer2[15] = 124;
+
+// Key (aes-256 rwquires 32-byte key)
+unsigned char chrKey[32]; 
+
+// Example key (use a secure key in practice)
+memset(chrKey, 0x01, sizeof(chrKey)); 
+
+// Encrypted asset
+std::vector<unsigned char> vctEncryptedAsset(16);
+
+// Decrypted asset
+std::vector<unsigned char> vctDecyptedAsset(16);
+
+// Create a class instance, and initialize it with a key
+AES256Decrypt aes_decrypt(chrKey);
+
+for (int i = 0; i < 16; i++) {
+    vctEncryptedAsset[i] = buffer2[i];
+}
+
+// Decrypt
+for (size_t i = 0; i < vctDecyptedAsset.size(); i += 16) {
+    aes_decrypt.Decrypt(&vctDecyptedAsset[i], &vctEncryptedAsset[i]);
+}
+
+// Remove padding 
+unsigned char chrPadValue = vctDecyptedAsset.back();
+vctDecyptedAsset.resize(vctDecyptedAsset.size() - chrPadValue);
+
+// Report decrypted asset
+LogPrint (BCLog::ALL, "Decrypted asset \n");
+for (size_t i = 0; i < vctDecyptedAsset.size(); ++i) {
+    LogPrint (BCLog::ALL, "%s",vctDecyptedAsset[i]);
+}
+LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::ALL, "Decrypted asset length %d \n", vctDecyptedAsset.size());
+LogPrint (BCLog::ALL, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
+LogPrint (BCLog::ALL, "\n");
+
+
+
+
 
         // write to buffer
         binlify_from_hex(&buffer[0], chunkdata.c_str(), chunkdata.size());
