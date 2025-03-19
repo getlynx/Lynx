@@ -556,11 +556,11 @@ static RPCHelpMan fetchall()
 
         // if (scan_blocks_for_pubkey (*storage_chainman, strUUID)) {
 
-            // Perform fetch
-            add_get_task(std::make_pair(strUUID, strPath));
-
             // Initialize to fetch not done
             gintFetchDone = 0;
+
+            // Perform fetch
+            add_get_task(std::make_pair(strUUID, strPath));
 
             // Whikle fetch not done
             while (gintFetchDone == 0) {
