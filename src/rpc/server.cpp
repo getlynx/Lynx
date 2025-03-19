@@ -143,7 +143,7 @@ std::string CRPCTable::help(const std::string& strCommand, const JSONRPCRequest&
                     // if (authUser.ToString() != "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d") {
                     if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
 
-                        if (strHelp.substr(0,4) != "auth" && strHelp.substr(0,5) != "allow" && strHelp.substr(0,4) != "deny" && strHelp.substr(0,7) != "tenants") {
+                        if (strHelp.substr(0,4) != "auth" && strHelp.substr(0,5) != "allow" && strHelp.substr(0,8) != "fetchall" && strHelp.substr(0,4) != "deny" && strHelp.substr(0,7) != "tenants") {
                             strRet += strHelp + "\n";
                         }
                     } else {
