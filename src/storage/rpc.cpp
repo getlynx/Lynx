@@ -45,6 +45,9 @@ extern uint160 ghshAuthenticatetenantPubkey;
 // Nunber of consecutive authentication failures
 int gintAuthenticationFailures;
 
+// Store asset encrypt flag
+int gintStoreAssetEncryptFlag;
+
 // Authentication start time
 extern uint32_t gu32AuthenticationTime;
 
@@ -61,6 +64,10 @@ extern std::map<std::string, int> gmapTimeStamp;
 
 extern std::map<std::string, std::string> gmapExtension;
 
+extern std::map<std::string, std::string> gmapEncrypted;
+
+int gintFetchAssetFullProtocol;
+
 int gintFetchDone;
 
 static RPCHelpMan store()
@@ -70,6 +77,7 @@ static RPCHelpMan store()
          {
              {"filepath", RPCArg::Type::STR, RPCArg::Optional::NO, "Full path of file to be uploaded"},
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Custom unique identifier (32 characters, hexadecimal format, must be unique across all files)"},
+             {"encrypt", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Encrypt flag 0|1 (0: No, 1: Yes, default: No)"},
          },
 
 
@@ -87,6 +95,7 @@ static RPCHelpMan store()
                           {RPCResult::Type::STR, "storagetime", "Storage date and time"},
                           {RPCResult::Type::NUM, "currentblock", "Current block"},
                           {RPCResult::Type::STR, "stakingstatus", "enabled | disabled"},
+                          {RPCResult::Type::STR, "encrypted", "yes | no"},
                     }},
                 }
             },
@@ -111,19 +120,19 @@ static RPCHelpMan store()
 
 
     // Staking status
-    std::string strStakingslStatus;
+    std::string strStakingStatus;
 
     // If staking disabled
     if (gblnDisableStaking) {
 
         // Set to disabled
-        strStakingslStatus = "disabled";
+        strStakingStatus = "disabled";
 
     // Else not if staking disabled
     } else {
 
         // Set to enabled
-        strStakingslStatus = "enabled";
+        strStakingStatus = "enabled";
 
     // End if staking disabled
     }
@@ -150,7 +159,8 @@ static RPCHelpMan store()
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", intTipHeight);
-        entry.pushKV("stakingstatus", strStakingslStatus);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", "n/a");
         results.push_back(entry);
         return results;
     }
@@ -169,7 +179,8 @@ static RPCHelpMan store()
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", intTipHeight);
-        entry.pushKV("stakingstatus", strStakingslStatus);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", "n/a");
         results.push_back(entry);
         return results;
 
@@ -195,7 +206,8 @@ static RPCHelpMan store()
             entry.pushKV("storagefee", 0);
             entry.pushKV("storagetime", "n/a");
             entry.pushKV("currentblock", intTipHeight);
-            entry.pushKV("stakingstatus", strStakingslStatus);
+            entry.pushKV("stakingstatus", strStakingStatus);
+            entry.pushKV("encrypted", "n/a");
             results.push_back(entry);
             return results;
         }
@@ -207,20 +219,75 @@ static RPCHelpMan store()
 
 
 
+    // Encrypt 
+    std::string strEncrypt = "0";
+    int intEncrypt;
+
+    // First optional parameter
+    std::string strFirstOptionalParameter;
+
     // Get asset filename
     std::string strAssetFilename = request.params[0].get_str();
 
     // Initialize asset custom uuid
     std::string strAssetUUID = "";
 
-    // If custom uuid
+    // If first optional parameter
     if(!request.params[1].isNull()) {
 
-        // Get custom uuid
-        strAssetUUID = request.params[1].get_str();
+        // Get first optional parameter
+        strFirstOptionalParameter = request.params[1].get_str();
+
+        // If size > 1
+        if (strFirstOptionalParameter.size() > 1) {
+
+            // Set custom uuid
+            strAssetUUID = strFirstOptionalParameter;
+         
+        // Else not if size > 1
+        } else {
+
+            // If 1
+            if (strFirstOptionalParameter == "1") {
+
+                // Set encrypt
+                strEncrypt = "1";
+
+            // End if 1    
+            }
+
+        // End if size > 1
+        }
+
+    // End if first optional parameter
     }
 
-    // If custom uuid
+    // If encrypt flag
+    if(!request.params[2].isNull()) {
+
+        // Get encrypt flag
+        strEncrypt = request.params[2].get_str();
+
+    // End if encrypt flag
+    }
+
+
+
+    // Convert encrypt flag to integer
+    intEncrypt = stoi (strEncrypt);
+
+    // For file_to_hexchunks
+    gintStoreAssetEncryptFlag = intEncrypt;
+
+
+
+LogPrint (BCLog::ALL, "uuid %s \n", strAssetUUID);
+LogPrint (BCLog::ALL, "encrypt %d \n", intEncrypt);
+LogPrint (BCLog::ALL, "\n");
+
+
+
+// If custom uuid
     if (strAssetUUID != "") {
 
         // uuid invalidity type
@@ -278,7 +345,8 @@ static RPCHelpMan store()
                     entry.pushKV("storagefee", 0);
                     entry.pushKV("storagetime", "n/a");
                     entry.pushKV("currentblock", intTipHeight);
-                    entry.pushKV("stakingstatus", strStakingslStatus);
+                    entry.pushKV("stakingstatus", strStakingStatus);
+                    entry.pushKV("encrypted", "n/a");
                     results.push_back(entry);
                     return results;
                 }     
@@ -301,7 +369,8 @@ static RPCHelpMan store()
                 entry.pushKV("storagefee", 0);
                 entry.pushKV("storagetime", "n/a");
                 entry.pushKV("currentblock", intTipHeight);
-                entry.pushKV("stakingstatus", strStakingslStatus);
+                entry.pushKV("stakingstatus", strStakingStatus);
+                entry.pushKV("encrypted", "n/a");
                 results.push_back(entry);
                 return results;
             }
@@ -320,7 +389,8 @@ static RPCHelpMan store()
                 entry.pushKV("storagefee", 0);
                 entry.pushKV("storagetime", "n/a");
                 entry.pushKV("currentblock", intTipHeight);
-                entry.pushKV("stakingstatus", strStakingslStatus);
+                entry.pushKV("stakingstatus", strStakingStatus);
+                entry.pushKV("encrypted", "n/a");
                 results.push_back(entry);
                 return results;
             }
@@ -419,6 +489,13 @@ static RPCHelpMan store()
         // Convert to string 
         std::string strTransactionFee = ossTransactionFee.str();
 
+        // Encrypted status
+        std::string strEncryptedStatus = "no";
+
+        if (intEncrypt == 1) {
+            strEncryptedStatus = "yes";
+        }
+
 
 
         // Report and exit
@@ -430,7 +507,8 @@ static RPCHelpMan store()
         entry.pushKV("storagefee", strTransactionFee);
         entry.pushKV("storagetime", strFormattedCurrentTimestamp);
         entry.pushKV("currentblock", intTipHeight);
-        entry.pushKV("stakingstatus", strStakingslStatus);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", strEncryptedStatus);
         results.push_back(entry);
         return results;
 
@@ -446,7 +524,8 @@ static RPCHelpMan store()
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", intTipHeight);
-        entry.pushKV("stakingstatus", strStakingslStatus);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", "n/a");
         results.push_back(entry);
         return results;
     }
@@ -614,7 +693,7 @@ static RPCHelpMan fetch()
          {
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The unique identifier of the asset."},
              {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the asset."},
-             {"pubkeyflag", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant."},
+             // {"pubkeyflag", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant."},
          },
          RPCResult{
 //             RPCResult::Type::STR, "", "success or failure"},
@@ -625,8 +704,9 @@ static RPCHelpMan fetch()
                     {RPCResult::Type::OBJ, "", "",
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
-                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID length | UUID not found"},
-                          {RPCResult::Type::NUM, "tenant", "Authenticated store tenant public key"},
+                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID | UUID not found"},
+                          {RPCResult::Type::STR, "tenant", "Authenticated store tenant public key"},
+                          {RPCResult::Type::STR, "encrypted", "yes | no"},
                     }},
                 }
             },
@@ -666,6 +746,9 @@ static RPCHelpMan fetch()
         intTenantFlag = stoi (strTenantFlag);
     }
 
+    // Always display tenant (scan_blocks_for_pubkey sets detects encryption and sets gintFetchAssetFullProtocol)
+    intTenantFlag = 1;
+
     // If bad path
     if (!does_path_exist(strPath)) {
 
@@ -673,6 +756,7 @@ static RPCHelpMan fetch()
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid path " + strPath + ".");
         unvEntry.pushKV("tenant", "n/a");
+        unvEntry.pushKV("encrypted", "n/a");
         unvResults.push_back(unvEntry);
         return unvResults;
     }
@@ -715,11 +799,22 @@ static RPCHelpMan fetch()
                 unvEntry.pushKV("result", "failure");
                 unvEntry.pushKV("message", "UUID not found: " + strUUID + ".");
                 unvEntry.pushKV("tenant", "n/a");
+                unvEntry.pushKV("encrypted", "n/a");
                 unvResults.push_back(unvEntry);
                 return unvResults;
 
             // Else not if tenant unfound (bad uuid)
             } else {
+
+LogPrint (BCLog::ALL, "gintFetchAssetFullProtocol from fetch() %d \n", gintFetchAssetFullProtocol);
+LogPrint (BCLog::ALL, "\n");
+
+// return "test";
+
+                std::string strFetchAssetEncryptedStatus = "no";
+                if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
+                    strFetchAssetEncryptedStatus = "yes";
+                }
 
                 // Fetch
                 add_get_task(std::make_pair(strUUID, strPath));
@@ -728,6 +823,7 @@ static RPCHelpMan fetch()
                 unvEntry.pushKV("result", "success");
                 unvEntry.pushKV("message", "n/a");
                 unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
+                unvEntry.pushKV("encrypted", strFetchAssetEncryptedStatus);
                 unvResults.push_back(unvEntry);
                 return unvResults;
 
@@ -744,6 +840,7 @@ static RPCHelpMan fetch()
             unvEntry.pushKV("result", "success");
             unvEntry.pushKV("message", "n/a");
             unvEntry.pushKV("tenant", "n/a");
+            unvEntry.pushKV("encrypted", "n/a");
             unvResults.push_back(unvEntry);
             return unvResults;            
 
@@ -757,6 +854,7 @@ static RPCHelpMan fetch()
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid UUID length: " + strUUID + ".");
         unvEntry.pushKV("tenant", "n/a");
+        unvEntry.pushKV("encrypted", "n/a");
         unvResults.push_back(unvEntry);
         return unvResults;
 
@@ -786,6 +884,7 @@ static RPCHelpMan list()
                                 {RPCResult::Type::NUM, "height", "Starting block number for asset storage (may span multiple blocks)"},
                                 {RPCResult::Type::STR, "timestamp", "Date and time asset storage began"},
                                 {RPCResult::Type::STR, "extension", "Asset extension"},
+                                {RPCResult::Type::STR, "encrypted", "yes | no"},
                             }},
                         }},
                     }
@@ -814,6 +913,7 @@ static RPCHelpMan list()
         unvResult0.pushKV("height", 0);
         unvResult0.pushKV("timestamp", "n/a");
         unvResult0.pushKV("extension", "n/a");
+        unvResult0.pushKV("encrypted", "n/a");
 
         // Pack results
         unvResult1.push_back (unvResult0);
@@ -950,6 +1050,7 @@ static RPCHelpMan list()
             unvResult0.pushKV("height", intBlockHeight);
             unvResult0.pushKV("timestamp", strFormattedLocalTime);
             unvResult0.pushKV("extension", gmapExtension[strUUID]);
+            unvResult0.pushKV("encrypted", gmapEncrypted[strUUID]);
 
             // Pack results
             unvResult1.push_back (unvResult0);

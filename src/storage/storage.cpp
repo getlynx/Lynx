@@ -61,6 +61,15 @@ std::map<std::string, int> gmapTimeStamp;
 // Asset extension
 std::map<std::string, std::string> gmapExtension;
 
+// Asset encrypted status
+std::map<std::string, std::string> gmapEncrypted;
+
+// Fetch asset encrypted status
+// int gintFetchAssetEncyptedStatus;
+
+extern int gintFetchAssetFullProtocol;
+
+
 
 
 
@@ -109,7 +118,9 @@ bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
 
     std::string strAuthenticatetenantPubkeyCandidate;
                         
-    long lngCutoff = Params().GetConsensus().nUUIDBlockStart;
+    // long lngCutoff = Params().GetConsensus().nUUIDBlockStart;
+
+    long lngCutoff = 3107401;
 
     // In reverse, skip POW blocks
     for (int height = (tip_height - 1); height > lngCutoff; height--) {
@@ -181,7 +192,7 @@ bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
                         // LogPrintf ("%s - failed at check_chunk_contextual. error_level %d\n", __func__, error_level);
                         continue;
                     }
-                        
+
 #ifdef TIMING
     end = clock ();    
     t_ccc = t_ccc + (double) (end - start) / CLOCKS_PER_SEC;
@@ -249,7 +260,8 @@ bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
                             LogPrint (BCLog::ALL, "\n");
                     
                             hasauth = true;
-                    
+
+gintFetchAssetFullProtocol = protocol;
                     
                             // Extract authenticated tenant at storeasset time from header chunk (ghshAuthenticatetenantPubkey)
                             extract_pubkey_from_signature (opdata, offset); 
@@ -450,7 +462,10 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
     CBlockIndex* pindex = nullptr;
 
     // Set cutoff
-    long lngCutoff = Params().GetConsensus().nUUIDBlockStart;
+    // long lngCutoff = Params().GetConsensus().nUUIDBlockStart;
+
+    // Set cutoff to beginning of optional encryption
+    long lngCutoff = 3107401;
 
     // Skip POW blocks in reverse
     for (int height = (tip_height - 1); height > lngCutoff; height--) {
@@ -683,7 +698,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                             // LogPrint (BCLog::ALL, "buffer %s \n", buffer);
 
                             // If extension
-                            if (intExtension == 1) {
+                            if ((intExtension == 1) || (intExtension == 3)) {
 
                                 // Extension
                                 std::string extension;
@@ -720,6 +735,12 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                             // Record extension for caller
                             gmapExtension[strUUID] = strExtension;
 
+                            if ((intExtension == 2) || (intExtension == 3)) {
+                                gmapEncrypted[strUUID] = "yes";
+                            } else {
+                                gmapEncrypted[strUUID] = "no";
+                            }
+
 
 
 
@@ -730,7 +751,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                             // Filelength is (totalchunks - 1) * 512 + finalchunklength
                             int intFileLengthInBytes = (intChunkTotal - 1) * 512 + intChunkLength;
 
-                            if (intExtension == 1) {
+                            if ((intExtension == 1) || (intExtension == 3)) {
                                 intFileLengthInBytes = intFileLengthInBytes - 4;
                             }
 
@@ -839,7 +860,10 @@ bool scan_blocks_for_specific_uuid (ChainstateManager& icsmChainStateManager, st
     // std::string strAuthenticatetenantPubkeyCandidate;
        
     // pos start block
-    long lngCutoff = Params().GetConsensus().nUUIDBlockStart;
+    // long lngCutoff = Params().GetConsensus().nUUIDBlockStart;
+
+    // Start of optional encryption functionality
+    long lngCutoff = 3107401;
 
     // In reverse, skip POW blocks
     for (int height = (intTipHeight - 1); height > lngCutoff; height--) {

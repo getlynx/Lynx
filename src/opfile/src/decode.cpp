@@ -26,6 +26,11 @@ extern uint160 ghshAuthenticatetenantPubkey;
 
 extern int gintFetchDone;
 
+// extern int gintFetchAssetEncyptedStatus;
+
+extern int gintFetchAssetFullProtocol;
+
+
 /*
 bool check_chunk_contextual(std::string chunk, int& protocol, int& error_level)
 {
@@ -77,10 +82,15 @@ bool check_chunk_contextual (std::string chunk, int& protocol, int& error_level,
     // Check version byte
     valid = false;
     get_version_from_chunk (chunk, version, offset);
-    for (auto& l : OPENCODING_VERSION) {
-        if (version == l) {
-            valid = true;
-        }
+    // for (auto& l : OPENCODING_VERSION) {
+        // if (version == l) {
+            // valid = true;
+        // }
+    // }
+    protocol = std::stoul(version, nullptr, 16);
+
+    if ((protocol > (-1)) && (protocol < 4)) {
+        valid = true;
     }
 
     // Bail on unknown protocol types
@@ -88,9 +98,6 @@ bool check_chunk_contextual (std::string chunk, int& protocol, int& error_level,
         error_level = ERR_CHUNKVERSION;
         return false;
     }
-
-    // pass protocol back
-    protocol = std::stoul(version, nullptr, 16);
 
     return true;
 }
@@ -202,12 +209,36 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
 
     error_level = NO_ERROR;
 
+    int intDecryptedFilesize;
+
     bool lastchunk;
     char checkhash[OPENCODING_CHECKSUM*4];
     unsigned char buffer[OPENCODING_CHUNKMAX*2];
     //int protocol, offset, thischunk, chunknum2, chunklen2, chunktotal2, extskip;
     int protocol, thischunk, chunknum2, chunklen2, chunktotal2, extskip;
     std::string chunklen, uuid, uuid2, chunkhash, checksum, chunknum, chunktotal, chunkdata, filepath;
+
+
+
+    LogPrint (BCLog::ALL, "uuid %s \n", get_info.first);
+    LogPrint (BCLog::ALL, "\n");
+
+    unsigned char key[32];
+
+    for (size_t i = 0; i < 32; i++) {
+        unsigned int byteValue;
+        std::stringstream(get_info.first.substr(i * 2, 2)) >> std::hex >> byteValue;
+        key[i] = static_cast<unsigned char>(byteValue);
+    }
+
+    LogPrint (BCLog::ALL, "key \n");
+    for (int i = 0; i < 32; i++) {
+        LogPrint (BCLog::ALL, "%d ", key[i]);
+    }
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "\n");
+
+
 
     //offset = 0;
     extskip = 0;
@@ -236,6 +267,9 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
             // pass error_level back
             return false;
         }
+
+LogPrint (BCLog::ALL, "protocol from build_file_from_chunks %d \n", protocol);
+LogPrint (BCLog::ALL, "\n");
 
 //    end = clock ();    
 //    t_ccc = t_ccc + (double) (end - start) / CLOCKS_PER_SEC;
@@ -359,13 +393,15 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
 #endif
 
         // if protocol is 01 and lastchunk is true (extensiondata)
-        if (lastchunk == true && protocol == 1) {
+        if (lastchunk == true && ((protocol == 1) || (protocol == 3))) {
             extskip = OPENCODING_EXTENSION;
         }
 
 #ifdef TIMING
     start = clock ();    
 #endif
+
+/*
 
 unsigned char buffer2[16];
 buffer2[0] = 249;
@@ -423,16 +459,111 @@ LogPrint (BCLog::ALL, "Decrypted asset length %d \n", vctDecyptedAsset.size());
 LogPrint (BCLog::ALL, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
 LogPrint (BCLog::ALL, "\n");
 
+*/
 
 
 
 
         // write to buffer
         binlify_from_hex(&buffer[0], chunkdata.c_str(), chunkdata.size());
-        if (!write_partial_stream(in, (char*)buffer, (chunkdata.size() / 2) - extskip)) {
-            error_level = ERR_FILEWRITE;
-            return false;
+
+
+
+
+
+LogPrint (BCLog::ALL, "gintFetchAssetFullProtocol from build_file_from_chunks %d \n", gintFetchAssetFullProtocol);
+LogPrint (BCLog::ALL, "\n");
+
+LogPrint (BCLog::ALL, "Asset size %d \n", chunkdata.size()/2);
+LogPrint (BCLog::ALL, "\n");
+
+LogPrint (BCLog::ALL, "Asset in decimal \n");
+for (int i = 0; i < chunkdata.size()/2; i++) {
+    LogPrint (BCLog::ALL, "%d ", buffer[i]);
+}
+LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::ALL, "\n");
+
+if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
+
+    int intEncryptedFilesize = ((chunkdata.size() / 2) - extskip);
+
+    // unsigned char chrKey[32]; 
+
+    // memset(chrKey, 0x01, sizeof(chrKey)); 
+
+    std::vector<unsigned char> vctEncryptedAsset(intEncryptedFilesize);
+
+    std::vector<unsigned char> vctDecyptedAsset(intEncryptedFilesize);
+
+    LogPrint (BCLog::ALL, "Encrypted asset from blockchain in decimal \n");
+    for (int i = 0; i < intEncryptedFilesize; i++) {
+        LogPrint (BCLog::ALL, "%d ", buffer[i]);
+    }
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "\n");
+
+    for (int i = 0; i < intEncryptedFilesize; i++) {
+        vctEncryptedAsset[i] = buffer[i];
+    }
+        
+    AES256Decrypt aes_decrypt(key);
+
+    for (size_t i = 0; i < vctDecyptedAsset.size(); i += 16) {
+        aes_decrypt.Decrypt(&vctDecyptedAsset[i], &vctEncryptedAsset[i]);
+    }
+
+    unsigned char chrPadValue = vctDecyptedAsset.back();
+    vctDecyptedAsset.resize(vctDecyptedAsset.size() - chrPadValue);
+
+    LogPrint (BCLog::ALL, "Decrypted asset \n");
+    for (size_t i = 0; i < vctDecyptedAsset.size(); ++i) {
+        LogPrint (BCLog::ALL, "%s",vctDecyptedAsset[i]);
+    }
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "Decrypted asset length %d \n", vctDecyptedAsset.size());
+    LogPrint (BCLog::ALL, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
+    LogPrint (BCLog::ALL, "\n");
+
+    intDecryptedFilesize = intEncryptedFilesize - chrPadValue;
+
+    for (int i = 0; i < intDecryptedFilesize; i++) {
+        buffer[i] = vctDecyptedAsset[i];
+    }
+
+    if (protocol == 3) {
+        for (int i = 0; i < 4; i++) {
+            buffer[intDecryptedFilesize+i] = buffer[intEncryptedFilesize+i];
         }
+    }
+
+}
+
+
+
+
+
+if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
+
+    // if (!write_partial_stream(in, (char*)buffer, (chunkdata.size() / 2) - extskip)) {
+    if (!write_partial_stream(in, (char*)buffer, intDecryptedFilesize)) {
+        error_level = ERR_FILEWRITE;
+        return false;
+    }
+
+} else {
+
+    if (!write_partial_stream(in, (char*)buffer, (chunkdata.size() / 2) - extskip)) {
+    // if (!write_partial_stream(in, (char*)buffer, intDecryptedFilesize)) {
+        error_level = ERR_FILEWRITE;
+        return false;
+    }
+    
+}
+
+
+
+
 
 #ifdef TIMING
     end = clock ();    
@@ -451,15 +582,20 @@ LogPrint (BCLog::ALL, "\n");
     LogPrint (BCLog::ALL, "(build_file_from_chunks)\n");
 
     //! if protocol 01, rename file with extension
-    if (protocol == 1) {
+    if (((protocol == 1) || (protocol == 3))) {
 
         std::string extension;
-        int extoffset = (chunkdata.size() / 2) - extskip;
+        int extoffset;
+        if (protocol == 1) {
+            extoffset = (chunkdata.size() / 2) - extskip;
+        } else {
+            extoffset = intDecryptedFilesize;
+        }
         for (int extwrite = extoffset; extwrite < extoffset + OPENCODING_EXTENSION; extwrite++) {
             extension += buffer[extwrite];
         }
 
-        LogPrint (BCLog::ALL, "Extension found: %s\n", extension);
+        LogPrint (BCLog::ALL, "Extension found: %s", extension.c_str());
         LogPrint (BCLog::ALL, "\n");
 
         std::string newfilepath = filepath + "." + extension;
