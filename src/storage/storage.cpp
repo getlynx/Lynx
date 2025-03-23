@@ -73,7 +73,7 @@ extern int gintFetchAssetFullProtocol;
 
 
 
-// Extract uuid
+// Extract pubkey, protocol
 bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
 {
 
@@ -250,6 +250,7 @@ bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
                             get_chunklen_from_chunk (opdata, chunklen, offset);
                             get_signature_from_chunk (opdata, signature, offset);
                     
+                            /*
                             LogPrint (BCLog::ALL, "Found valid header chunk for UUID: %s\n", this_uuid);
                             LogPrint (BCLog::ALL, "\n");
                             LogPrint (BCLog::ALL, "Header Chunk Magic: %s\n", magic);
@@ -258,10 +259,12 @@ bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
                             LogPrint (BCLog::ALL, "Header Chunk Length: %s\n", chunklen);
                             LogPrint (BCLog::ALL, "Header Chunk Signature: %s\n", signature);
                             LogPrint (BCLog::ALL, "\n");
+                            */
                     
                             hasauth = true;
 
-gintFetchAssetFullProtocol = protocol;
+                            // Set full protocol
+                            gintFetchAssetFullProtocol = protocol;
                     
                             // Extract authenticated tenant at storeasset time from header chunk (ghshAuthenticatetenantPubkey)
                             extract_pubkey_from_signature (opdata, offset); 
