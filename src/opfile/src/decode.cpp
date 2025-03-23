@@ -1,6 +1,6 @@
 #include "chunk.h"
 #include "protocol.h"
-#include "util.h"
+#include "storage/util.h"
 
 #include <storage/auth.h>
 
@@ -261,6 +261,13 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
         }
 
 //    start = clock ();    
+
+        std::string dummy;
+
+        if (!strip_opreturndata_from_chunk (chunk, dummy, offset)) {
+            LogPrintf ("%s - failed at strip_opreturndata_from_chunk\n", __func__);
+            return false;;
+        }    
 
         // perform contextual checks
         if (!check_chunk_contextual (chunk, protocol, error_level, offset)) {
@@ -583,6 +590,8 @@ if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
 
     //! if protocol 01, rename file with extension
     if (((protocol == 1) || (protocol == 3))) {
+
+LogPrint (BCLog::ALL, "chunkdata.size %d buffer %d %d %d %d \n", chunkdata.size(), buffer[0], buffer[1], buffer[2], buffer[3]);
 
         std::string extension;
         int extoffset;
