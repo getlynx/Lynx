@@ -232,6 +232,9 @@ static RPCHelpMan store()
     // Initialize asset custom uuid
     std::string strAssetUUID = "";
 
+    // Returned uuid
+    std::string strAssetUUID0;
+
     // If first optional parameter
     if(!request.params[1].isNull()) {
 
@@ -316,6 +319,10 @@ LogPrint (BCLog::ALL, "\n");
                 strUUID4 = strUUID4 + strUUID1[i];
             }
             LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
+
+            strAssetUUID0 = strAssetUUID;
+
+            strAssetUUID = strUUID4;
                 
 
             
@@ -339,7 +346,7 @@ LogPrint (BCLog::ALL, "\n");
                     // Report and exit
                     entry.pushKV("result", "failure");
                     entry.pushKV("message", "A duplicate unique identifier was discovered.");
-                    entry.pushKV("identifier", strAssetUUID);
+                    entry.pushKV("identifier", strAssetUUID0);
                     entry.pushKV("tenant", authUser.ToString());
                     entry.pushKV("filesize", 0);
                     entry.pushKV("storagefee", 0);
@@ -436,9 +443,13 @@ LogPrint (BCLog::ALL, "\n");
             strUUID4 = strUUID4 + strUUID1[i];
         }
         LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
-        
-        
 
+        strAssetUUID0 = strAssetUUID;
+
+        strAssetUUID = strUUID4;
+            
+        
+        
 
 
     }
@@ -501,7 +512,7 @@ LogPrint (BCLog::ALL, "\n");
         // Report and exit
         entry.pushKV("result", "success");
         entry.pushKV("message", "n/a");
-        entry.pushKV("identifier", strAssetUUID);
+        entry.pushKV("identifier", strAssetUUID0);
         entry.pushKV("tenant", authUser.ToString());
         entry.pushKV("filesize", intAssetFilesize);
         entry.pushKV("storagefee", strTransactionFee);
@@ -787,6 +798,8 @@ static RPCHelpMan fetch()
                 strUUID4 = strUUID4 + strUUID1[i];
             }
             LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
+
+            strUUID = strUUID4;
                 
             
     
