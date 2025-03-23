@@ -210,7 +210,7 @@ bool blnfncCheckStakeKernelHash (
     return true; 
 }
 
-bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBlock, unsigned int icmpDifficulty, int64_t nTime, const COutPoint& prevout, int64_t* pBlockTime)
+bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBlock, unsigned int icmpDifficulty, int64_t nTime, const COutPoint& prevout, int64_t* ocmpUTXOBlockTime)
 {
     uint256 hashProofOfStake, targetProofOfStake;
 
@@ -236,12 +236,12 @@ bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBl
     if (nRequiredDepth > nDepth) {
         return false;
     }
-    if (pBlockTime) {
-        *pBlockTime = pindex->GetBlockTime();
+    if (ocmpUTXOBlockTime) {
+        *ocmpUTXOBlockTime = pindex->GetBlockTime();
     }
 
     CAmount amount = coin.out.nValue;
-    return CheckStakeKernelHash(ibliCurrentBlock, icmpDifficulty, *pBlockTime,
+    return CheckStakeKernelHash(ibliCurrentBlock, icmpDifficulty, *ocmpUTXOBlockTime,
         amount, prevout, nTime, hashProofOfStake, targetProofOfStake);
 }
 
