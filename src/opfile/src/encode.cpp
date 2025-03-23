@@ -338,6 +338,7 @@ if (protocol == 1) {
 
     total_chunks = chunk;
     free(buffer);
+    free(buffer2);
 
     if (debug) printf("\n");
 
