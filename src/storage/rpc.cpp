@@ -757,7 +757,7 @@ static RPCHelpMan fetch()
         intTenantFlag = stoi (strTenantFlag);
     }
 
-    // Always display tenant (scan_blocks_for_pubkey sets detects encryption and sets gintFetchAssetFullProtocol)
+    // Always display tenant (scan_blocks_for_pubkey detects encryption and sets gintFetchAssetFullProtocol)
     intTenantFlag = 1;
 
     // If bad path
