@@ -545,6 +545,7 @@ LogPrint (BCLog::ALL, "\n");
     };
 }
 
+/*
 static RPCHelpMan fetchall()
 {
     return RPCHelpMan{"fetchall",
@@ -696,6 +697,8 @@ static RPCHelpMan fetchall()
 },
     };
 }
+
+*/
 
 static RPCHelpMan fetch()
 {
@@ -1662,7 +1665,7 @@ void RegisterStorageRPCCommands(CRPCTable& t)
 {
     static const CRPCCommand commands[]{
         {"storage", &store},
-        {"storage", &fetchall},
+        // {"storage", &fetchall},
         {"storage", &fetch},
         {"storage", &list},
         {"storage", &status},
