@@ -520,8 +520,12 @@ if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
         aes_decrypt.Decrypt(&vctDecyptedAsset[i], &vctEncryptedAsset[i]);
     }
 
-    unsigned char chrPadValue = vctDecyptedAsset.back();
-    vctDecyptedAsset.resize(vctDecyptedAsset.size() - chrPadValue);
+    unsigned char chrPadValue = 0;
+
+    if (lastchunk == true) {
+        chrPadValue = vctDecyptedAsset.back();
+        vctDecyptedAsset.resize(vctDecyptedAsset.size() - chrPadValue);
+    }
 
     LogPrint (BCLog::ALL, "Decrypted asset \n");
     for (size_t i = 0; i < vctDecyptedAsset.size(); ++i) {

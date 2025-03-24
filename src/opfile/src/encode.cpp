@@ -243,9 +243,9 @@ if (protocol == 1) {
     vctDecyptedAsset.resize(vctDecyptedAsset.size() - chrPadValue);
 
     // Report decrypted asset
-    LogPrint (BCLog::ALL, "Decrypted asset \n");
+    LogPrint (BCLog::ALL, "Decrypted asset in decumal \n");
     for (size_t i = 0; i < vctDecyptedAsset.size(); ++i) {
-        LogPrint (BCLog::ALL, "%s",vctDecyptedAsset[i]);
+        LogPrint (BCLog::ALL, "%d ",vctDecyptedAsset[i]);
     }
     LogPrint (BCLog::ALL, "\n");
     LogPrint (BCLog::ALL, "Decrypted asset length %d \n", vctDecyptedAsset.size());
