@@ -240,9 +240,9 @@ bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBl
         *ocmpUTXOBlockTime = pindex->GetBlockTime();
     }
 
-    CAmount amount = coin.out.nValue;
+    CAmount mntStake = coin.out.nValue;
     return CheckStakeKernelHash(ibliCurrentBlock, icmpDifficulty, *ocmpUTXOBlockTime,
-        amount, prevout, nTime, hashProofOfStake, targetProofOfStake);
+        mntStake, prevout, nTime, hashProofOfStake, targetProofOfStake);
 }
 
 
