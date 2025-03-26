@@ -484,12 +484,16 @@ LogPrint (BCLog::ALL, "\n");
 LogPrint (BCLog::ALL, "Asset size %d \n", chunkdata.size()/2);
 LogPrint (BCLog::ALL, "\n");
 
+/*
+
 LogPrint (BCLog::ALL, "Asset in decimal \n");
 for (int i = 0; i < chunkdata.size()/2; i++) {
     LogPrint (BCLog::ALL, "%d ", buffer[i]);
 }
 LogPrint (BCLog::ALL, "\n");
 LogPrint (BCLog::ALL, "\n");
+
+*/
 
 if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
 
@@ -503,12 +507,16 @@ if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
 
     std::vector<unsigned char> vctDecyptedAsset(intEncryptedFilesize);
 
+/*
+
     LogPrint (BCLog::ALL, "Encrypted asset from blockchain in decimal \n");
     for (int i = 0; i < intEncryptedFilesize; i++) {
         LogPrint (BCLog::ALL, "%d ", buffer[i]);
     }
     LogPrint (BCLog::ALL, "\n");
     LogPrint (BCLog::ALL, "\n");
+
+*/
 
     for (int i = 0; i < intEncryptedFilesize; i++) {
         vctEncryptedAsset[i] = buffer[i];
@@ -527,6 +535,8 @@ if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
         vctDecyptedAsset.resize(vctDecyptedAsset.size() - chrPadValue);
     }
 
+/*
+
     LogPrint (BCLog::ALL, "Decrypted asset \n");
     for (size_t i = 0; i < vctDecyptedAsset.size(); ++i) {
         LogPrint (BCLog::ALL, "%s",vctDecyptedAsset[i]);
@@ -535,6 +545,8 @@ if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
     LogPrint (BCLog::ALL, "Decrypted asset length %d \n", vctDecyptedAsset.size());
     LogPrint (BCLog::ALL, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
     LogPrint (BCLog::ALL, "\n");
+
+*/
 
     intDecryptedFilesize = intEncryptedFilesize - chrPadValue;
 

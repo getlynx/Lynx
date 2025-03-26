@@ -74,12 +74,17 @@ LogPrint (BCLog::ALL, "\n");
     int intAssetLength = filelen;
 
     // Report asset in decimal
+
+/*
+
     LogPrint (BCLog::ALL, "Asset in decimal \n");
     for (int i = 0; i < intAssetLength; i++) {
         LogPrint (BCLog::ALL, "%d ", buffer[i]);
     }
     LogPrint (BCLog::ALL, "\n");
     LogPrint (BCLog::ALL, "\n");
+
+*/
 
     // Report asset length
     LogPrint (BCLog::ALL, "Asset length %d \n", intAssetLength);
@@ -100,6 +105,9 @@ if (gintStoreAssetEncryptFlag == 1) {
         strAssetPlaintext = strAssetPlaintext + buffer[i];
     }
 
+/*
+
+
     // Report asset plaintext
     LogPrint (BCLog::ALL, "Asset plaintext %s \n", strAssetPlaintext);
 
@@ -109,6 +117,8 @@ if (gintStoreAssetEncryptFlag == 1) {
     // Report asset plaintext size
     LogPrint (BCLog::ALL, "Asset plaintext size %d \n", strAssetPlaintext.size());
     LogPrint (BCLog::ALL, "\n");
+
+*/
 
     // Vectorize asset plaintext
     std::vector<unsigned char> vctAssetPlaintext(strAssetPlaintext.begin(), strAssetPlaintext.end());
@@ -147,6 +157,8 @@ if (gintStoreAssetEncryptFlag == 1) {
 
 
 
+/*
+
 // Report encrypted asset in decimal
 LogPrint (BCLog::ALL, "Encrypted asset in decimal \n");
 for (int i = 0; i < vctEncryptedAsset.size(); i++) {
@@ -154,6 +166,8 @@ for (int i = 0; i < vctEncryptedAsset.size(); i++) {
 }
 LogPrint (BCLog::ALL, "\n");
 LogPrint (BCLog::ALL, "\n");
+
+*/
 
 // Encrypted asset size
 filelenext = vctEncryptedAsset.size();
@@ -177,6 +191,8 @@ for (int i = 0; i < vctEncryptedAsset.size(); i++) {
     buffer2[i] = vctEncryptedAsset[i];
 }
 
+/*
+
 // Report snatched encrypted asset in decimal
 LogPrint (BCLog::ALL, "Snatched encrypted asset in decimal \n");
 for (int i = 0; i < vctEncryptedAsset.size(); i++) {
@@ -184,6 +200,8 @@ for (int i = 0; i < vctEncryptedAsset.size(); i++) {
 }
 LogPrint (BCLog::ALL, "\n");
 LogPrint (BCLog::ALL, "\n");
+
+*/
 
 
 
@@ -197,6 +215,8 @@ if (protocol == 1) {
     // sprintf(buffer2+vctEncryptedAsset.size(), "%s", extension.c_str());
 }
 
+/*
+
 // Report snatched encrypted asset
 LogPrint (BCLog::ALL, "Snatched encrypted asset \n");
 for (int i = 0; i < filelenext; i++) {
@@ -204,6 +224,8 @@ for (int i = 0; i < filelenext; i++) {
 }
 LogPrint (BCLog::ALL, "\n");
 LogPrint (BCLog::ALL, "\n");
+
+*/
 
 // Report snatched extension in decimal
 if (protocol == 1) {
@@ -219,6 +241,8 @@ if (protocol == 1) {
 
 
 
+/*
+
     // Report encrypted asset
     LogPrint (BCLog::ALL, "Encrypted asset \n");
     for (unsigned char c : vctEncryptedAsset) {
@@ -226,6 +250,8 @@ if (protocol == 1) {
     }
     LogPrint (BCLog::ALL, "\n");
     LogPrint (BCLog::ALL, "\n");
+
+*/
 
     // Decrypted asset
     std::vector<unsigned char> vctDecyptedAsset(vctEncryptedAsset.size());
@@ -242,6 +268,8 @@ if (protocol == 1) {
     unsigned char chrPadValue = vctDecyptedAsset.back();
     vctDecyptedAsset.resize(vctDecyptedAsset.size() - chrPadValue);
 
+/*
+
     // Report decrypted asset
     LogPrint (BCLog::ALL, "Decrypted asset in decumal \n");
     for (size_t i = 0; i < vctDecyptedAsset.size(); ++i) {
@@ -251,6 +279,8 @@ if (protocol == 1) {
     LogPrint (BCLog::ALL, "Decrypted asset length %d \n", vctDecyptedAsset.size());
     LogPrint (BCLog::ALL, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
     LogPrint (BCLog::ALL, "\n");
+
+*/
 
 }
 
@@ -273,6 +303,8 @@ if (gintStoreAssetEncryptFlag == 0) {
 
 
 
+/*
+
 // Report asset in decimal
 LogPrint (BCLog::ALL, "Asset in decimal \n");
 if (gintStoreAssetEncryptFlag == 0) {
@@ -286,6 +318,8 @@ if (gintStoreAssetEncryptFlag == 0) {
 }
 LogPrint (BCLog::ALL, "\n");
 LogPrint (BCLog::ALL, "\n");
+
+*/
 
 // Report extension in decimal
 if (protocol == 1) {
