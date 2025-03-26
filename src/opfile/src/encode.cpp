@@ -524,7 +524,12 @@ bool build_chunks_with_headers(std::pair<std::string, std::string>& putinfo, int
 
         LogPrint (BCLog::ALL, "\n");
         LogPrint (BCLog::ALL, "data\n");
+
+/*
+
         LogPrint (BCLog::ALL, "%s\n", data_chunk);
+
+*/
 
         encoded_chunk = header + header2 + data_chunk;
         encoded_chunks.push_back(encoded_chunk);
