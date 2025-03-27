@@ -100,10 +100,17 @@ LogPrint (BCLog::ALL, "\n");
 
 if (gintStoreAssetEncryptFlag == 1) {    
 
+    strAssetPlaintext.reserve(intAssetLength); 
+
     // Snatch asset
-    for (int i = 0; i < intAssetLength; i++) {
-        strAssetPlaintext = strAssetPlaintext + buffer[i];
-    }
+    // for (int i = 0; i < intAssetLength; i++) {
+        // strAssetPlaintext = strAssetPlaintext + buffer[i];
+    // }
+
+    std::copy(buffer, buffer + intAssetLength, std::back_inserter(strAssetPlaintext));
+
+    LogPrint (BCLog::ALL, "Asset length %d \n", intAssetLength);
+    LogPrint (BCLog::ALL, "\n");
 
 /*
 
@@ -122,6 +129,9 @@ if (gintStoreAssetEncryptFlag == 1) {
 
     // Vectorize asset plaintext
     std::vector<unsigned char> vctAssetPlaintext(strAssetPlaintext.begin(), strAssetPlaintext.end());
+
+    LogPrint (BCLog::ALL, "Asset length %d \n", intAssetLength);
+    LogPrint (BCLog::ALL, "\n");
 
 
 
@@ -190,6 +200,9 @@ filelenext += (protocol == 1 ? OPENCODING_EXTENSION : 0);
 for (int i = 0; i < vctEncryptedAsset.size(); i++) {
     buffer2[i] = vctEncryptedAsset[i];
 }
+
+LogPrint (BCLog::ALL, "Encrypted asset size %d \n", vctEncryptedAsset.size());
+LogPrint (BCLog::ALL, "\n");
 
 /*
 
@@ -264,6 +277,9 @@ if (protocol == 1) {
         aes_decrypt.Decrypt(&vctDecyptedAsset[i], &vctEncryptedAsset[i]);
     }
 
+    LogPrint (BCLog::ALL, "Encrypted asset size %d \n", vctEncryptedAsset.size());
+    LogPrint (BCLog::ALL, "\n");
+    
     // Remove padding 
     unsigned char chrPadValue = vctDecyptedAsset.back();
     vctDecyptedAsset.resize(vctDecyptedAsset.size() - chrPadValue);
