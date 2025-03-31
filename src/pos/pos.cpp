@@ -210,19 +210,19 @@ bool blnfncCheckStakeKernelHash (
     return true; 
 }
 
-bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBlock, unsigned int icmpDifficulty, int64_t nTime, const COutPoint& prevout, int64_t* ocmpUTXOBlockTime)
+bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBlock, unsigned int icmpDifficulty, int64_t nTime, const COutPoint& ioptOutpoint, int64_t* ocmpUTXOBlockTime)
 {
     uint256 hashProofOfStake, targetProofOfStake;
 
     Coin coin;
     {
         LOCK(::cs_main);
-        if (!chain_state.CoinsTip().GetCoin(prevout, coin)) {
-            return error("%s: prevout not found", __func__);
+        if (!chain_state.CoinsTip().GetCoin(ioptOutpoint, coin)) {
+            return error("%s: outpoint not found", __func__);
         }
     }
     if (coin.IsSpent()) {
-        return error("%s: prevout is spent", __func__);
+        return error("%s: outpoint is spent", __func__);
     }
 
     CBlockIndex* pindex = chain_state.m_chain[coin.nHeight];
@@ -242,7 +242,7 @@ bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBl
 
     CAmount mntStake = coin.out.nValue;
     return CheckStakeKernelHash(ibliCurrentBlock, icmpDifficulty, *ocmpUTXOBlockTime,
-        mntStake, prevout, nTime, hashProofOfStake, targetProofOfStake);
+        mntStake, ioptOutpoint, nTime, hashProofOfStake, targetProofOfStake);
 }
 
 
