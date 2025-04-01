@@ -73,8 +73,8 @@ bool blnfncCheckStakeKernelHash (
     // Stake     
     CAmount imntStake,        
 
-    // Outpoint     
-    const COutPoint& ioptOutpoint,          
+    // Stake outpoint     
+    const COutPoint& ioptStakeOutpoint,          
     
     // Candidate block time (compact)
     uint32_t icmpCandidateBlockTime,    
@@ -158,11 +158,11 @@ bool blnfncCheckStakeKernelHash (
     // UTXO block time
     dstHashDatastream << icmpUTXOBlockTime               
 
-    // Outpoint transaction    
-    << ioptOutpoint.hash                
+    // Stake outpoint transaction    
+    << ioptStakeOutpoint.hash                
 
-    // Outpoint index
-    << ioptOutpoint.n                    
+    // Stake outpoint index
+    << ioptStakeOutpoint.n                    
 
     // Candidate block time
     << icmpCandidateBlockTime;                      
@@ -177,9 +177,9 @@ bool blnfncCheckStakeKernelHash (
             FormatISO8601DateTime(i64StakeModifierTime));
 
         // Log stake modifier, utxo block time, outpoint index, candidate block time, proof of hash stake
-        LogPrintf("%s: check stake modifier=%s utxo block time=%u outpoint index=%u candidate block time =%u proof of stake hash=%s\n",
+        LogPrintf("%s: check stake modifier=%s utxo block time=%u stake outpoint index=%u candidate block time =%u proof of stake hash=%s\n",
             __func__, u25StakeModifier.ToString(),
-            icmpUTXOBlockTime, ioptOutpoint.n, icmpCandidateBlockTime,
+            icmpUTXOBlockTime, ioptStakeOutpoint.n, icmpCandidateBlockTime,
             o256ProofOfStakeHash.ToString());
     }
 
@@ -200,9 +200,9 @@ bool blnfncCheckStakeKernelHash (
             FormatISO8601DateTime(i64StakeModifierTime));
 
         // Log stake modifier, utxo block time, outpoint index, candidate block time, proof of hash stake
-        LogPrintf("%s: pass stake modifier=%s utxo block time=%u outpoint index=%u candidate block time =%u proof of stake hash=%s\n",
+        LogPrintf("%s: pass stake modifier=%s utxo block time=%u stake outpoint index=%u candidate block time =%u proof of stake hash=%s\n",
             __func__, u25StakeModifier.ToString(),
-            icmpUTXOBlockTime, ioptOutpoint.n, icmpCandidateBlockTime,
+            icmpUTXOBlockTime, ioptStakeOutpoint.n, icmpCandidateBlockTime,
             o256ProofOfStakeHash.ToString());
     }
 
@@ -210,19 +210,19 @@ bool blnfncCheckStakeKernelHash (
     return true; 
 }
 
-bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBlock, unsigned int icmpDifficulty, int64_t nTime, const COutPoint& ioptOutpoint, int64_t* ocmpUTXOBlockTime)
+bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBlock, unsigned int icmpDifficulty, int64_t nTime, const COutPoint& ioptStakeOutpoint, int64_t* ocmpUTXOBlockTime)
 {
     uint256 hashProofOfStake, targetProofOfStake;
 
     Coin coin;
     {
         LOCK(::cs_main);
-        if (!chain_state.CoinsTip().GetCoin(ioptOutpoint, coin)) {
-            return error("%s: outpoint not found", __func__);
+        if (!chain_state.CoinsTip().GetCoin(ioptStakeOutpoint, coin)) {
+            return error("%s: stake outpoint not found", __func__);
         }
     }
     if (coin.IsSpent()) {
-        return error("%s: outpoint is spent", __func__);
+        return error("%s: stake outpoint is spent", __func__);
     }
 
     CBlockIndex* pindex = chain_state.m_chain[coin.nHeight];
@@ -242,7 +242,7 @@ bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBl
 
     CAmount mntStake = coin.out.nValue;
     return CheckStakeKernelHash(ibliCurrentBlock, icmpDifficulty, *ocmpUTXOBlockTime,
-        mntStake, ioptOutpoint, nTime, hashProofOfStake, targetProofOfStake);
+        mntStake, ioptStakeOutpoint, nTime, hashProofOfStake, targetProofOfStake);
 }
 
 
