@@ -70,8 +70,8 @@ bool blnfncCheckStakeKernelHash (
     // UTXO block time (compact)
     uint32_t icmpUTXOBlockTime,     
 
-    // Stake     
-    CAmount imntStake,        
+    // Stake amount   
+    CAmount imntStakeAmount,        
 
     // Stake outpoint     
     const COutPoint& ioptStakeOutpoint,          
@@ -117,25 +117,25 @@ bool blnfncCheckStakeKernelHash (
         return error("%s: SetCompact failed.", __func__);
     }
 
-    // Set Stake
-    int64_t i64Stake = imntStake;
+    // Set stake amount
+    int64_t i64StakeAmount = imntStakeAmount;
 
     // If current block height exceeds threshold and stake exceeds threthold
     if (ibliCurrentBlock->nHeight + 1 >= cnsConsensusVariables.weightDampenerHeight &&
-        i64Stake >= cnsConsensusVariables.weightDampener) {
+        i64StakeAmount >= cnsConsensusVariables.weightDampener) {
 
         // Cap stake
-        i64Stake = cnsConsensusVariables.weightDampener;
+        i64StakeAmount = cnsConsensusVariables.weightDampener;
     }
 
-    // Set stake
-    arith_uint256 rthStake = arith_uint256(i64Stake);
+    // Set stake amount
+    arith_uint256 rthStakeAmount = arith_uint256(i64StakeAmount);
 
     // Weighted difficulty
     arith_uint256 rthWeightedDifficulty;
 
     // Weight difficulty
-    rthWeightedDifficulty = rthDifficulty * rthStake;
+    rthWeightedDifficulty = rthDifficulty * rthStakeAmount;
 
     // Set weighted difficulty
     o256WeightedDifficulty = ArithToUint256(rthWeightedDifficulty);
@@ -240,9 +240,9 @@ bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBl
         *ocmpUTXOBlockTime = pindex->GetBlockTime();
     }
 
-    CAmount mntStake = coin.out.nValue;
+    CAmount mntStakeAmount = coin.out.nValue;
     return CheckStakeKernelHash(ibliCurrentBlock, icmpDifficulty, *ocmpUTXOBlockTime,
-        mntStake, ioptStakeOutpoint, nTime, hashProofOfStake, targetProofOfStake);
+        mntStakeAmount, ioptStakeOutpoint, nTime, hashProofOfStake, targetProofOfStake);
 }
 
 
