@@ -1300,7 +1300,7 @@ static RPCHelpMan auth()
             // Exit
             return unvResults;
 
-        // Else not if authorized    
+        // Else not if unauthorized    
         } else {
 
             // Get walletsa
