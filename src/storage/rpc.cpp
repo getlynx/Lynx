@@ -70,6 +70,10 @@ int gintFetchAssetFullProtocol;
 
 int gintFetchDone;
 
+std::string gstrAssetExtension;
+
+std::string gstrAssetFilename;
+
 static RPCHelpMan store()
 {
     return RPCHelpMan{"store",
@@ -457,8 +461,23 @@ LogPrint (BCLog::ALL, "\n");
     // If asset filesize > 0
     if (read_file_size(strAssetFilename) > 0) {
 
+        std::string extension;
+        size_t dotposition = strAssetFilename.rfind('.');
+
+        if (dotposition != std::string::npos && dotposition != strAssetFilename.size() - 1) {
+            extension = strAssetFilename.substr(dotposition + 1);
+            if (extension.size() != 4) {
+                extension.resize(4);
+            }
+        }
+
+        gstrAssetExtension = extension;
+
+        gstrAssetFilename = strAssetFilename;
+
         // Add put task
-        add_put_task(strAssetFilename, strAssetUUID);
+        // add_put_task(strAssetFilename, strAssetUUID);
+        add_put_task("", strAssetUUID);
 
         // LogPrint (BCLog::ALL, "uuid %s\n", strAssetUUID);
 

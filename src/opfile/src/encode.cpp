@@ -19,13 +19,30 @@ extern int gintStoreAssetEncryptFlag;
 
 extern std::string authUserKey;
 
+extern std::string gstrAssetExtension;
+
+extern std::string gstrAssetFilename;
+
 bool file_to_hexchunks(std::string filepath, int& protocol, int& error_level, int& total_chunks, std::vector<std::string>& data_chunks, unsigned char* key) {
 
 LogPrint (BCLog::ALL, "encrypt from file_to_hexchunks %d \n", gintStoreAssetEncryptFlag);
 LogPrint (BCLog::ALL, "\n");
 
+/*
     std::string extension;
     if (extract_file_extension(filepath, extension)) {
+
+        // we detected an extension we can store
+        protocol = 1;
+    }
+*/
+
+
+
+    std::string extension;
+    extension = gstrAssetExtension;
+
+    if (extension.size() > 0) {
 
         // we detected an extension we can store
         protocol = 1;
@@ -443,7 +460,8 @@ bool build_chunks_with_headers(std::pair<std::string, std::string>& putinfo, int
     std::vector<std::string> data_chunks;
     std::string authheader, header, header2, encoded_chunk, filepath, customuuid;
 
-    filepath = putinfo.first;
+    // filepath = putinfo.first;
+    filepath = gstrAssetFilename;
     customuuid = putinfo.second;
 
     validcustom = customuuid.size() == OPENCODING_UUID*2;

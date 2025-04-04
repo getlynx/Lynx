@@ -2018,7 +2018,7 @@ configure:26615: $? = 0
 configure:26615: result: yes
 configure:26629: checking for timingsafe_bcmp
 configure:26629: g++ -m64 -std=c++17 -o conftest -pipe -std=c++17 -O2  -I/root/dkdkfjfjdkdk/Lynx/depends/x86_64-pc-linux-gnu/include/  -L/root/dkdkfjfjdkdk/Lynx/depends/x86_64-pc-linux-gnu/lib  conftest.cpp  >&5
-/usr/bin/ld: /tmp/cczYmauQ.o: in function `main':
+/usr/bin/ld: /tmp/ccC0Vj0s.o: in function `main':
 conftest.cpp:(.text.startup+0x5): undefined reference to `timingsafe_bcmp'
 collect2: error: ld returned 1 exit status
 configure:26629: $? = 1
@@ -4848,6 +4848,7 @@ config.status:1527: creating share/qt/Info.plist
 config.status:1527: creating test/config.ini
 config.status:1527: creating contrib/devtools/split-debug.sh
 config.status:1527: creating src/config/bitcoin-config.h
+config.status:1708: src/config/bitcoin-config.h is unchanged
 config.status:1787: executing depfiles commands
 config.status:1864: cd src       && sed -e '/# am--include-marker/d' Makefile         | make -f - am--depfiles
 config.status:1869: $? = 0
