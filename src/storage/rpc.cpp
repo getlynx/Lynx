@@ -1266,7 +1266,7 @@ static RPCHelpMan auth()
         // Report
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid key.");
-        unvEntry.pushKV("capacity", 0);
+        unvEntry.pushKV("capacity (KB)", 0);
         unvEntry.pushKV("sessionstart", "n/a");
         unvEntry.pushKV("sessionend", "n/a");
         unvEntry.pushKV("sessionstartblock", "n/a");
@@ -1297,7 +1297,7 @@ static RPCHelpMan auth()
             // Report
             unvEntry.pushKV("result", "failure");
             unvEntry.pushKV("message", "Unauthorized tenant.");
-            unvEntry.pushKV("capacity", 0);
+            unvEntry.pushKV("capacity (KB)", 0);
             unvEntry.pushKV("sessionstart", "n/a");
             unvEntry.pushKV("sessionend", "n/a");
             unvEntry.pushKV("sessionstartblock", "n/a");
@@ -1334,7 +1334,7 @@ static RPCHelpMan auth()
                 // Report and exit
                 unvEntry.pushKV("result", "failure");
                 unvEntry.pushKV("message", "No wallet.");
-                unvEntry.pushKV("capacity", 0);
+                unvEntry.pushKV("capacity (KB)", 0);
                 unvEntry.pushKV("sessionstart", "n/a");
                 unvEntry.pushKV("sessionend", "n/a");
                 unvEntry.pushKV("sessionstartblock", "n/a");
@@ -1411,7 +1411,7 @@ static RPCHelpMan auth()
             }
 
             // capacity
-            unvEntry.pushKV("capacity", u32Capacity);
+            unvEntry.pushKV("capacity (KB)", u32Capacity);
 
             // Get current time
             uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
