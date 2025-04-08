@@ -34,6 +34,8 @@
 
 #include <pos/manager.h>
 
+#include <util/system.h>
+
 using namespace wallet;
 using node::ReadBlockFromDisk;
 
@@ -1230,6 +1232,20 @@ static RPCHelpMan auth()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
 
+    /*
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "disablestaking %d \n", gArgs.GetBoolArg("-disablestaking", false));
+
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "rpcuser %s \n", gArgs.GetArg("-rpcuser", ""));
+
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "rpctenant %s \n", gArgs.GetArg("-rpctenant", ""));
+    */
+
     // Results
     UniValue unvResults(UniValue::VARR);
 
@@ -1259,6 +1275,7 @@ static RPCHelpMan auth()
 
     // Get private key
     std::string strPrivateKey = request.params[0].get_str();
+    // std::string strPrivateKey = gArgs.GetArg("-rpctenant", "");
 
     // If private key empty or invalid
     if (strPrivateKey.empty() || !set_auth_user(strPrivateKey)) {

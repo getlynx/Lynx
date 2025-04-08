@@ -634,6 +634,8 @@ void SetupServerArgs(ArgsManager& argsman)
     argsman.AddArg("-stakethreadconddelayms", "Number of milliseconds to delay staking for on error condition (default: 60000)", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-stakethreadignorepeers", "Ignore the current initialblockdownload state and peer checks when staking (default: false)", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
 
+    argsman.AddArg("-rpctenant=<tenant>", "Authentication key", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
+
 #if HAVE_DECL_FORK
     argsman.AddArg("-daemon", strprintf("Run in the background as a daemon and accept commands (default: %d)", DEFAULT_DAEMON), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-daemonwait", strprintf("Wait for initialization to be finished before exiting. This implies -daemon (default: %d)", DEFAULT_DAEMONWAIT), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
