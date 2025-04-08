@@ -93,7 +93,7 @@ static RPCHelpMan store()
                     {RPCResult::Type::OBJ, "", "",
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
-                          {RPCResult::Type::STR, "message", "Not authenticated as tenent | Not authenticated | Repeated UUID | Improper length UUID | Invalid hex notation UUID | Zero length asset filesize"},
+                          {RPCResult::Type::STR, "message", "Not authenticated as tenent | Not authenticated | Repeated UUID | Improper length UUID | Invalid hex notation UUID | Zero length asset filesize | Insufficiently funded wallet"},
                           {RPCResult::Type::STR, "identifier", "Universally unique asset identifier"},
                           {RPCResult::Type::STR, "tenant", "Hashed public tenant key"},
                           {RPCResult::Type::NUM, "filesize", "filesize (B)"},
@@ -114,6 +114,19 @@ static RPCHelpMan store()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
+
+
+
+    // Get wallets
+    auto vctWallets = GetWallets(*storage_context);
+
+    // Number of suitable inputs
+    int intNumberOfSuitableInputs;
+
+    // Get number of suitable inputs
+    estimate_coins_for_opreturn(vctWallets.front().get(), intNumberOfSuitableInputs);
+
+    LogPrint (BCLog::ALL, "suitable inputs %d \n", intNumberOfSuitableInputs);
 
 
 
@@ -161,7 +174,7 @@ static RPCHelpMan store()
         entry.pushKV("message", "Not authenticated as tenant.");
         entry.pushKV("identifier", "n/a");
         entry.pushKV("tenant", "n/a");
-        entry.pushKV("filesize", 0);
+        entry.pushKV("filesize (B)", 0);
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", intTipHeight);
@@ -181,7 +194,7 @@ static RPCHelpMan store()
         entry.pushKV("message", "Please authenticate to use this command.");
         entry.pushKV("identifier", "n/a");
         entry.pushKV("tenant", "n/a");
-        entry.pushKV("filesize", 0);
+        entry.pushKV("filesize (B)", 0);
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", intTipHeight);
@@ -208,7 +221,7 @@ static RPCHelpMan store()
             entry.pushKV("message", "Please authenticate to use this command.");
             entry.pushKV("identifier", "n/a");
             entry.pushKV("tenant", "n/a");
-            entry.pushKV("filesize", 0);
+            entry.pushKV("filesize (B)", 0);
             entry.pushKV("storagefee", 0);
             entry.pushKV("storagetime", "n/a");
             entry.pushKV("currentblock", intTipHeight);
@@ -234,6 +247,28 @@ static RPCHelpMan store()
 
     // Get asset filename
     std::string strAssetFilename = request.params[0].get_str();
+
+    int filelen = read_file_size (strAssetFilename);
+
+    LogPrint (BCLog::ALL, "transactions %d \n", filelen/512/256+1);
+
+    if (intNumberOfSuitableInputs < ((filelen/512/256)+1)) {
+
+        // Report and exit
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Insufficiently funded wallet.");
+        entry.pushKV("identifier", "n/a");
+        entry.pushKV("tenant", "n/a");
+        entry.pushKV("filesize (B)", filelen);
+        entry.pushKV("storagefee", 0);
+        entry.pushKV("storagetime", "n/a");
+        entry.pushKV("currentblock", intTipHeight);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", "n/a");
+        results.push_back(entry);
+        return results;
+
+    }
 
     // Initialize asset custom uuid
     std::string strAssetUUID = "";
@@ -296,7 +331,7 @@ LogPrint (BCLog::ALL, "\n");
 
 
 
-// If custom uuid
+    // If custom uuid
     if (strAssetUUID != "") {
 
         // uuid invalidity type
@@ -354,7 +389,7 @@ LogPrint (BCLog::ALL, "\n");
                     entry.pushKV("message", "A duplicate unique identifier was discovered.");
                     entry.pushKV("identifier", strAssetUUID0);
                     entry.pushKV("tenant", authUser.ToString());
-                    entry.pushKV("filesize", 0);
+                    entry.pushKV("filesize (B)", 0);
                     entry.pushKV("storagefee", 0);
                     entry.pushKV("storagetime", "n/a");
                     entry.pushKV("currentblock", intTipHeight);
@@ -378,7 +413,7 @@ LogPrint (BCLog::ALL, "\n");
                 entry.pushKV("message", "The custom unique identifier provided has an invalid length.");
                 entry.pushKV("identifier", strAssetUUID);
                 entry.pushKV("tenant", authUser.ToString());
-                entry.pushKV("filesize", 0);
+                entry.pushKV("filesize (B)", 0);
                 entry.pushKV("storagefee", 0);
                 entry.pushKV("storagetime", "n/a");
                 entry.pushKV("currentblock", intTipHeight);
@@ -398,7 +433,7 @@ LogPrint (BCLog::ALL, "\n");
                 entry.pushKV("message", "Invalid UUID hex notation.");
                 entry.pushKV("identifier", strAssetUUID);
                 entry.pushKV("tenant", authUser.ToString());
-                entry.pushKV("filesize", 0);
+                entry.pushKV("filesize (B)", 0);
                 entry.pushKV("storagefee", 0);
                 entry.pushKV("storagetime", "n/a");
                 entry.pushKV("currentblock", intTipHeight);
@@ -535,7 +570,7 @@ LogPrint (BCLog::ALL, "\n");
         entry.pushKV("message", "n/a");
         entry.pushKV("identifier", strAssetUUID0);
         entry.pushKV("tenant", authUser.ToString());
-        entry.pushKV("filesize", intAssetFilesize);
+        entry.pushKV("filesize (B)", intAssetFilesize);
         entry.pushKV("storagefee", strTransactionFee);
         entry.pushKV("storagetime", strFormattedCurrentTimestamp);
         entry.pushKV("currentblock", intTipHeight);
@@ -552,7 +587,7 @@ LogPrint (BCLog::ALL, "\n");
         entry.pushKV("message", "Zero length asset filesize.");
         entry.pushKV("identifier", "n/a");
         entry.pushKV("tenant", authUser.ToString());
-        entry.pushKV("filesize", 0);
+        entry.pushKV("filesize (B)", 0);
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", intTipHeight);
@@ -1339,7 +1374,7 @@ static RPCHelpMan auth()
         // Else not if unauthorized    
         } else {
 
-            // Get walletsa
+            // Get wallets
             auto vctWallets = GetWallets(*storage_context);
 
             // Get number of wallets
