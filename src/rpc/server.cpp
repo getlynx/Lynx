@@ -157,7 +157,7 @@ std::string CRPCTable::help(const std::string& strCommand, const JSONRPCRequest&
 
             } else { 
                 if (Capitalize(category) == "Storage") {
-                    if (((strHelp.substr(0,5) == "fetch") || (strHelp.substr(0,6) == "status") || (strHelp.substr(0,4) == "auth")) && (strHelp.substr(0,6) != "fetcha")) {
+                    if (((strHelp.substr(0,5) == "fetch") || (strHelp.substr(0,6) == "blocku") || (strHelp.substr(0,6) == "status") || (strHelp.substr(0,4) == "auth")) && (strHelp.substr(0,6) != "fetcha")) {
                         strRet += strHelp + "\n";
                     }
                 }

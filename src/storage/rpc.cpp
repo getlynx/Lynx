@@ -1738,6 +1738,7 @@ void RegisterStorageRPCCommands(CRPCTable& t)
         {"storage", &store},
         // {"storage", &fetchall},
         {"storage", &fetch},
+        // {"storage", &blockuuid},
         {"storage", &list},
         {"storage", &status},
         {"storage", &tenants},
