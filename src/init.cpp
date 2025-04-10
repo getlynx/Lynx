@@ -95,6 +95,8 @@
 #include <walletinitinterface.h>
 #include <wallet/wallet.h>
 
+#include <logging.h>
+
 #include <algorithm>
 #include <condition_variable>
 #include <cstdint>
@@ -143,6 +145,8 @@ std::thread chunkman;
 std::thread stakeman;
 
 extern int gintAuthenticationFailures;
+
+extern std::vector<std::string> blockuuidList;
 
 static constexpr bool DEFAULT_PROXYRANDOMIZE{true};
 static constexpr bool DEFAULT_REST_ENABLE{false};
@@ -1622,6 +1626,9 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     // On startup setup auth user parameters
     build_auth_list(chainparams.GetConsensus());
 
+    // On startup setup blockuuid parameters
+    build_blockuuid_list(chainparams.GetConsensus());
+
     // On first startup, warn on low block storage space
     if (!fReindex && !fReindexChainState && chain_active_height <= 1) {
         uint64_t assumed_chain_bytes{chainparams.AssumedBlockchainSize() * 1024 * 1024 * 1024};
@@ -1860,6 +1867,14 @@ LogPrint (BCLog::ALL, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSAGE_L
     if (!scan_blocks_for_authdata(chainman)) {
         return InitError(strprintf(_("Error while parsing authdata chunks")));
     }
+
+    if (!scan_blocks_for_blockuuiddata(chainman)) {
+        return InitError(strprintf(_("Error while parsing blockuuiddata chunks")));
+    }
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "blockuuidList size %d \n", blockuuidList.size());
+    LogPrint (BCLog::ALL, "\n");
 
     // ********************************************************* Step 12.5: start staking
 #ifdef ENABLE_WALLET
