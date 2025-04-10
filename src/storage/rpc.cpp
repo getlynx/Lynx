@@ -774,7 +774,7 @@ static RPCHelpMan fetch()
                     {RPCResult::Type::OBJ, "", "",
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
-                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID | UUID not found"},
+                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID | UUID not found | Blocked UUID"},
                           {RPCResult::Type::STR, "tenant", "Authenticated store tenant public key"},
                           {RPCResult::Type::STR, "encrypted", "yes | no"},
                     }},
@@ -859,6 +859,25 @@ static RPCHelpMan fetch()
             LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
 
             strUUID = strUUID4;
+
+
+
+
+
+            LogPrint (BCLog::ALL, "strUUID %s \n", strUUID);
+            LogPrint (BCLog::ALL, "\n");
+
+            if (is_blockuuid_member(strUUID)) {
+
+                // Report and exit
+                unvEntry.pushKV("result", "failure");
+                unvEntry.pushKV("message", "Blocked UUID: " + strUUID + ".");
+                unvEntry.pushKV("tenant", "n/a");
+                unvEntry.pushKV("encrypted", "n/a");
+                unvResults.push_back(unvEntry);
+                return unvResults;
+
+            }
                 
             
     
@@ -1831,67 +1850,134 @@ static RPCHelpMan blockuuid()
 
 
 
-    /*
+},
+    };
+}
 
-    UniValue ret(UniValue::VARR);
+static RPCHelpMan unblockuuid()
+{
+    return RPCHelpMan{"unblockuuid",
+                "\nUnblock UUID from fetch.\n",
+                {
+                    {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "UUID to be unblocked."},
+                },
 
-    std::string hash160 = request.params[0].get_str();
-    if (hash160.size() != OPAUTH_HASHLEN*2) {
-        ret.push_back("hash160-wrong-size");
-        return ret;
-        // return std::string("hash160-wrong-size");
+
+
+                RPCResult{
+                    RPCResult::Type::ARR, "", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "result", "success | failure"},
+                            {RPCResult::Type::STR, "message", "Invalid length | Invalid hex notation | Not authenticated as manager | error-generating-blockuuidpayload | error-generating-blockuuidtransaction"},
+                            {RPCResult::Type::STR, "uuid", "UUID to be unblocked"},
+                        }},
+                    }
+                },
+    
+    
+
+                    RPCExamples{
+                    HelpExampleCli("unblockuuid", "80a24ff2fac560fb14543e322b5745b86d814fbc6acb238f97f2897564342756")
+            + HelpExampleRpc("unblockuuid", "80a24ff2fac560fb14543e322b5745b86d814fbc6acb238f97f2897564342756")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    // if (check_mempool_for_authdata(mempool)) {
+        // return std::string("authtx-in-mempool");
+    // }
+
+    // Entry
+    UniValue entry(UniValue::VOBJ);
+
+    // Results
+    UniValue results(UniValue::VARR);
+
+    // Snag uuid
+    std::string strUUID = request.params[0].get_str();
+
+    // uuid invalidity type
+    int intUUIDInvalidityType;
+
+    // If not authenticated as manager
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Not authenticated as manager");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
     }
-    uint160 hash = uint160S(hash160);
 
-    // are we authenticated
-    if (is_auth_member(authUser)) {
+    // If uuid invalid (length, hex notation)
+    if (!is_valid_uuid(strUUID, intUUIDInvalidityType)) {
 
-        if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
-            ret.push_back("Role-based restriction: Current role cannot perform this action");
-            return ret;
-            // return std::string("Role-based restriction: Current role cannot perform this action");
+        // If invalid length
+        if (intUUIDInvalidityType == 1) {
+
+            entry.pushKV("result", "failure");
+            entry.pushKV("message", "Invalid length");
+            entry.pushKV("uuid", strUUID);
+            results.push_back(entry);
+            return results;
         }
 
-        int type;
-        uint32_t time;
-        CMutableTransaction tx;
-        std::string opreturn_payload;
+        // If invalid hex notation
+        if (intUUIDInvalidityType == 2) {
 
-        type = 0;
-        time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
-
-        // LogPrint (BCLog::ALL, "\n");
-        // LogPrint (BCLog::ALL, "time in seconds since the first second of 1970 (3600*24*365*54 ..): %d\n", time);
-
-        if (!generate_auth_payload(opreturn_payload, type, time, hash160)) {
-            ret.push_back("error-generating-authpayload");
-            return ret;
-            // return std::string("error-generating-authpayload");
+            entry.pushKV("result", "failure");
+            entry.pushKV("message", "Invalid hex notation");
+            entry.pushKV("uuid", strUUID);
+            results.push_back(entry);
+            return results;
         }
 
-        if (!generate_auth_transaction(*storage_context, tx, opreturn_payload)) {
-            ret.push_back("error-generating-authtransaction");
-            return ret;
-            // return std::string("error-generating-authtransaction");
-        }
+    }
+    
+    int intBlockUUIDType;
+    uint32_t u32Time;
+    CMutableTransaction mtxTransaction;
+    std::string strOPRETURNPayload;
 
-        // add_auth_member(hash);
+    intBlockUUIDType = 1;
+    u32Time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
 
-        ret.push_back("success");
-        ret.push_back(hash160);
-        return ret;
-        // return std::string("success");
+    if (!generate_blockuuid_payload(strOPRETURNPayload, intBlockUUIDType, u32Time, strUUID)) {
 
-    } else {
-        ret.push_back("authentication failure");
-        return ret;
-        // return std::string("authentication failure");
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blockuuidpayload");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
     }
 
-    ret.push_back("failure");
-    return ret;
-    // return std::string("failure");
-*/
+    if (!generate_blockuuid_transaction(*storage_context, mtxTransaction, strOPRETURNPayload)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blockuuidtransaction");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
+    }
+
+
+
+
+
+    entry.pushKV("result", "success");
+    entry.pushKV("message", "n/a");
+    entry.pushKV("uuid", strUUID);
+    results.push_back(entry);
+    return results;
+
+
+
+
 
 },
     };
@@ -1964,6 +2050,7 @@ void RegisterStorageRPCCommands(CRPCTable& t)
         // {"storage", &fetchall},
         {"storage", &fetch},
         {"storage", &blockuuid},
+        {"storage", &unblockuuid},
         {"storage", &listblockeduuids},
         {"storage", &list},
         {"storage", &status},

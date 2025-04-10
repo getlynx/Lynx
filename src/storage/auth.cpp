@@ -64,12 +64,40 @@ void remove_auth_member(uint160 pubkeyhash)
     authList = tempList;
 }
 
+void remove_blockuuid_member(std::string uuid)
+{
+    LOCK(blockuuidListLock);
+    std::vector<std::string> tempList;
+    for (auto& l : blockuuidList) {
+        if (l != uuid) {
+            tempList.push_back(l);
+        }
+    }
+    blockuuidList = tempList;
+}
+
 // Check for file storage authorization
 bool is_auth_member(uint160 pubkeyhash)
 {
     LOCK(authListLock);
     for (auto& l : authList) {
         if (l == pubkeyhash) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Check for blocked uuid
+bool is_blockuuid_member(std::string uuid)
+{
+    LOCK(blockuuidListLock);
+    for (auto& l : blockuuidList) {
+
+        LogPrint (BCLog::ALL, "l uuid %s %s \n", l, uuid);
+        LogPrint (BCLog::ALL, "\n");
+
+    if (l == uuid) {
             return true;
         }
     }
@@ -517,7 +545,7 @@ bool process_blockuuid_chunk (std::string& chunk, int& , int pintOffset)
     if (operation == OPBLOCKUUID_BLOCKUUID) {
         add_blockuuid_member(uuid);
     } else if (operation == OPBLOCKUUID_UNBLOCKUUID) {
-        // remove_auth_member(uint160S(uuid));
+        remove_blockuuid_member(uuid);
     } else {
         return false;
     }
@@ -1080,7 +1108,7 @@ gu32BlockHeight = height;
     start = clock ();    
 #endif
 
-                        // Validate authdata, and popoulate authList
+                        // Validate blockuuiddate, and popoulate blockuuidList
                         if (!found_opreturn_in_blockuuiddata (scrOpreturnData, error_level)) {
                             LogPrint (BCLog::ALL, "\n");
                             LogPrint (BCLog::ALL, "An invalid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);

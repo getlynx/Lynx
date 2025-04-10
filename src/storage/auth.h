@@ -18,9 +18,11 @@
 void add_auth_member(uint160 pubkeyhash);
 void add_blockuuid_member(std::string uuid);
 void remove_auth_member(uint160 pubkeyhash);
+void remove_blockuuid_member(std::string uuid);
 void build_auth_list(const Consensus::Params& params);
 void build_blockuuid_list(const Consensus::Params& params);
 bool is_auth_member(uint160 pubkeyhash);
+bool is_blockuuid_member(std::string uuid);
 bool set_auth_user(std::string& privatewif);
 void copy_auth_list(std::vector<uint160>& tempList);
 void copy_blockuuid_list(std::vector<std::string>& tempList);
