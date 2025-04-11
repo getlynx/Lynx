@@ -1995,14 +1995,81 @@ static RPCHelpMan blocktenant()
 
 
 
-    /*
+},
+    };
+}
+
+static RPCHelpMan unblocktenant()
+{
+    return RPCHelpMan{"unblocktenant",
+                "\nUnblock tenant from fetch.\n",
+                {
+                    {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "Tenant pubkey to be unblocked."},
+                },
+
+
+
+                RPCResult{
+                    RPCResult::Type::ARR, "", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "result", "success | failure"},
+                            {RPCResult::Type::STR, "message", "Not authenticated as manager | Incorrect length | error-generating-blocktenantpayload | error-generating-blocktenanttransaction"},
+                            {RPCResult::Type::STR, "uuid", "Tenant pubkey to be unblocked"},
+                        }},
+                    }
+                },
+    
+    
+
+                    RPCExamples{
+                    HelpExampleCli("unblocktenant", "00112233445566778899aabbccddeeff00112233")
+            + HelpExampleRpc("unblocktenant", "00112233445566778899aabbccddeeff00112233")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    // if (check_mempool_for_authdata(mempool)) {
+        // return std::string("authtx-in-mempool");
+    // }
+
+    // Entry
+    UniValue entry(UniValue::VOBJ);
+
+    // Results
+    UniValue results(UniValue::VARR);
+
+    // Snag tenant
+    std::string strTenant = request.params[0].get_str();
+
+    if (strTenant.size() != OPBLOCKTENANT_TENANTLEN*2) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Incorrect length.");
+        entry.pushKV("tenant", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    // If not authenticated as manager
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Not authenticated as manager");
+        entry.pushKV("tenant", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
 
     int intBlockTenantType;
     uint32_t u32Time;
     CMutableTransaction mtxTransaction;
     std::string strOPRETURNPayload;
 
-    intBlockTenantType = 0;
+    intBlockTenantType = 1;
     u32Time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
 
     if (!generate_blocktenant_payload(strOPRETURNPayload, intBlockTenantType, u32Time, strTenant)) {
@@ -2015,7 +2082,7 @@ static RPCHelpMan blocktenant()
 
     }
 
-    if (!generate_blocktennant_transaction(*storage_context, mtxTransaction, strOPRETURNPayload)) {
+    if (!generate_blocktenant_transaction(*storage_context, mtxTransaction, strOPRETURNPayload)) {
 
         entry.pushKV("result", "failure");
         entry.pushKV("message", "error-generating-blocktenanttransaction");
@@ -2034,8 +2101,6 @@ static RPCHelpMan blocktenant()
     entry.pushKV("tenant", strTenant);
     results.push_back(entry);
     return results;
-
-    */
 
 
 
@@ -2245,6 +2310,7 @@ void RegisterStorageRPCCommands(CRPCTable& t)
         {"storage", &listblockeduuids},
         {"storage", &listblockedtenants},
         {"storage", &blocktenant},
+        {"storage", &unblocktenant},
         {"storage", &list},
         {"storage", &status},
         {"storage", &tenants},

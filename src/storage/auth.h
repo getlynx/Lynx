@@ -20,6 +20,7 @@ void add_blockuuid_member(std::string uuid);
 void add_blocktenant_member(std::string uuid);
 void remove_auth_member(uint160 pubkeyhash);
 void remove_blockuuid_member(std::string uuid);
+void remove_blocktenant_member(std::string uuid);
 void build_auth_list(const Consensus::Params& params);
 void build_blockuuid_list(const Consensus::Params& params);
 void build_blocktenant_list(const Consensus::Params& params);

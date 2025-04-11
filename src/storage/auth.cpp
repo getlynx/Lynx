@@ -91,6 +91,18 @@ void remove_blockuuid_member(std::string uuid)
     blockuuidList = tempList;
 }
 
+void remove_blocktenant_member(std::string tenant)
+{
+    LOCK(blocktenantListLock);
+    std::vector<std::string> tempList;
+    for (auto& l : blocktenantList) {
+        if (l != tenant) {
+            tempList.push_back(l);
+        }
+    }
+    blocktenantList = tempList;
+}
+
 // Check for file storage authorization
 bool is_auth_member(uint160 pubkeyhash)
 {
@@ -691,7 +703,7 @@ bool process_blocktenant_chunk (std::string& chunk, int& , int pintOffset)
     if (operation == OPBLOCKTENANT_BLOCKTENANT) {
         add_blocktenant_member(tenant);
     } else if (operation == OPBLOCKTENANT_UNBLOCKTENANT) {
-        // remove_blocktenant_member(tenant);
+        remove_blocktenant_member(tenant);
     } else {
         return false;
     }
