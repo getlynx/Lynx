@@ -148,6 +148,8 @@ extern int gintAuthenticationFailures;
 
 extern std::vector<std::string> blockuuidList;
 
+extern std::vector<std::string> blocktenantList;
+
 static constexpr bool DEFAULT_PROXYRANDOMIZE{true};
 static constexpr bool DEFAULT_REST_ENABLE{false};
 static constexpr bool DEFAULT_I2P_ACCEPT_INCOMING{true};
@@ -1629,6 +1631,9 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     // On startup setup blockuuid parameters
     build_blockuuid_list(chainparams.GetConsensus());
 
+    // On startup setup blocktenant parameters
+    build_blocktenant_list(chainparams.GetConsensus());
+
     // On first startup, warn on low block storage space
     if (!fReindex && !fReindexChainState && chain_active_height <= 1) {
         uint64_t assumed_chain_bytes{chainparams.AssumedBlockchainSize() * 1024 * 1024 * 1024};
@@ -1874,6 +1879,14 @@ LogPrint (BCLog::ALL, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSAGE_L
 
     LogPrint (BCLog::ALL, "\n");
     LogPrint (BCLog::ALL, "blockuuidList size %d \n", blockuuidList.size());
+    LogPrint (BCLog::ALL, "\n");
+
+    if (!scan_blocks_for_blocktenantdata(chainman)) {
+        return InitError(strprintf(_("Error while parsing blocktenantdata chunks")));
+    }
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "blocktenantList size %d \n", blocktenantList.size());
     LogPrint (BCLog::ALL, "\n");
 
     // ********************************************************* Step 12.5: start staking

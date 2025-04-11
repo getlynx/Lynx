@@ -1287,6 +1287,40 @@ static RPCHelpMan listblockeduuids()
     };
 }
 
+static RPCHelpMan listblockedtenants()
+{
+    return RPCHelpMan{"listblockedtenants",
+                "\nDisplay the current list of blocked tenants.\n",
+                {},
+                {
+                    RPCResult{
+                        RPCResult::Type::ARR, "", "",
+                        {{RPCResult::Type::STR, "", "A blocked tenant."}}},
+                },
+                RPCExamples{
+                    HelpExampleCli("listblockedtenants", "")
+            + HelpExampleRpc("listblockedtenants", "")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+        return std::string("Role-based restriction: Current role cannot perform this action");
+    }
+
+    UniValue ret(UniValue::VARR);
+
+    std::vector<std::string> tempList;
+    copy_blocktenant_list(tempList);
+    for (auto& l : tempList) {
+        ret.push_back(l);
+    }
+
+    return ret;
+},
+    };
+}
+
 static RPCHelpMan auth()
 {
     return RPCHelpMan{"auth",
@@ -1919,33 +1953,73 @@ static RPCHelpMan blocktenant()
 
     }
 
-    return "test";
-
-    /*
-
-    int intBlockUUIDType;
+    int intBlockTenantType;
     uint32_t u32Time;
     CMutableTransaction mtxTransaction;
     std::string strOPRETURNPayload;
 
-    intBlockUUIDType = 0;
+    intBlockTenantType = 0;
     u32Time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
 
-    if (!generate_blockuuid_payload(strOPRETURNPayload, intBlockUUIDType, u32Time, strUUID)) {
+    if (!generate_blocktenant_payload(strOPRETURNPayload, intBlockTenantType, u32Time, strTenant)) {
 
         entry.pushKV("result", "failure");
-        entry.pushKV("message", "error-generating-blockuuidpayload");
-        entry.pushKV("uuid", strUUID);
+        entry.pushKV("message", "error-generating-blocktenantpayload");
+        entry.pushKV("uuid", strTenant);
         results.push_back(entry);
         return results;
 
     }
 
-    if (!generate_blockuuid_transaction(*storage_context, mtxTransaction, strOPRETURNPayload)) {
+    if (!generate_blocktenant_transaction(*storage_context, mtxTransaction, strOPRETURNPayload)) {
 
         entry.pushKV("result", "failure");
-        entry.pushKV("message", "error-generating-blockuuidtransaction");
-        entry.pushKV("uuid", strUUID);
+        entry.pushKV("message", "error-generating-blocktenanttransaction");
+        entry.pushKV("uuid", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
+
+
+
+
+
+    entry.pushKV("result", "success");
+    entry.pushKV("message", "n/a");
+    entry.pushKV("tenant", strTenant);
+    results.push_back(entry);
+    return results;
+
+
+
+
+
+    /*
+
+    int intBlockTenantType;
+    uint32_t u32Time;
+    CMutableTransaction mtxTransaction;
+    std::string strOPRETURNPayload;
+
+    intBlockTenantType = 0;
+    u32Time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+
+    if (!generate_blocktenant_payload(strOPRETURNPayload, intBlockTenantType, u32Time, strTenant)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blocktenantpayload");
+        entry.pushKV("uuid", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    if (!generate_blocktennant_transaction(*storage_context, mtxTransaction, strOPRETURNPayload)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blocktenanttransaction");
+        entry.pushKV("uuid", strTenant);
         results.push_back(entry);
         return results;
 
@@ -2169,6 +2243,7 @@ void RegisterStorageRPCCommands(CRPCTable& t)
         {"storage", &blockuuid},
         {"storage", &unblockuuid},
         {"storage", &listblockeduuids},
+        {"storage", &listblockedtenants},
         {"storage", &blocktenant},
         {"storage", &list},
         {"storage", &status},
