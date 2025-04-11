@@ -1870,7 +1870,7 @@ static RPCHelpMan blocktenant()
                         {RPCResult::Type::OBJ, "", "",
                         {
                             {RPCResult::Type::STR, "result", "success | failure"},
-                            {RPCResult::Type::STR, "message", "Not authenticated as manager | error-generating-blocktenantpayload | error-generating-blocktenanttransaction"},
+                            {RPCResult::Type::STR, "message", "Not authenticated as manager | Incorrect length | error-generating-blocktenantpayload | error-generating-blocktenanttransaction"},
                             {RPCResult::Type::STR, "uuid", "Tenant pubkey to be blocked"},
                         }},
                     }
@@ -1897,6 +1897,16 @@ static RPCHelpMan blocktenant()
 
     // Snag tenant
     std::string strTenant = request.params[0].get_str();
+
+    if (strTenant.size() != OPBLOCKTENANT_TENANTLEN*2) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Incorrect length.");
+        entry.pushKV("tenant", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
 
     // If not authenticated as manager
     if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {

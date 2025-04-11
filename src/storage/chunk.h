@@ -65,7 +65,7 @@ const std::string OPBLOCKUUID_BLOCKUUID = "00";
 const std::string OPBLOCKUUID_UNBLOCKUUID = "01";
 
 // blockuuid data
-const std::string OPBLOCKUUID_MAGIC = "786e796c";
+const std::string OPBLOCKUUID_MAGIC = "6b6e796c";
 
 //void get_magic_from_blockuuid(std::string chunk, std::string& magic);
 void get_magic_from_blockuuid (std::string chunk, std::string& magic, int pintOffset);
@@ -81,6 +81,43 @@ void get_uuid_from_blockuuid (std::string chunk, std::string& uuid, int pintOffs
 
 // void get_signature_from_blockuuid(std::string chunk, std::string& sig);
 void get_signature_from_blockuuid (std::string chunk, std::string& sig, int pintOffset);
+
+
+
+
+
+// offset 0-3     |   magic bytes 'lynk' (4b)
+// offset 4       |   operation byte (1b)
+// offset 5-8     |   unixtime of command (4b)
+// offset 9-20    |   pubkey
+// offset 21-     |   signed dblsha of above
+
+const int OPBLOCKTENANT_MAGICLEN = 4;
+const int OPBLOCKTENANT_OPERATIONLEN = 1;
+const int OPBLOCKTENANT_TIMELEN = 4;
+const int OPBLOCKTENANT_TENANTLEN = 20;
+const int OPBLOCKTENANT_SIGHASHLEN = 32;
+
+const std::string OPBLOCKTENANT_BLOCKTENANT = "00";
+const std::string OPBLOCKTENANT_UNBLOCKTENANT = "01";
+
+// blockuuid data
+const std::string OPBLOCKTENANT_MAGIC = "786e796c";
+
+//void get_magic_from_blockuuid(std::string chunk, std::string& magic);
+void get_magic_from_blocktenant (std::string chunk, std::string& magic, int pintOffset);
+
+// void get_operation_from_blockuuid(std::string chunk, std::string& operation);
+void get_operation_from_blocktenant (std::string chunk, std::string& operation, int pintOffset);
+
+// void get_time_from_blockuuid(std::string chunk, std::string& time);
+void get_time_from_blocktenant (std::string chunk, std::string& time, int pintOffset);
+
+// void get_uuid_from_blockuuid(std::string chunk, std::string& uuid);
+void get_tenant_from_blocktenant (std::string chunk, std::string& tenant, int pintOffset);
+
+// void get_signature_from_blockuuid(std::string chunk, std::string& sig);
+void get_signature_from_blocktenant (std::string chunk, std::string& sig, int pintOffset);
 
 
 
