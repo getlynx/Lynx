@@ -1342,7 +1342,7 @@ static RPCHelpMan auth()
     return RPCHelpMan{"auth",
                 "\nAuthenticate a data storage tenant for a 72 block (~6 hour) session.\n",
                 {
-                    {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO, "WIF-Format Privatekey."},
+                    // {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO, "WIF-Format Privatekey."},
                 },
                 {
                     RPCResult{
@@ -1412,8 +1412,8 @@ static RPCHelpMan auth()
     }
 
     // Get private key
-    std::string strPrivateKey = request.params[0].get_str();
-    // std::string strPrivateKey = gArgs.GetArg("-rpctenant", "");
+    // std::string strPrivateKey = request.params[0].get_str();
+    std::string strPrivateKey = gArgs.GetArg("-rpctenant", "");
 
     // If private key empty or invalid
     if (strPrivateKey.empty() || !set_auth_user(strPrivateKey)) {
