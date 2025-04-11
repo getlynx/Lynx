@@ -1889,58 +1889,30 @@ static RPCHelpMan blocktenant()
         // return std::string("authtx-in-mempool");
     // }
 
-    return "test";
-
-    /*
-
     // Entry
     UniValue entry(UniValue::VOBJ);
 
     // Results
     UniValue results(UniValue::VARR);
 
-    // Snag uuid
-    std::string strUUID = request.params[0].get_str();
-
-    // uuid invalidity type
-    int intUUIDInvalidityType;
+    // Snag tenant
+    std::string strTenant = request.params[0].get_str();
 
     // If not authenticated as manager
     if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
 
         entry.pushKV("result", "failure");
         entry.pushKV("message", "Not authenticated as manager");
-        entry.pushKV("uuid", strUUID);
+        entry.pushKV("tenant", strTenant);
         results.push_back(entry);
         return results;
 
     }
 
-    // If uuid invalid (length, hex notation)
-    if (!is_valid_uuid(strUUID, intUUIDInvalidityType)) {
+    return "test";
 
-        // If invalid length
-        if (intUUIDInvalidityType == 1) {
+    /*
 
-            entry.pushKV("result", "failure");
-            entry.pushKV("message", "Invalid length");
-            entry.pushKV("uuid", strUUID);
-            results.push_back(entry);
-            return results;
-        }
-
-        // If invalid hex notation
-        if (intUUIDInvalidityType == 2) {
-
-            entry.pushKV("result", "failure");
-            entry.pushKV("message", "Invalid hex notation");
-            entry.pushKV("uuid", strUUID);
-            results.push_back(entry);
-            return results;
-        }
-
-    }
-    
     int intBlockUUIDType;
     uint32_t u32Time;
     CMutableTransaction mtxTransaction;
@@ -1975,7 +1947,7 @@ static RPCHelpMan blocktenant()
 
     entry.pushKV("result", "success");
     entry.pushKV("message", "n/a");
-    entry.pushKV("uuid", strUUID);
+    entry.pushKV("tenant", strTenant);
     results.push_back(entry);
     return results;
 
