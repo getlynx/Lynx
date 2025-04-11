@@ -65,7 +65,7 @@ const std::string OPBLOCKUUID_BLOCKUUID = "00";
 const std::string OPBLOCKUUID_UNBLOCKUUID = "01";
 
 // blockuuid data
-const std::string OPBLOCKUUID_MAGIC = "6b6e796c";
+const std::string OPBLOCKUUID_MAGIC = "786e796c";
 
 //void get_magic_from_blockuuid(std::string chunk, std::string& magic);
 void get_magic_from_blockuuid (std::string chunk, std::string& magic, int pintOffset);
@@ -102,7 +102,7 @@ const std::string OPBLOCKTENANT_BLOCKTENANT = "00";
 const std::string OPBLOCKTENANT_UNBLOCKTENANT = "01";
 
 // blockuuid data
-const std::string OPBLOCKTENANT_MAGIC = "786e796c";
+const std::string OPBLOCKTENANT_MAGIC = "6b6e796c";
 
 //void get_magic_from_blockuuid(std::string chunk, std::string& magic);
 void get_magic_from_blocktenant (std::string chunk, std::string& magic, int pintOffset);
