@@ -80,10 +80,10 @@ bool blnfncCheckStakeKernelHash (
     uint32_t icmpCandidateBlockTime,    
 
     // Proof of stake hash             
-    uint256& o256ProofOfStakeHash,         
+    uint256& ou25ProofOfStakeHash,         
 
     // Weighted difficulty
-    uint256& o256WeightedDifficulty,     
+    uint256& ou25WeightedDifficulty,     
 
     // Log flag
     bool iblnLogFlag) {
@@ -138,7 +138,7 @@ bool blnfncCheckStakeKernelHash (
     rthWeightedDifficulty = rthDifficulty * rthStakeAmount;
 
     // Set weighted difficulty
-    o256WeightedDifficulty = ArithToUint256(rthWeightedDifficulty);
+    ou25WeightedDifficulty = ArithToUint256(rthWeightedDifficulty);
 
     // Set stake modifier
     const uint256& u25StakeModifier = ibliCurrentBlock->nStakeModifier;
@@ -168,7 +168,7 @@ bool blnfncCheckStakeKernelHash (
     << icmpCandidateBlockTime;                      
 
     // Compute hash
-    o256ProofOfStakeHash = Hash(dstHashDatastream);
+    ou25ProofOfStakeHash = Hash(dstHashDatastream);
 
     // Log stake modifier, stake modifier height, stake modifier time 
     if (iblnLogFlag) {
@@ -180,11 +180,11 @@ bool blnfncCheckStakeKernelHash (
         LogPrintf("%s: check stake modifier=%s utxo block time=%u stake outpoint index=%u candidate block time =%u proof of stake hash=%s\n",
             __func__, u25StakeModifier.ToString(),
             icmpUTXOBlockTime, ioptStakeOutpoint.n, icmpCandidateBlockTime,
-            o256ProofOfStakeHash.ToString());
+            ou25ProofOfStakeHash.ToString());
     }
 
     // If proof of stake hash < weighted difficulty
-    if (UintToArith256(o256ProofOfStakeHash) > rthWeightedDifficulty) {
+    if (UintToArith256(ou25ProofOfStakeHash) > rthWeightedDifficulty) {
 
         // Report 
         LogPrint (BCLog::POS, "Hash exceeds target - stake attempt invalid \n");
@@ -203,21 +203,21 @@ bool blnfncCheckStakeKernelHash (
         LogPrintf("%s: pass stake modifier=%s utxo block time=%u stake outpoint index=%u candidate block time =%u proof of stake hash=%s\n",
             __func__, u25StakeModifier.ToString(),
             icmpUTXOBlockTime, ioptStakeOutpoint.n, icmpCandidateBlockTime,
-            o256ProofOfStakeHash.ToString());
+            ou25ProofOfStakeHash.ToString());
     }
 
     // Return true
     return true; 
 }
 
-bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBlock, unsigned int icmpDifficulty, int64_t icmpCandidateBlockTime, const COutPoint& ioptStakeOutpoint, int64_t* ocmpUTXOBlockTime)
+bool blnfncCheckKernel(Chainstate& chnChainState, const CBlockIndex* ibliCurrentBlock, unsigned int icmpDifficulty, int64_t icmpCandidateBlockTime, const COutPoint& ioptStakeOutpoint, int64_t* ocmpUTXOBlockTime)
 {
-    uint256 hashProofOfStake, targetProofOfStake;
+    uint256 u25ProofOfStakeHash, u25WeightedDifficulty;
 
     Coin coin;
     {
         LOCK(::cs_main);
-        if (!chain_state.CoinsTip().GetCoin(ioptStakeOutpoint, coin)) {
+        if (!chnChainState.CoinsTip().GetCoin(ioptStakeOutpoint, coin)) {
             return error("%s: stake outpoint not found", __func__);
         }
     }
@@ -225,7 +225,7 @@ bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBl
         return error("%s: stake outpoint is spent", __func__);
     }
 
-    CBlockIndex* pindex = chain_state.m_chain[coin.nHeight];
+    CBlockIndex* pindex = chnChainState.m_chain[coin.nHeight];
     if (!pindex) {
         return false;
     }
@@ -242,7 +242,7 @@ bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* ibliCurrentBl
 
     CAmount mntStakeAmount = coin.out.nValue;
     return CheckStakeKernelHash(ibliCurrentBlock, icmpDifficulty, *ocmpUTXOBlockTime,
-        mntStakeAmount, ioptStakeOutpoint, icmpCandidateBlockTime, hashProofOfStake, targetProofOfStake);
+        mntStakeAmount, ioptStakeOutpoint, icmpCandidateBlockTime, u25ProofOfStakeHash, u25WeightedDifficulty);
 }
 
 
