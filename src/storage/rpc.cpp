@@ -897,6 +897,22 @@ static RPCHelpMan fetch()
             // Else not if tenant unfound (bad uuid)
             } else {
 
+
+
+                if (is_blocktenant_member(ghshAuthenticatetenantPubkey.ToString())) {
+
+                    // Report and exit
+                    unvEntry.pushKV("result", "failure");
+                    unvEntry.pushKV("message", "Blocked tenant: " + ghshAuthenticatetenantPubkey.ToString() + ".");
+                    unvEntry.pushKV("tenant", "n/a");
+                    unvEntry.pushKV("encrypted", "n/a");
+                    unvResults.push_back(unvEntry);
+                    return unvResults;
+    
+                }
+                    
+                
+        
 LogPrint (BCLog::ALL, "gintFetchAssetFullProtocol from fetch() %d \n", gintFetchAssetFullProtocol);
 LogPrint (BCLog::ALL, "\n");
 

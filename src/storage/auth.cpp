@@ -131,6 +131,22 @@ bool is_blockuuid_member(std::string uuid)
     return false;
 }
 
+// Check for blocked tenant
+bool is_blocktenant_member(std::string tenant)
+{
+    LOCK(blocktenantListLock);
+    for (auto& l : blocktenantList) {
+
+        LogPrint (BCLog::ALL, "l tenant %s %s \n", l, tenant);
+        LogPrint (BCLog::ALL, "\n");
+
+    if (l == tenant) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool set_auth_user(std::string& privatewif)
 {
     CKey key = DecodeSecret(privatewif);
