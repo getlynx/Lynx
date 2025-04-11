@@ -1854,6 +1854,141 @@ static RPCHelpMan blockuuid()
     };
 }
 
+static RPCHelpMan blocktenant()
+{
+    return RPCHelpMan{"blocktenant",
+                "\nBlock tenant from fetch.\n",
+                {
+                    {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "Tenant pubkey to be blocked."},
+                },
+
+
+
+                RPCResult{
+                    RPCResult::Type::ARR, "", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "result", "success | failure"},
+                            {RPCResult::Type::STR, "message", "Not authenticated as manager | error-generating-blocktenantpayload | error-generating-blocktenanttransaction"},
+                            {RPCResult::Type::STR, "uuid", "Tenant pubkey to be blocked"},
+                        }},
+                    }
+                },
+    
+    
+
+                    RPCExamples{
+                    HelpExampleCli("blocktenant", "00112233445566778899aabbccddeeff00112233")
+            + HelpExampleRpc("blocktenant", "00112233445566778899aabbccddeeff00112233")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    // if (check_mempool_for_authdata(mempool)) {
+        // return std::string("authtx-in-mempool");
+    // }
+
+    return "test";
+
+    /*
+
+    // Entry
+    UniValue entry(UniValue::VOBJ);
+
+    // Results
+    UniValue results(UniValue::VARR);
+
+    // Snag uuid
+    std::string strUUID = request.params[0].get_str();
+
+    // uuid invalidity type
+    int intUUIDInvalidityType;
+
+    // If not authenticated as manager
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Not authenticated as manager");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    // If uuid invalid (length, hex notation)
+    if (!is_valid_uuid(strUUID, intUUIDInvalidityType)) {
+
+        // If invalid length
+        if (intUUIDInvalidityType == 1) {
+
+            entry.pushKV("result", "failure");
+            entry.pushKV("message", "Invalid length");
+            entry.pushKV("uuid", strUUID);
+            results.push_back(entry);
+            return results;
+        }
+
+        // If invalid hex notation
+        if (intUUIDInvalidityType == 2) {
+
+            entry.pushKV("result", "failure");
+            entry.pushKV("message", "Invalid hex notation");
+            entry.pushKV("uuid", strUUID);
+            results.push_back(entry);
+            return results;
+        }
+
+    }
+    
+    int intBlockUUIDType;
+    uint32_t u32Time;
+    CMutableTransaction mtxTransaction;
+    std::string strOPRETURNPayload;
+
+    intBlockUUIDType = 0;
+    u32Time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+
+    if (!generate_blockuuid_payload(strOPRETURNPayload, intBlockUUIDType, u32Time, strUUID)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blockuuidpayload");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    if (!generate_blockuuid_transaction(*storage_context, mtxTransaction, strOPRETURNPayload)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blockuuidtransaction");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
+    }
+
+
+
+
+
+    entry.pushKV("result", "success");
+    entry.pushKV("message", "n/a");
+    entry.pushKV("uuid", strUUID);
+    results.push_back(entry);
+    return results;
+
+    */
+
+
+
+
+
+},
+    };
+}
+
 static RPCHelpMan unblockuuid()
 {
     return RPCHelpMan{"unblockuuid",
@@ -2052,6 +2187,7 @@ void RegisterStorageRPCCommands(CRPCTable& t)
         {"storage", &blockuuid},
         {"storage", &unblockuuid},
         {"storage", &listblockeduuids},
+        {"storage", &blocktenant},
         {"storage", &list},
         {"storage", &status},
         {"storage", &tenants},
