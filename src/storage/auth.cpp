@@ -1189,14 +1189,64 @@ gu32BlockHeight = height;
 #endif
 
                         // If auth chunk, rather than data chunk
-                        if (!is_opreturn_an_authdata (scrOpreturnData, error_level)) {
+                        if (is_opreturn_an_authdata (scrOpreturnData, error_level) || is_opreturn_a_blockuuiddata (scrOpreturnData, error_level) || is_opreturn_a_blocktenantdata (scrOpreturnData, error_level)) {
 
 #ifdef TIMING
     end = clock ();    
     t_ioaa = t_ioaa + (double) (end - start) / CLOCKS_PER_SEC;
 #endif
 
+
+
+if (is_opreturn_an_authdata (scrOpreturnData, error_level)) {
+
+    // Validate authdata, and popoulate authList
+    if (!found_opreturn_in_authdata (scrOpreturnData, error_level)) {
+        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::ALL, "An invalid tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    } else {
+        //LogPrint (BCLog::ALL, "\n");
+        //LogPrint (BCLog::ALL, "A valid tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    }
+
+}
+
+
+
+if (is_opreturn_a_blockuuiddata (scrOpreturnData, error_level)) {
+
+    // Validate blockuuiddata, and popoulate blockuuidList
+    if (!found_opreturn_in_blockuuiddata (scrOpreturnData, error_level)) {
+        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::ALL, "An invalid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    } else {
+        //LogPrint (BCLog::ALL, "\n");
+        //LogPrint (BCLog::ALL, "A valid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    }
+
+}
+
+
+
+if (is_opreturn_a_blocktenantdata (scrOpreturnData, error_level)) {
+
+    // Validate blocktenantdata, and popoulate blocktenantList
+    if (!found_opreturn_in_blocktenantdata (scrOpreturnData, error_level)) {
+        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::ALL, "An invalid tenant was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    } else {
+        //LogPrint (BCLog::ALL, "\n");
+        //LogPrint (BCLog::ALL, "A valid tenant was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    }
+
+}
+
+
+
+                        } else {
+
                             continue;
+
                         }
 
 #ifdef TIMING
@@ -1207,15 +1257,6 @@ gu32BlockHeight = height;
 #ifdef TIMING
     start = clock ();    
 #endif
-
-                        // Validate authdata, and popoulate authList
-                        if (!found_opreturn_in_authdata (scrOpreturnData, error_level)) {
-                            LogPrint (BCLog::ALL, "\n");
-                            LogPrint (BCLog::ALL, "An invalid Tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
-                        } else {
-                            //LogPrint (BCLog::ALL, "\n");
-                            //LogPrint (BCLog::ALL, "A valid Tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
-                        }
 
 #ifdef TIMING
     end = clock ();    

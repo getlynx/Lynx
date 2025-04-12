@@ -1873,17 +1873,17 @@ LogPrint (BCLog::ALL, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSAGE_L
         return InitError(strprintf(_("Error while parsing authdata chunks")));
     }
 
-    if (!scan_blocks_for_blockuuiddata(chainman)) {
-        return InitError(strprintf(_("Error while parsing blockuuiddata chunks")));
-    }
+    // if (!scan_blocks_for_blockuuiddata(chainman)) {
+        // return InitError(strprintf(_("Error while parsing blockuuiddata chunks")));
+    // }
 
     LogPrint (BCLog::ALL, "\n");
     LogPrint (BCLog::ALL, "blockuuidList size %d \n", blockuuidList.size());
     LogPrint (BCLog::ALL, "\n");
 
-    if (!scan_blocks_for_blocktenantdata(chainman)) {
-        return InitError(strprintf(_("Error while parsing blocktenantdata chunks")));
-    }
+    // if (!scan_blocks_for_blocktenantdata(chainman)) {
+        // return InitError(strprintf(_("Error while parsing blocktenantdata chunks")));
+    // }
 
     LogPrint (BCLog::ALL, "\n");
     LogPrint (BCLog::ALL, "blocktenantList size %d \n", blocktenantList.size());
