@@ -210,37 +210,53 @@ bool blnfncCheckStakeKernelHash (
     return true; 
 }
 
+// Ckeck kernel
 bool blnfncCheckKernel(Chainstate& chnChainState, const CBlockIndex* ibliCurrentBlock, unsigned int icmpDifficulty, int64_t icmpCandidateBlockTime, const COutPoint& ioptStakeOutpoint, int64_t* ocmpUTXOBlockTime)
 {
     uint256 u25ProofOfStakeHash, u25WeightedDifficulty;
 
-    Coin coin;
+    // Stake coin
+    Coin coiStakeCoin;
     {
         LOCK(::cs_main);
-        if (!chnChainState.CoinsTip().GetCoin(ioptStakeOutpoint, coin)) {
+
+        // Get stake coin
+        if (!chnChainState.CoinsTip().GetCoin(ioptStakeOutpoint, coiStakeCoin)) {
             return error("%s: stake outpoint not found", __func__);
         }
     }
-    if (coin.IsSpent()) {
+
+    // If stake coin spent
+    if (coiStakeCoin.IsSpent()) {
         return error("%s: stake outpoint is spent", __func__);
     }
 
-    CBlockIndex* pindex = chnChainState.m_chain[coin.nHeight];
-    if (!pindex) {
+    // Get stake block
+    CBlockIndex* bliStakeBlock = chnChainState.m_chain[coiStakeCoin.nHeight];
+    if (!bliStakeBlock) {
         return false;
     }
 
-    int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(ibliCurrentBlock->nHeight / 2));
-    int nDepth = ibliCurrentBlock->nHeight - coin.nHeight;
+    // Set required depth
+    int intRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(ibliCurrentBlock->nHeight / 2));
 
-    if (nRequiredDepth > nDepth) {
+    // Set stake depth
+    int intStakeDepth = ibliCurrentBlock->nHeight - coiStakeCoin.nHeight;
+
+    // If required depth > stake depth
+    if (intRequiredDepth > intStakeDepth) {
         return false;
     }
+
+    // Get UTXO time
     if (ocmpUTXOBlockTime) {
-        *ocmpUTXOBlockTime = pindex->GetBlockTime();
+        *ocmpUTXOBlockTime = bliStakeBlock->GetBlockTime();
     }
 
-    CAmount mntStakeAmount = coin.out.nValue;
+    // Set stake amount
+    CAmount mntStakeAmount = coiStakeCoin.out.nValue;
+
+    // Check stake kernel hash
     return CheckStakeKernelHash(ibliCurrentBlock, icmpDifficulty, *ocmpUTXOBlockTime,
         mntStakeAmount, ioptStakeOutpoint, icmpCandidateBlockTime, u25ProofOfStakeHash, u25WeightedDifficulty);
 }
