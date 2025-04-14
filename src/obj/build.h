@@ -1,1 +1,1 @@
-#define BUILD_GIT_COMMIT "ce3250b34008-dirty"
+#define BUILD_GIT_COMMIT "82d7d15223d1-dirty"
