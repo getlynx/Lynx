@@ -261,6 +261,89 @@ bool blnfncCheckKernel(Chainstate& chnChainState, const CBlockIndex* ibliCurrent
         mntStakeAmount, ioptStakeOutpoint, icmpCandidateBlockTime, u25ProofOfStakeHash, u25WeightedDifficulty);
 }
 
+bool blnfncCheckProofOfStake(
+    Chainstate& chain_state,          
+    BlockValidationState& state,      
+    const CBlockIndex* pindexPrev,    
+    const CTransaction& tx,           
+    int64_t nTime,                    
+    unsigned int nBits,               
+    uint256& hashProofOfStake,        
+    uint256& targetProofOfStake)      
+{
+    // pindexPrev points to the latest block in our chain
+    // nTime represents when the new block was created
+
+    // Get access to the block database through the chain state
+    auto& pblocktree { chain_state.m_blockman.m_block_tree_db };
+
+    // Verify this is a valid staking transaction with at least one input
+    if (!tx.IsCoinStake() || tx.vin.size() < 1) {
+        LogPrintf("ERROR: %s: malformed-txn %s\n", __func__, tx.GetHash().ToString());
+        return false;
+    }
+
+    // Reference to hold the previous transaction (though unused in this function)
+    CTransactionRef txPrev;
+
+    // Get the first input of the coinstake transaction
+    // This input (known as the kernel) must meet the staking target
+    // Kernel (input 0) must match the stake hash target per coin age (nBits)
+    const CTxIn& txin = tx.vin[0];
+
+    // Variables to store information about the staking coin
+    uint32_t nBlockFromTime;    // Timestamp of block containing the staked coin
+    int nDepth;                 // How many blocks deep is the staked coin
+    CScript kernelPubKey;       // Public key script that controls the stake
+    CAmount amount;             // Amount of coins being staked
+
+    // Try to find the coin being staked in the UTXO (unspent transaction output) set
+    Coin coin;
+    if (!chain_state.CoinsTip().GetCoin(txin.prevout, coin) || coin.IsSpent()) {
+        return false;  // Coin doesn't exist or was already spent
+    }
+
+    // Find the block that contains the coin being staked
+    CBlockIndex* pindex = chain_state.m_chain[coin.nHeight];
+    if (!pindex) {
+        return false;  // Block not found in main chain
+    }
+
+    // Calculate the coin's age in blocks and verify it meets minimum age requirement
+    nDepth = pindexPrev->nHeight - coin.nHeight;
+    // Required depth is the lesser of COINBASE_MATURITY or half the chain height
+    int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(pindexPrev->nHeight / 2));
+    if (nRequiredDepth > nDepth) {
+        return false;  // Coin isn't mature enough to stake
+    }
+
+    // Store the staking coin's details for validation
+    kernelPubKey = coin.out.scriptPubKey;      // Script controlling the coins
+    amount = coin.out.nValue;                   // Amount being staked
+    nBlockFromTime = pindex->GetBlockTime();    // When the coin's block was mined
+
+    // Get the spending transaction's signature details
+    const CScript& scriptSig = txin.scriptSig;
+    const CScriptWitness* witness = &txin.scriptWitness;
+    ScriptError serror = SCRIPT_ERR_OK;
+    std::vector<uint8_t> vchAmount(8);
+
+    // Verify the transaction signature is valid and the spender owns the coins
+    if (!VerifyScript(scriptSig, kernelPubKey, witness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&tx, 0, amount, MissingDataBehavior::FAIL), &serror)) {
+        LogPrintf("ERROR: %s: verify-script-failed, txn %s, reason %s\n", __func__, tx.GetHash().ToString(), ScriptErrorString(serror));
+        return false;
+    }
+
+    if (!CheckStakeKernelHash(pindexPrev, nBits, nBlockFromTime,
+            amount, txin.prevout, nTime, hashProofOfStake, targetProofOfStake, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
+        LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, hashProof=%s\n", __func__, tx.GetHash().ToString(), hashProofOfStake.ToString());
+        return false;
+    }
+
+    // All validation checks passed - this is a valid stake
+    return true;
+}
+
 
 
 /* Calculate the difficulty for a given block index.
