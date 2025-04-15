@@ -264,14 +264,14 @@ bool blnfncCheckKernel(Chainstate& chnChainState, const CBlockIndex* ibliCurrent
 bool blnfncCheckProofOfStake(
     Chainstate& chain_state,          
     BlockValidationState& state,      
-    const CBlockIndex* pindexPrev,    
+    const CBlockIndex* ibliCurrentBlock,    
     const CTransaction& tx,           
     int64_t nTime,                    
     unsigned int nBits,               
     uint256& hashProofOfStake,        
     uint256& targetProofOfStake)      
 {
-    // pindexPrev points to the latest block in our chain
+    // ibliCurrentBlock points to the latest block in our chain
     // nTime represents when the new block was created
 
     // Get access to the block database through the chain state
@@ -310,9 +310,9 @@ bool blnfncCheckProofOfStake(
     }
 
     // Calculate the coin's age in blocks and verify it meets minimum age requirement
-    nDepth = pindexPrev->nHeight - coin.nHeight;
+    nDepth = ibliCurrentBlock->nHeight - coin.nHeight;
     // Required depth is the lesser of COINBASE_MATURITY or half the chain height
-    int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(pindexPrev->nHeight / 2));
+    int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(ibliCurrentBlock->nHeight / 2));
     if (nRequiredDepth > nDepth) {
         return false;  // Coin isn't mature enough to stake
     }
@@ -334,7 +334,7 @@ bool blnfncCheckProofOfStake(
         return false;
     }
 
-    if (!CheckStakeKernelHash(pindexPrev, nBits, nBlockFromTime,
+    if (!CheckStakeKernelHash (ibliCurrentBlock, nBits, nBlockFromTime,
             amount, txin.prevout, nTime, hashProofOfStake, targetProofOfStake, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
         LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, hashProof=%s\n", __func__, tx.GetHash().ToString(), hashProofOfStake.ToString());
         return false;
