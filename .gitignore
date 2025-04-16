@@ -54,3 +54,5 @@ config.status
 config.status
 configure
 libtool
+
+src/obj/build.h
