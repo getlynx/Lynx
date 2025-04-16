@@ -257,7 +257,7 @@ bool blnfncCheckKernel(Chainstate& chnChainState, const CBlockIndex* ibliCurrent
     CAmount mntStakeAmount = coiStakeCoin.out.nValue;
 
     // Check stake kernel hash
-    return CheckStakeKernelHash(ibliCurrentBlock, icmpDifficulty, *ocmpUTXOBlockTime,
+    return blnfncCheckStakeKernelHash(ibliCurrentBlock, icmpDifficulty, *ocmpUTXOBlockTime,
         mntStakeAmount, ioptStakeOutpoint, icmpCandidateBlockTime, u25ProofOfStakeHash, u25WeightedDifficulty);
 }
 
@@ -334,7 +334,7 @@ bool blnfncCheckProofOfStake(
         return false;
     }
 
-    if (!CheckStakeKernelHash (ibliCurrentBlock, nBits, nBlockFromTime,
+    if (!blnfncCheckStakeKernelHash (ibliCurrentBlock, nBits, nBlockFromTime,
             amount, txin.prevout, nTime, hashProofOfStake, targetProofOfStake, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
         LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, hashProof=%s\n", __func__, tx.GetHash().ToString(), hashProofOfStake.ToString());
         return false;
