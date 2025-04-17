@@ -267,7 +267,7 @@ bool blnfncCheckProofOfStake(
     const CBlockIndex* ibliCurrentBlock,    
     const CTransaction& tx,           
     int64_t nTime,                    
-    unsigned int nBits,               
+    unsigned int icmpDifficulty,               
     uint256& hashProofOfStake,        
     uint256& targetProofOfStake)      
 {
@@ -288,7 +288,7 @@ bool blnfncCheckProofOfStake(
 
     // Get the first input of the coinstake transaction
     // This input (known as the kernel) must meet the staking target
-    // Kernel (input 0) must match the stake hash target per coin age (nBits)
+    // Kernel (input 0) must match the stake hash target per coin age (icmpDifficulty)
     const CTxIn& txin = tx.vin[0];
 
     // Variables to store information about the staking coin
@@ -334,7 +334,7 @@ bool blnfncCheckProofOfStake(
         return false;
     }
 
-    if (!blnfncCheckStakeKernelHash (ibliCurrentBlock, nBits, nBlockFromTime,
+    if (!blnfncCheckStakeKernelHash (ibliCurrentBlock, icmpDifficulty, nBlockFromTime,
             amount, txin.prevout, nTime, hashProofOfStake, targetProofOfStake, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
         LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, hashProof=%s\n", __func__, tx.GetHash().ToString(), hashProofOfStake.ToString());
         return false;
