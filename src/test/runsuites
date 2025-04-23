@@ -1,0 +1,20 @@
+
+
+
+rm logfile
+
+
+
+testbinary=./test_lynx
+suitelist=testsuites   # This is the file containing your list of suite names
+logfile=logfile
+
+
+
+while IFS= read -r suite; do
+    echo "$suite"
+    $testbinary --run_test="$suite" --log_level=all >> "$logfile" 2>&1
+    echo "$suite"
+done < "$suitelist"
+
+
