@@ -295,7 +295,7 @@ bool blnfncCheckProofOfStake(
     uint32_t cmpUTXOBlockTime;    // Timestamp of block containing the staked coin
     int nDepth;                 // How many blocks deep is the staked coin
     CScript kernelPubKey;       // Public key script that controls the stake
-    CAmount amount;             // Amount of coins being staked
+    CAmount mntStakeAmount;             // Amount of coins being staked
 
     // Try to find the coin being staked in the UTXO (unspent transaction output) set
     Coin coin;
@@ -319,7 +319,7 @@ bool blnfncCheckProofOfStake(
 
     // Store the staking coin's details for validation
     kernelPubKey = coin.out.scriptPubKey;      // Script controlling the coins
-    amount = coin.out.nValue;                   // Amount being staked
+    mntStakeAmount = coin.out.nValue;                   // Amount being staked
     cmpUTXOBlockTime = pindex->GetBlockTime();    // When the coin's block was mined
 
     // Get the spending transaction's signature details
@@ -329,13 +329,13 @@ bool blnfncCheckProofOfStake(
     std::vector<uint8_t> vchAmount(8);
 
     // Verify the transaction signature is valid and the spender owns the coins
-    if (!VerifyScript(scriptSig, kernelPubKey, witness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&tx, 0, amount, MissingDataBehavior::FAIL), &serror)) {
+    if (!VerifyScript(scriptSig, kernelPubKey, witness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&tx, 0, mntStakeAmount, MissingDataBehavior::FAIL), &serror)) {
         LogPrintf("ERROR: %s: verify-script-failed, txn %s, reason %s\n", __func__, tx.GetHash().ToString(), ScriptErrorString(serror));
         return false;
     }
 
     if (!blnfncCheckStakeKernelHash (ibliCurrentBlock, icmpDifficulty, cmpUTXOBlockTime,
-            amount, txin.prevout, nTime, hashProofOfStake, targetProofOfStake, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
+            mntStakeAmount, txin.prevout, nTime, hashProofOfStake, targetProofOfStake, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
         LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, hashProof=%s\n", __func__, tx.GetHash().ToString(), hashProofOfStake.ToString());
         return false;
     }
