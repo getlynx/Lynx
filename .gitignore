@@ -60,3 +60,7 @@ src/config/bitcoin-config.h
 src/test/data/*.json.h
 src/test/data/asmap.raw.h
 src/test/test_lynx
+ch
+cpa
+cps
+gcae
