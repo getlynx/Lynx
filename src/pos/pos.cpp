@@ -268,8 +268,8 @@ bool blnfncCheckProofOfStake(
     const CTransaction& tx,           
     int64_t icmpCandidateBlockTime,                    
     unsigned int icmpDifficulty,               
-    uint256& hashProofOfStake,        
-    uint256& targetProofOfStake)      
+    uint256& ou25ProofOfStakeHash,        
+    uint256& ou25WeightedDifficulty)      
 {
     // ibliCurrentBlock points to the latest block in our chain
     // icmpCandidateBlockTime represents when the new block was created
@@ -335,8 +335,8 @@ bool blnfncCheckProofOfStake(
     }
 
     if (!blnfncCheckStakeKernelHash (ibliCurrentBlock, icmpDifficulty, cmpUTXOBlockTime,
-            mntStakeAmount, txin.prevout, icmpCandidateBlockTime, hashProofOfStake, targetProofOfStake, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
-        LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, hashProof=%s\n", __func__, tx.GetHash().ToString(), hashProofOfStake.ToString());
+            mntStakeAmount, txin.prevout, icmpCandidateBlockTime, ou25ProofOfStakeHash, ou25WeightedDifficulty, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
+        LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, proof of stake hash=%s\n", __func__, tx.GetHash().ToString(), ou25ProofOfStakeHash.ToString());
         return false;
     }
 
