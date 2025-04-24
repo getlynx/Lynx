@@ -266,13 +266,13 @@ bool blnfncCheckProofOfStake(
     BlockValidationState& state,      
     const CBlockIndex* ibliCurrentBlock,    
     const CTransaction& tx,           
-    int64_t nTime,                    
+    int64_t icmpCandidateBlockTime,                    
     unsigned int icmpDifficulty,               
     uint256& hashProofOfStake,        
     uint256& targetProofOfStake)      
 {
     // ibliCurrentBlock points to the latest block in our chain
-    // nTime represents when the new block was created
+    // icmpCandidateBlockTime represents when the new block was created
 
     // Get access to the block database through the chain state
     auto& pblocktree { chain_state.m_blockman.m_block_tree_db };
@@ -335,7 +335,7 @@ bool blnfncCheckProofOfStake(
     }
 
     if (!blnfncCheckStakeKernelHash (ibliCurrentBlock, icmpDifficulty, cmpUTXOBlockTime,
-            mntStakeAmount, txin.prevout, nTime, hashProofOfStake, targetProofOfStake, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
+            mntStakeAmount, txin.prevout, icmpCandidateBlockTime, hashProofOfStake, targetProofOfStake, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
         LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, hashProof=%s\n", __func__, tx.GetHash().ToString(), hashProofOfStake.ToString());
         return false;
     }
