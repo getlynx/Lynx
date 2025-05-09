@@ -144,6 +144,10 @@ strType = chunk.substr (pintOffset, 8);
 
     } else if (strType == OPAUTH_MAGIC) {
         type = 2; // auth chunk
+    } else if (strType == OPBLOCKUUID_MAGIC) {
+        type = 3; // blockuuid chunk
+    } else if (strType == OPBLOCKTENANT_MAGIC) {
+        type = 4; // blockuuid chunk
     }
 }
 

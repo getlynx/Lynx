@@ -21,6 +21,10 @@ std::vector<std::pair<std::string, std::string>> workQueueResult;
 extern ChainstateManager* storage_chainman;
 extern wallet::WalletContext* storage_context;
 
+extern int gintFetchDone;
+
+extern std::string gstrAssetFilename;
+
 void add_put_task(std::string put_info, std::string put_uuid)
 {
     LOCK(workQueueLock);
@@ -77,7 +81,8 @@ void perform_put_task(std::pair<std::string, std::string>& put_info, int& error_
 
     // see if there are enough inputs
     int usable_inputs;
-    int filelen = read_file_size(put_info.first);
+    // int filelen = read_file_size(put_info.first);
+    int filelen = read_file_size(gstrAssetFilename);
 
     // check file length
     int maxfilelength = 25 * 1024 * 1024;
@@ -199,6 +204,9 @@ void perform_get_task(std::pair<std::string, std::string> get_info, int& error_l
 
     std::vector<std::string> chunks;
     if (!scan_blocks_for_specific_uuid(*storage_chainman, get_info.first, error_level, chunks, offset)) {
+
+        gintFetchDone = 1;
+
         return;
     }
 
@@ -209,6 +217,9 @@ void perform_get_task(std::pair<std::string, std::string> get_info, int& error_l
 
     int total_chunks = chunks.size();
     if (!build_file_from_chunks (get_info, error_level, total_chunks, chunks, offset)) {
+
+        gintFetchDone = 1;
+
         return;
     }
 

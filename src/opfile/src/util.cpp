@@ -187,6 +187,7 @@ std::string strip_trailing_slash(std::string& input)
     return input;
 }
 
+/*
 bool extract_file_extension(std::string& filepath, std::string& extension)
 {
     bool extrecord = false;
@@ -203,3 +204,26 @@ bool extract_file_extension(std::string& filepath, std::string& extension)
     }
     return extrecord;
 }
+*/
+
+bool extract_file_extension (std::string& filepath, std::string& extension) {
+    bool extrecord = false;
+    int dotposition = -1;
+    for (int i = filepath.size(); i > -1; i--) {
+        if (filepath[i] == 46) {
+            extrecord = true;
+            dotposition = i;
+            break;
+        }
+    }
+    if (dotposition > (-1)) {
+        for (int i = dotposition + 1; i < filepath.size(); i++) {
+            extension += filepath[i];
+        } 
+    }
+    if (extrecord && extension.size() != 4) {
+        extension.resize(4);
+    }
+    return extrecord;
+}
+

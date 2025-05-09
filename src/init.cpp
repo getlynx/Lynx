@@ -95,6 +95,8 @@
 #include <walletinitinterface.h>
 #include <wallet/wallet.h>
 
+#include <logging.h>
+
 #include <algorithm>
 #include <condition_variable>
 #include <cstdint>
@@ -143,6 +145,10 @@ std::thread chunkman;
 std::thread stakeman;
 
 extern int gintAuthenticationFailures;
+
+extern std::vector<std::string> blockuuidList;
+
+extern std::vector<std::string> blocktenantList;
 
 static constexpr bool DEFAULT_PROXYRANDOMIZE{true};
 static constexpr bool DEFAULT_REST_ENABLE{false};
@@ -633,6 +639,8 @@ void SetupServerArgs(ArgsManager& argsman)
     argsman.AddArg("-disablestaking", "Prevent staking thread immediately on startup (default: false)", ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-stakethreadconddelayms", "Number of milliseconds to delay staking for on error condition (default: 60000)", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-stakethreadignorepeers", "Ignore the current initialblockdownload state and peer checks when staking (default: false)", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+
+    argsman.AddArg("-rpctenant=<tenant>", "Authentication key", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
 
 #if HAVE_DECL_FORK
     argsman.AddArg("-daemon", strprintf("Run in the background as a daemon and accept commands (default: %d)", DEFAULT_DAEMON), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -1620,6 +1628,12 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     // On startup setup auth user parameters
     build_auth_list(chainparams.GetConsensus());
 
+    // On startup setup blockuuid parameters
+    build_blockuuid_list(chainparams.GetConsensus());
+
+    // On startup setup blocktenant parameters
+    build_blocktenant_list(chainparams.GetConsensus());
+
     // On first startup, warn on low block storage space
     if (!fReindex && !fReindexChainState && chain_active_height <= 1) {
         uint64_t assumed_chain_bytes{chainparams.AssumedBlockchainSize() * 1024 * 1024 * 1024};
@@ -1858,6 +1872,22 @@ LogPrint (BCLog::ALL, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSAGE_L
     if (!scan_blocks_for_authdata(chainman)) {
         return InitError(strprintf(_("Error while parsing authdata chunks")));
     }
+
+    // if (!scan_blocks_for_blockuuiddata(chainman)) {
+        // return InitError(strprintf(_("Error while parsing blockuuiddata chunks")));
+    // }
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "blockuuidList size %d \n", blockuuidList.size());
+    LogPrint (BCLog::ALL, "\n");
+
+    // if (!scan_blocks_for_blocktenantdata(chainman)) {
+        // return InitError(strprintf(_("Error while parsing blocktenantdata chunks")));
+    // }
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "blocktenantList size %d \n", blocktenantList.size());
+    LogPrint (BCLog::ALL, "\n");
 
     // ********************************************************* Step 12.5: start staking
 #ifdef ENABLE_WALLET

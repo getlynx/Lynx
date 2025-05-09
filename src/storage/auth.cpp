@@ -2,6 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+// Test
+
 #define TIMING 1
 
 #include <storage/auth.h>
@@ -16,6 +18,8 @@ using namespace node;
 
 uint160 authUser;
 uint32_t authTime{0};
+uint32_t blockuuidTime{0};
+uint32_t blocktenantTime{0};
 
 uint32_t gu32AuthenticationTime;
 
@@ -23,6 +27,12 @@ std::string authUserKey;
 
 RecursiveMutex authListLock;
 std::vector<uint160> authList;
+
+RecursiveMutex blockuuidListLock;
+std::vector<std::string> blockuuidList;
+
+RecursiveMutex blocktenantListLock;
+std::vector<std::string> blocktenantList;
 
 uint32_t gu32BlockHeight;
 
@@ -37,6 +47,28 @@ void add_auth_member(uint160 pubkeyhash)
     authList.push_back(pubkeyhash);
 }
 
+void add_blockuuid_member(std::string uuid)
+{
+    LOCK(blockuuidListLock);
+    for (auto& l : blockuuidList) {
+        if (l == uuid) {
+            return;
+        }
+    }
+    blockuuidList.push_back(uuid);
+}
+
+void add_blocktenant_member(std::string tenant)
+{
+    LOCK(blocktenantListLock);
+    for (auto& l : blocktenantList) {
+        if (l == tenant) {
+            return;
+        }
+    }
+    blocktenantList.push_back(tenant);
+}
+
 void remove_auth_member(uint160 pubkeyhash)
 {
     LOCK(authListLock);
@@ -49,12 +81,68 @@ void remove_auth_member(uint160 pubkeyhash)
     authList = tempList;
 }
 
+void remove_blockuuid_member(std::string uuid)
+{
+    LOCK(blockuuidListLock);
+    std::vector<std::string> tempList;
+    for (auto& l : blockuuidList) {
+        if (l != uuid) {
+            tempList.push_back(l);
+        }
+    }
+    blockuuidList = tempList;
+}
+
+void remove_blocktenant_member(std::string tenant)
+{
+    LOCK(blocktenantListLock);
+    std::vector<std::string> tempList;
+    for (auto& l : blocktenantList) {
+        if (l != tenant) {
+            tempList.push_back(l);
+        }
+    }
+    blocktenantList = tempList;
+}
+
 // Check for file storage authorization
 bool is_auth_member(uint160 pubkeyhash)
 {
     LOCK(authListLock);
     for (auto& l : authList) {
         if (l == pubkeyhash) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Check for blocked uuid
+bool is_blockuuid_member(std::string uuid)
+{
+    LOCK(blockuuidListLock);
+    for (auto& l : blockuuidList) {
+
+        LogPrint (BCLog::ALL, "l uuid %s %s \n", l, uuid);
+        LogPrint (BCLog::ALL, "\n");
+
+    if (l == uuid) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Check for blocked tenant
+bool is_blocktenant_member(std::string tenant)
+{
+    LOCK(blocktenantListLock);
+    for (auto& l : blocktenantList) {
+
+        LogPrint (BCLog::ALL, "l tenant %s %s \n", l, tenant);
+        LogPrint (BCLog::ALL, "\n");
+
+    if (l == tenant) {
             return true;
         }
     }
@@ -122,10 +210,42 @@ void build_auth_list(const Consensus::Params& params)
     authTime = params.initAuthTime;
 }
 
+void build_blockuuid_list(const Consensus::Params& params)
+{
+    LOCK(blockuuidListLock);
+    if (blockuuidList.size() > 0) {
+        return;
+    }
+
+    blockuuidTime = params.initAuthTime;
+}
+
+void build_blocktenant_list(const Consensus::Params& params)
+{
+    LOCK(blocktenantListLock);
+    if (blocktenantList.size() > 0) {
+        return;
+    }
+
+    blocktenantTime = params.initAuthTime;
+}
+
 void copy_auth_list(std::vector<uint160>& tempList)
 {
     LOCK(authListLock);
     tempList = authList;
+}
+
+void copy_blockuuid_list(std::vector<std::string>& tempList)
+{
+    LOCK(blockuuidListLock);
+    tempList = blockuuidList;
+}
+
+void copy_blocktenant_list(std::vector<std::string>& tempList)
+{
+    LOCK(blocktenantListLock);
+    tempList = blocktenantList;
 }
 
 bool is_signature_valid_raw(std::vector<unsigned char>& signature, uint256& hash)
@@ -178,6 +298,44 @@ bool is_signature_valid_chunk (std::string chunk, int pintOffset)
 
     vchsig = ParseHex(signature);
     sha256_hash_bin(&chunk.c_str()[pintOffset], (char*)&checkhash, (OPAUTH_MAGICLEN*2) + (OPAUTH_OPERATIONLEN*2) + (OPAUTH_TIMELEN*2) + (OPAUTH_HASHLEN*2));
+
+    if (!is_signature_valid_raw(vchsig, checkhash)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool is_blockuuid_signature_valid_chunk (std::string chunk, int pintOffset)
+{
+    uint256 checkhash;
+    std::string signature;
+    std::vector<unsigned char> vchsig;
+
+    // get_signature_from_auth(chunk, signature);
+    get_signature_from_blockuuid (chunk, signature, pintOffset);
+
+    vchsig = ParseHex(signature);
+    sha256_hash_bin(&chunk.c_str()[pintOffset], (char*)&checkhash, (OPBLOCKUUID_MAGICLEN*2) + (OPBLOCKUUID_OPERATIONLEN*2) + (OPBLOCKUUID_TIMELEN*2) + (OPBLOCKUUID_UUIDLEN*2));
+
+    if (!is_signature_valid_raw(vchsig, checkhash)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool is_blocktenant_signature_valid_chunk (std::string chunk, int pintOffset)
+{
+    uint256 checkhash;
+    std::string signature;
+    std::vector<unsigned char> vchsig;
+
+    // get_signature_from_auth(chunk, signature);
+    get_signature_from_blocktenant (chunk, signature, pintOffset);
+
+    vchsig = ParseHex(signature);
+    sha256_hash_bin(&chunk.c_str()[pintOffset], (char*)&checkhash, (OPBLOCKTENANT_MAGICLEN*2) + (OPBLOCKTENANT_OPERATIONLEN*2) + (OPBLOCKTENANT_TIMELEN*2) + (OPBLOCKTENANT_TENANTLEN*2));
 
     if (!is_signature_valid_raw(vchsig, checkhash)) {
         return false;
@@ -248,6 +406,84 @@ LogPrint (BCLog::ALL, " unixtime authTime %d %d \n", unixtime, authTime);
     if (unixtime < u32CurrentTime) {
 
         authTime = unixtime;
+
+    }
+
+    return true;
+}
+
+bool check_contextual_blockuuid (std::string& chunk, int& error_level, int pintOffset)
+{
+    std::string magic, time;
+
+    // get_magic_from_auth(chunk, magic);
+    get_magic_from_blockuuid (chunk, magic, pintOffset);
+    if (magic != OPBLOCKUUID_MAGIC) {
+        error_level = ERR_CHUNKMAGIC;
+        return false;
+    }
+
+    // set blockuuidTime to genesis if not init
+    if (blockuuidTime == 0) {
+        blockuuidTime = Params().GetConsensus().initAuthTime;
+    }
+
+    // get_time_from_auth(chunk, time);
+    get_time_from_blockuuid (chunk, time, pintOffset);
+    uint32_t unixtime = hexstring_to_unixtime(time);
+    if (unixtime < blockuuidTime) {
+
+LogPrint (BCLog::ALL, " unixtime authTime %d %d \n", unixtime, blockuuidTime);
+
+        // each auth message timestamp must be greater
+        // than that of the previous timestamp
+        return false;
+    }
+
+    uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+
+    if (unixtime < u32CurrentTime) {
+
+        blockuuidTime = unixtime;
+
+    }
+
+    return true;
+}
+
+bool check_contextual_blocktenant (std::string& chunk, int& error_level, int pintOffset)
+{
+    std::string magic, time;
+
+    // get_magic_from_auth(chunk, magic);
+    get_magic_from_blocktenant (chunk, magic, pintOffset);
+    if (magic != OPBLOCKTENANT_MAGIC) {
+        error_level = ERR_CHUNKMAGIC;
+        return false;
+    }
+
+    // set blocktenantTime to genesis if not init
+    if (blocktenantTime == 0) {
+        blocktenantTime = Params().GetConsensus().initAuthTime;
+    }
+
+    // get_time_from_auth(chunk, time);
+    get_time_from_blocktenant (chunk, time, pintOffset);
+    uint32_t unixtime = hexstring_to_unixtime(time);
+    if (unixtime < blocktenantTime) {
+
+LogPrint (BCLog::ALL, " unixtime blocktenantTime %d %d \n", unixtime, blocktenantTime);
+
+        // each auth message timestamp must be greater
+        // than that of the previous timestamp
+        return false;
+    }
+
+    uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+
+    if (unixtime < u32CurrentTime) {
+
+        blocktenantTime = unixtime;
 
     }
 
@@ -379,6 +615,120 @@ bool process_auth_chunk (std::string& chunk, int& , int pintOffset)
     return true;
 }
 
+// blockuuid or unblockuuid
+bool process_blockuuid_chunk (std::string& chunk, int& , int pintOffset)
+{
+    std::string uuid, operation;
+    // get_operation_from_auth(chunk, operation);
+
+    // blockuuid or unblockuuid
+    get_operation_from_blockuuid (chunk, operation, pintOffset);
+    if (operation != OPBLOCKUUID_BLOCKUUID && operation != OPBLOCKUUID_UNBLOCKUUID) {
+        //LogPrintf("%s - failed at get_operation_from_auth2\n", __func__);
+        return false;
+    }
+
+    // get_hash_from_auth(chunk, hash);
+
+    // Snag uuid
+    get_uuid_from_blockuuid (chunk, uuid, pintOffset);
+
+    // if (!is_signature_valid_chunk(chunk)) {
+    
+    // Validate signature
+    if (!is_blockuuid_signature_valid_chunk (chunk, pintOffset)) {
+        //LogPrintf("%s - failed at is_signature_valid_chunk2\n", __func__);
+        return false;
+    }
+
+    std::string magic;
+    std::string type;
+    std::string time;
+    // std::string uuid;
+    std::string signature;    
+
+    get_magic_from_blockuuid (chunk, magic, pintOffset);
+    get_operation_from_blockuuid (chunk, type, pintOffset);
+    get_time_from_blockuuid (chunk, time, pintOffset);
+    get_uuid_from_blockuuid (chunk, uuid, pintOffset);
+    get_signature_from_blockuuid (chunk, signature, pintOffset);
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "BLOCKUUID DATA STRUCTURE (%s)\n", __func__);
+    LogPrint (BCLog::ALL, "magic type time uuid signature\n");
+    LogPrint (BCLog::ALL, "%s %s %s %s %s\n", magic, type, time, uuid, signature);
+    LogPrint (BCLog::ALL, "Block height: %d \n", gu32BlockHeight);
+    LogPrint (BCLog::ALL, "\n");
+
+    // blockuuid or unblockuuid
+    if (operation == OPBLOCKUUID_BLOCKUUID) {
+        add_blockuuid_member(uuid);
+    } else if (operation == OPBLOCKUUID_UNBLOCKUUID) {
+        remove_blockuuid_member(uuid);
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
+// blocktenant or unblocktenant
+bool process_blocktenant_chunk (std::string& chunk, int& , int pintOffset)
+{
+    std::string tenant, operation;
+    // get_operation_from_auth(chunk, operation);
+
+    // blocktenant or unblocktenant
+    get_operation_from_blocktenant (chunk, operation, pintOffset);
+    if (operation != OPBLOCKTENANT_BLOCKTENANT && operation != OPBLOCKTENANT_UNBLOCKTENANT) {
+        //LogPrintf("%s - failed at get_operation_from_auth2\n", __func__);
+        return false;
+    }
+
+    // get_hash_from_auth(chunk, hash);
+
+    // Snag tenant
+    get_tenant_from_blocktenant (chunk, tenant, pintOffset);
+
+    // if (!is_signature_valid_chunk(chunk)) {
+    
+    // Validate signature
+    if (!is_blocktenant_signature_valid_chunk (chunk, pintOffset)) {
+        //LogPrintf("%s - failed at is_signature_valid_chunk2\n", __func__);
+        return false;
+    }
+
+    std::string magic;
+    std::string type;
+    std::string time;
+    // std::string uuid;
+    std::string signature;    
+
+    get_magic_from_blocktenant (chunk, magic, pintOffset);
+    get_operation_from_blocktenant (chunk, type, pintOffset);
+    get_time_from_blocktenant (chunk, time, pintOffset);
+    get_tenant_from_blocktenant (chunk, tenant, pintOffset);
+    get_signature_from_blocktenant (chunk, signature, pintOffset);
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "BLOCKTENANT DATA STRUCTURE (%s)\n", __func__);
+    LogPrint (BCLog::ALL, "magic type time tenant signature\n");
+    LogPrint (BCLog::ALL, "%s %s %s %s %s\n", magic, type, time, tenant, signature);
+    LogPrint (BCLog::ALL, "Block height: %d \n", gu32BlockHeight);
+    LogPrint (BCLog::ALL, "\n");
+
+    // blocktenant or unblocktenant
+    if (operation == OPBLOCKTENANT_BLOCKTENANT) {
+        add_blocktenant_member(tenant);
+    } else if (operation == OPBLOCKTENANT_UNBLOCKTENANT) {
+        remove_blocktenant_member(tenant);
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
 bool compare_pubkey2 (std::string& chunk, int& , int pintOffset, uint160 hash160)
 {
     std::string hash, operation;
@@ -434,6 +784,64 @@ bool is_opreturn_an_authdata(const CScript& script_data, int& error_level)
     // Chech for auth data magic
     is_valid_chunk (opdata, type, intOffset);
     if (type != 2) {
+        //LogPrintf("%s - unknown chunk type\n", __func__);
+        return false;
+    }
+
+    return true;
+}
+
+// Detect blockuuid data rather than blocktenant, auth, or asset data
+bool is_opreturn_a_blockuuiddata(const CScript& script_data, int& error_level)
+{
+    int type;
+    std::string opdata, chunk;
+    opdata = HexStr(script_data);
+
+    int intOffset;
+
+    // if (!strip_opreturndata_from_chunk(opdata, chunk)) {
+
+    // Return offset, rather than strip non-payload data
+    if (!strip_opreturndata_from_chunk (opdata, chunk, intOffset)) {
+        //LogPrintf("%s - failed at strip_opreturndata_from_chunk\n", __func__);
+        return false;
+    }
+
+    // is_valid_chunk(chunk, type);
+
+    // Chech for auth data magic
+    is_valid_chunk (opdata, type, intOffset);
+    if (type != 3) {
+        //LogPrintf("%s - unknown chunk type\n", __func__);
+        return false;
+    }
+
+    return true;
+}
+
+// Detect blocktennant data rather than blockuuid, auth, or asset data
+bool is_opreturn_a_blocktenantdata(const CScript& script_data, int& error_level)
+{
+    int type;
+    std::string opdata, chunk;
+    opdata = HexStr(script_data);
+
+    int intOffset;
+
+    // if (!strip_opreturndata_from_chunk(opdata, chunk)) {
+
+    // Return offset, rather than strip non-payload data
+    if (!strip_opreturndata_from_chunk (opdata, chunk, intOffset)) {
+        //LogPrintf("%s - failed at strip_opreturndata_from_chunk\n", __func__);
+        return false;
+    }
+
+    // is_valid_chunk(chunk, type);
+
+    // Check for auth data magic
+    is_valid_chunk (opdata, type, intOffset);
+    if (type != 4) {
         //LogPrintf("%s - unknown chunk type\n", __func__);
         return false;
     }
@@ -526,6 +934,104 @@ bool found_opreturn_in_authdata (const CScript& script_data, int& error_level, b
     return true;
 }
 
+bool found_opreturn_in_blockuuiddata (const CScript& script_data, int& error_level, bool test_accept)
+{
+    int type;
+    std::string opdata, chunk;
+    opdata = HexStr(script_data);
+
+    int intOffset; 
+
+    // if (!strip_opreturndata_from_chunk(opdata, chunk)) {
+
+    // Return offset rather than strip non-payload data
+    if (!strip_opreturndata_from_chunk (opdata, chunk, intOffset)) {
+        // LogPrint (BCLog::ALL, "%s - failed at strip_opreturndata_from_chunk\n", __func__);
+        return false;
+    }
+
+    // is_valid_chunk(chunk, type)
+
+    // Validate magic
+    is_valid_chunk (opdata, type, intOffset);
+    if (type != 3) {
+        // LogPrint (BCLog::ALL, "%s - unknown chunk type\n", __func__);
+        return false;
+    }
+
+    // used to identify authdata in mempool
+    if (test_accept) {
+        return true;
+    }
+
+    // if (!check_contextual_auth(chunk, error_level)) {
+
+    // Check magic and time
+    if (!check_contextual_blockuuid (opdata, error_level, intOffset)) {
+        // LogPrint (BCLog::ALL, "%s - failed at check_contextual_auth\n", __func__);
+        return false;
+    }
+
+    // if (!process_auth_chunk(chunk, error_level)) {
+
+    // blockuuid or unblockuuid
+    if (!process_blockuuid_chunk (opdata, error_level, intOffset)) {
+        // LogPrint (BCLog::ALL, "%s - failed at process_auth_chunk\n", __func__);
+        return false;
+    }
+
+    return true;
+}
+
+bool found_opreturn_in_blocktenantdata (const CScript& script_data, int& error_level, bool test_accept)
+{
+    int type;
+    std::string opdata, chunk;
+    opdata = HexStr(script_data);
+
+    int intOffset; 
+
+    // if (!strip_opreturndata_from_chunk(opdata, chunk)) {
+
+    // Return offset rather than strip non-payload data
+    if (!strip_opreturndata_from_chunk (opdata, chunk, intOffset)) {
+        // LogPrint (BCLog::ALL, "%s - failed at strip_opreturndata_from_chunk\n", __func__);
+        return false;
+    }
+
+    // is_valid_chunk(chunk, type)
+
+    // Validate magic
+    is_valid_chunk (opdata, type, intOffset);
+    if (type != 4) {
+        // LogPrint (BCLog::ALL, "%s - unknown chunk type\n", __func__);
+        return false;
+    }
+
+    // used to identify authdata in mempool
+    if (test_accept) {
+        return true;
+    }
+
+    // if (!check_contextual_auth(chunk, error_level)) {
+
+    // Check magic and time
+    if (!check_contextual_blocktenant (opdata, error_level, intOffset)) {
+        // LogPrint (BCLog::ALL, "%s - failed at check_contextual_blocktenant\n", __func__);
+        return false;
+    }
+
+    // if (!process_auth_chunk(chunk, error_level)) {
+
+    // blocktennant or unblocktenant
+    if (!process_blocktenant_chunk (opdata, error_level, intOffset)) {
+        // LogPrint (BCLog::ALL, "%s - failed at process_blocktenant_chunk\n", __func__);
+        return false;
+    }
+
+    return true;
+}
+
 bool compare_pubkey (const CScript& script_data, int& error_level, uint160 hash160)
 {
     int type;
@@ -597,39 +1103,48 @@ bool check_mempool_for_authdata(const CTxMemPool& mempool)
     return false;
 }
 
-// noop
-
+// Scan blocks for allow and deny transactions
 bool scan_blocks_for_authdata(ChainstateManager& chainman)
 {
-    const CChain& active_chain = chainman.ActiveChain();
-    const int tip_height = active_chain.Height();
+
+    // Active chain
+    const CChain& chnActiveChain = chainman.ActiveChain();
+
+    // Tip height
+    const int intTipHeight = chnActiveChain.Height();
 
     // Timing
     clock_t start, end;
     clock_t start_t, end_t;
-    double time_taken;
+    double dblComprehensiveFunctionTime;
     double t_rbfd = 0.0;
     double t_ioaa = 0.0;
     double t_foia = 0.0;
 
-    CBlock block{};
-    CBlockIndex* pindex = nullptr;
+    // Block
+    CBlock blkBlock{};
 
+    // Initialize block index
+    CBlockIndex* bliBlockIndex = nullptr;
+
+    // Start comprehensive function timing
     start_t = clock ();    
 
-    // uint32_t u32Cutoff =  Params().GetConsensus().nUUIDBlockStart;
-    // uint32_t u32BlockSpan =  8301;
+    // Set block span ( (12 blocks/hr) * (24 hr/day) * (365 day/yr) = 105,120 blocks/yr )
     uint32_t u32BlockSpan =  105120;
-    uint32_t u32Cutoff =  tip_height - u32BlockSpan;
 
+    // Set cutoff
+    uint32_t u32Cutoff =  intTipHeight - u32BlockSpan;
+
+    // If cutoff is below pos start
     if (u32Cutoff < Params().GetConsensus().nUUIDBlockStart) {
+
+        // Set cutoff to pos start
         u32Cutoff = Params().GetConsensus().nUUIDBlockStart;
     }
 
     // Scan most recent blockspan blocks
-    // for (int height = Params().GetConsensus().nUUIDBlockStart; height < tip_height; height++) {
-    // for (int height = u32Cutoff; height < tip_height; height++) {
-    for (uint32_t height = u32Cutoff; height < tip_height; height++) {
+    for (uint32_t height = u32Cutoff; height < intTipHeight; height++) {
 
 gu32BlockHeight = height;        
 
@@ -637,8 +1152,11 @@ gu32BlockHeight = height;
     start = clock ();    
 #endif
 
-        pindex = active_chain[height];
-        if (!ReadBlockFromDisk(block, pindex, chainman.GetConsensus())) {
+        // Set block index to current block
+        bliBlockIndex  = chnActiveChain[height];
+
+        // Read block from disk
+        if (!ReadBlockFromDisk(blkBlock, bliBlockIndex , chainman.GetConsensus())) {
             return false;
         }
 
@@ -648,22 +1166,24 @@ gu32BlockHeight = height;
 #endif
 
         // Loop on block transactions
-        for (unsigned int vtx = 0; vtx < block.vtx.size(); vtx++) {
+        for (unsigned int vtx = 0; vtx < blkBlock.vtx.size(); vtx++) {
 
-            if (block.vtx[vtx]->IsCoinBase() || block.vtx[vtx]->IsCoinStake()) {
+            // Skip irrelevant transactions
+            if (blkBlock.vtx[vtx]->IsCoinBase() || blkBlock.vtx[vtx]->IsCoinStake()) {
                 continue;
             }
 
             // If not chunk data
-            if (block.vtx[vtx]->vout.size() < 5) {            
+            if (blkBlock.vtx[vtx]->vout.size() < 5) {            
 
                 // Loop on transaction outputs
-                for (unsigned int vout = 0; vout < block.vtx[vtx]->vout.size(); vout++) {
+                for (unsigned int vout = 0; vout < blkBlock.vtx[vtx]->vout.size(); vout++) {
 
-                    const CScript opreturn_out = block.vtx[vtx]->vout[vout].scriptPubKey;
+                    // OP_RETURN data
+                    const CScript scrOpreturnData = blkBlock.vtx[vtx]->vout[vout].scriptPubKey;
 
                     // If OP_RETURN
-                    if (opreturn_out.IsOpReturn()) {
+                    if (scrOpreturnData.IsOpReturn()) {
                         int error_level;
 
 #ifdef TIMING
@@ -671,7 +1191,200 @@ gu32BlockHeight = height;
 #endif
 
                         // If auth chunk, rather than data chunk
-                        if (!is_opreturn_an_authdata (opreturn_out, error_level)) {
+                        if (is_opreturn_an_authdata (scrOpreturnData, error_level) || is_opreturn_a_blockuuiddata (scrOpreturnData, error_level) || is_opreturn_a_blocktenantdata (scrOpreturnData, error_level)) {
+
+#ifdef TIMING
+    end = clock ();    
+    t_ioaa = t_ioaa + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+
+
+
+if (is_opreturn_an_authdata (scrOpreturnData, error_level)) {
+
+    // Validate authdata, and popoulate authList
+    if (!found_opreturn_in_authdata (scrOpreturnData, error_level)) {
+        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::ALL, "An invalid tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    } else {
+        //LogPrint (BCLog::ALL, "\n");
+        //LogPrint (BCLog::ALL, "A valid tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    }
+
+}
+
+
+
+if (is_opreturn_a_blockuuiddata (scrOpreturnData, error_level)) {
+
+    // Validate blockuuiddata, and popoulate blockuuidList
+    if (!found_opreturn_in_blockuuiddata (scrOpreturnData, error_level)) {
+        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::ALL, "An invalid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    } else {
+        //LogPrint (BCLog::ALL, "\n");
+        //LogPrint (BCLog::ALL, "A valid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    }
+
+}
+
+
+
+if (is_opreturn_a_blocktenantdata (scrOpreturnData, error_level)) {
+
+    // Validate blocktenantdata, and popoulate blocktenantList
+    if (!found_opreturn_in_blocktenantdata (scrOpreturnData, error_level)) {
+        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::ALL, "An invalid tenant was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    } else {
+        //LogPrint (BCLog::ALL, "\n");
+        //LogPrint (BCLog::ALL, "A valid tenant was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+    }
+
+}
+
+
+
+                        } else {
+
+                            continue;
+
+                        }
+
+#ifdef TIMING
+    end = clock ();    
+    t_ioaa = t_ioaa + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+
+#ifdef TIMING
+    start = clock ();    
+#endif
+
+#ifdef TIMING
+    end = clock ();    
+    t_foia = t_foia + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+
+                    }
+                }
+
+            }
+
+        }
+    }
+
+    // End comprehensive function timing
+    end_t = clock ();    
+
+    // Compute comprehensive function time
+    dblComprehensiveFunctionTime = (double) (end_t - start_t) / CLOCKS_PER_SEC;
+
+#ifdef TIMING
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "elapsed ReadBlockFromDisk %ld \n", t_rbfd);
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "elapsed is_opreturn_an_authdata %ld \n", t_ioaa);
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "elapsed found_opreturn_in_authdata %ld \n", t_foia);
+#endif
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "The elapsed time to complete the scan_blocks_for_authdata() function was %ld seconds.\n", dblComprehensiveFunctionTime);
+
+    return true;
+}
+
+// Scan blocks for blockuuid and unblockuuid transactions
+bool scan_blocks_for_blockuuiddata(ChainstateManager& chainman)
+{
+
+    // Active chain
+    const CChain& chnActiveChain = chainman.ActiveChain();
+
+    // Tip height
+    const int intTipHeight = chnActiveChain.Height();
+
+    // Timing
+    clock_t start, end;
+    clock_t start_t, end_t;
+    double dblComprehensiveFunctionTime;
+    double t_rbfd = 0.0;
+    double t_ioaa = 0.0;
+    double t_foia = 0.0;
+
+    // Block
+    CBlock blkBlock{};
+
+    // Initialize block index
+    CBlockIndex* bliBlockIndex = nullptr;
+
+    // Start comprehensive function timing
+    start_t = clock ();    
+
+    // Set block span ( (12 blocks/hr) * (24 hr/day) * (365 day/yr) * (10 yr/decade) = 1,051,200 blocks/decade )
+    uint32_t u32BlockSpan =  1051200;
+
+    // Set cutoff
+    uint32_t u32Cutoff =  intTipHeight - u32BlockSpan;
+
+    // If cutoff is below pos start
+    if (u32Cutoff < Params().GetConsensus().nUUIDBlockStart) {
+
+        // Set cutoff to pos start
+        u32Cutoff = Params().GetConsensus().nUUIDBlockStart;
+    }
+
+    // Scan most recent blockspan blocks
+    for (uint32_t height = u32Cutoff; height < intTipHeight; height++) {
+
+gu32BlockHeight = height;        
+
+#ifdef TIMING
+    start = clock ();    
+#endif
+
+        // Set block index to current block
+        bliBlockIndex  = chnActiveChain[height];
+
+        // Read block from disk
+        if (!ReadBlockFromDisk(blkBlock, bliBlockIndex , chainman.GetConsensus())) {
+            return false;
+        }
+
+#ifdef TIMING
+    end = clock ();    
+    t_rbfd = t_rbfd + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+
+        // Loop on block transactions
+        for (unsigned int vtx = 0; vtx < blkBlock.vtx.size(); vtx++) {
+
+            // Skip irrelevant transactions
+            if (blkBlock.vtx[vtx]->IsCoinBase() || blkBlock.vtx[vtx]->IsCoinStake()) {
+                continue;
+            }
+
+            // If not chunk data
+            if (blkBlock.vtx[vtx]->vout.size() < 5) {            
+
+                // Loop on transaction outputs
+                for (unsigned int vout = 0; vout < blkBlock.vtx[vtx]->vout.size(); vout++) {
+
+                    // OP_RETURN data
+                    const CScript scrOpreturnData = blkBlock.vtx[vtx]->vout[vout].scriptPubKey;
+
+                    // If OP_RETURN
+                    if (scrOpreturnData.IsOpReturn()) {
+                        int error_level;
+
+#ifdef TIMING
+    start = clock ();    
+#endif
+
+                        // If blockuuid chunk, rather than blocktenant, auth or data chunk
+                        if (!is_opreturn_a_blockuuiddata (scrOpreturnData, error_level)) {
 
 #ifdef TIMING
     end = clock ();    
@@ -690,13 +1403,13 @@ gu32BlockHeight = height;
     start = clock ();    
 #endif
 
-                         // Validate authdata, and popoulate authList
-                        if (!found_opreturn_in_authdata (opreturn_out, error_level)) {
+                        // Validate blockuuiddate, and popoulate blockuuidList
+                        if (!found_opreturn_in_blockuuiddata (scrOpreturnData, error_level)) {
                             LogPrint (BCLog::ALL, "\n");
-                            LogPrint (BCLog::ALL, "An invalid Tenant public key was found in TX %s (vout %d).\n", block.vtx[vtx]->GetHash().ToString(), vout);
+                            LogPrint (BCLog::ALL, "An invalid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
                         } else {
                             //LogPrint (BCLog::ALL, "\n");
-                            //LogPrint (BCLog::ALL, "A valid Tenant public key was found in TX %s (vout %d).\n", block.vtx[vtx]->GetHash().ToString(), vout);
+                            //LogPrint (BCLog::ALL, "A valid Tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
                         }
 
 #ifdef TIMING
@@ -712,9 +1425,11 @@ gu32BlockHeight = height;
         }
     }
 
-    // stop clock
+    // End comprehensive function timing
     end_t = clock ();    
-    time_taken = (double) (end_t - start_t) / CLOCKS_PER_SEC;
+
+    // Compute comprehensive function time
+    dblComprehensiveFunctionTime = (double) (end_t - start_t) / CLOCKS_PER_SEC;
 
 #ifdef TIMING
     LogPrint (BCLog::ALL, "\n");
@@ -728,7 +1443,159 @@ gu32BlockHeight = height;
 #endif
 
     LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "The elapsed time to complete the scan_blocks_for_authdata() function was %ld seconds.\n", time_taken);
+    LogPrint (BCLog::ALL, "The elapsed time to complete the scan_blocks_for_blockuuiddata() function was %ld seconds.\n", dblComprehensiveFunctionTime);
+
+    return true;
+}
+
+// Scan blocks for blocktenant and unblocktenant transactions
+bool scan_blocks_for_blocktenantdata(ChainstateManager& chainman)
+{
+
+    // Active chain
+    const CChain& chnActiveChain = chainman.ActiveChain();
+
+    // Tip height
+    const int intTipHeight = chnActiveChain.Height();
+
+    // Timing
+    clock_t start, end;
+    clock_t start_t, end_t;
+    double dblComprehensiveFunctionTime;
+    double t_rbfd = 0.0;
+    double t_ioaa = 0.0;
+    double t_foia = 0.0;
+
+    // Block
+    CBlock blkBlock{};
+
+    // Initialize block index
+    CBlockIndex* bliBlockIndex = nullptr;
+
+    // Start comprehensive function timing
+    start_t = clock ();    
+
+    // Set block span ( (12 blocks/hr) * (24 hr/day) * (365 day/yr) * (10 yr/decade) = 1,051,200 blocks/decade )
+    uint32_t u32BlockSpan =  1051200;
+
+    // Set cutoff
+    uint32_t u32Cutoff =  intTipHeight - u32BlockSpan;
+
+    // If cutoff is below pos start
+    if (u32Cutoff < Params().GetConsensus().nUUIDBlockStart) {
+
+        // Set cutoff to pos start
+        u32Cutoff = Params().GetConsensus().nUUIDBlockStart;
+    }
+
+    // Scan most recent blockspan blocks
+    for (uint32_t height = u32Cutoff; height < intTipHeight; height++) {
+
+gu32BlockHeight = height;        
+
+#ifdef TIMING
+    start = clock ();    
+#endif
+
+        // Set block index to current block
+        bliBlockIndex  = chnActiveChain[height];
+
+        // Read block from disk
+        if (!ReadBlockFromDisk(blkBlock, bliBlockIndex , chainman.GetConsensus())) {
+            return false;
+        }
+
+#ifdef TIMING
+    end = clock ();    
+    t_rbfd = t_rbfd + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+
+        // Loop on block transactions
+        for (unsigned int vtx = 0; vtx < blkBlock.vtx.size(); vtx++) {
+
+            // Skip irrelevant transactions
+            if (blkBlock.vtx[vtx]->IsCoinBase() || blkBlock.vtx[vtx]->IsCoinStake()) {
+                continue;
+            }
+
+            // If not chunk data
+            if (blkBlock.vtx[vtx]->vout.size() < 5) {            
+
+                // Loop on transaction outputs
+                for (unsigned int vout = 0; vout < blkBlock.vtx[vtx]->vout.size(); vout++) {
+
+                    // OP_RETURN data
+                    const CScript scrOpreturnData = blkBlock.vtx[vtx]->vout[vout].scriptPubKey;
+
+                    // If OP_RETURN
+                    if (scrOpreturnData.IsOpReturn()) {
+                        int error_level;
+
+#ifdef TIMING
+    start = clock ();    
+#endif
+
+                        // If blocktenant chunk, rather than blockuuid, auth or data chunk
+                        if (!is_opreturn_a_blocktenantdata (scrOpreturnData, error_level)) {
+
+#ifdef TIMING
+    end = clock ();    
+    t_ioaa = t_ioaa + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+
+                            continue;
+                        }
+
+#ifdef TIMING
+    end = clock ();    
+    t_ioaa = t_ioaa + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+
+#ifdef TIMING
+    start = clock ();    
+#endif
+
+                        // Validate blocktenantdate, and popoulate blocktenantList
+                        if (!found_opreturn_in_blocktenantdata (scrOpreturnData, error_level)) {
+                            LogPrint (BCLog::ALL, "\n");
+                            LogPrint (BCLog::ALL, "An invalid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+                        } else {
+                            //LogPrint (BCLog::ALL, "\n");
+                            //LogPrint (BCLog::ALL, "A valid Tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+                        }
+
+#ifdef TIMING
+    end = clock ();    
+    t_foia = t_foia + (double) (end - start) / CLOCKS_PER_SEC;
+#endif
+
+                    }
+                }
+
+            }
+
+        }
+    }
+
+    // End comprehensive function timing
+    end_t = clock ();    
+
+    // Compute comprehensive function time
+    dblComprehensiveFunctionTime = (double) (end_t - start_t) / CLOCKS_PER_SEC;
+
+#ifdef TIMING
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "elapsed ReadBlockFromDisk %ld \n", t_rbfd);
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "elapsed is_opreturn_an_authdata %ld \n", t_ioaa);
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "elapsed found_opreturn_in_authdata %ld \n", t_foia);
+#endif
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "The elapsed time to complete the scan_blocks_for_blocktenantdata() function was %ld seconds.\n", dblComprehensiveFunctionTime);
 
     return true;
 }
@@ -864,6 +1731,98 @@ bool generate_auth_payload(std::string& payload, int& type, uint32_t& time, std:
     return true;
 }
 
+bool generate_blockuuid_payload(std::string& payload, int& type, uint32_t& time, std::string& uuid)
+{
+    payload.clear();
+
+    payload += OPBLOCKUUID_MAGIC;
+    payload += type == 0 ? OPBLOCKUUID_BLOCKUUID : OPBLOCKUUID_UNBLOCKUUID;
+    payload += unixtime_to_hexstring(time);
+    payload += uuid;
+
+    CKey key = DecodeSecret(authUserKey);
+    if (!key.IsValid()) {
+        return false;
+    }
+
+    uint256 checkhash;
+    std::vector<unsigned char> signature;
+    sha256_hash_bin(payload.c_str(), (char*)&checkhash, (OPBLOCKUUID_MAGICLEN*2) + (OPBLOCKUUID_OPERATIONLEN*2) + (OPBLOCKUUID_TIMELEN*2) + (OPBLOCKUUID_UUIDLEN*2));
+
+    if (!key.SignCompact(checkhash, signature)) {
+        return false;
+    }
+
+    payload += HexStr(signature);
+
+
+
+
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "BLOCKUUID DATA STRUCTURE (generate_blockuuid_payload)\n");
+    LogPrint (BCLog::ALL, "magic type time uuid magic-type-time-uuid-hashed-signed \n");
+    LogPrint (BCLog::ALL, "%s %s %s %s %s\n",
+      payload.substr( 0, OPBLOCKUUID_MAGICLEN*2),
+      payload.substr( OPBLOCKUUID_MAGICLEN*2, OPBLOCKUUID_OPERATIONLEN*2),
+      payload.substr( OPBLOCKUUID_MAGICLEN*2+OPBLOCKUUID_OPERATIONLEN*2, OPBLOCKUUID_TIMELEN*2),
+      payload.substr( OPBLOCKUUID_MAGICLEN*2+OPBLOCKUUID_OPERATIONLEN*2+OPBLOCKUUID_TIMELEN*2, OPBLOCKUUID_UUIDLEN*2),
+      payload.substr( 0, payload.length()-(OPBLOCKUUID_MAGICLEN*2+OPBLOCKUUID_OPERATIONLEN*2+OPBLOCKUUID_TIMELEN*2+OPBLOCKUUID_UUIDLEN*2)));
+    LogPrint (BCLog::ALL, "\n");
+
+
+
+
+
+    return true;
+}
+
+bool generate_blocktenant_payload(std::string& payload, int& type, uint32_t& time, std::string& tenant)
+{
+    payload.clear();
+
+    payload += OPBLOCKTENANT_MAGIC;
+    payload += type == 0 ? OPBLOCKTENANT_BLOCKTENANT : OPBLOCKTENANT_UNBLOCKTENANT;
+    payload += unixtime_to_hexstring(time);
+    payload += tenant;
+
+    CKey key = DecodeSecret(authUserKey);
+    if (!key.IsValid()) {
+        return false;
+    }
+
+    uint256 checkhash;
+    std::vector<unsigned char> signature;
+    sha256_hash_bin(payload.c_str(), (char*)&checkhash, (OPBLOCKTENANT_MAGICLEN*2) + (OPBLOCKTENANT_OPERATIONLEN*2) + (OPBLOCKTENANT_TIMELEN*2) + (OPBLOCKTENANT_TENANTLEN*2));
+
+    if (!key.SignCompact(checkhash, signature)) {
+        return false;
+    }
+
+    payload += HexStr(signature);
+
+
+
+
+
+    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::ALL, "BLOCKTENANT DATA STRUCTURE (generate_blocktenant_payload)\n");
+    LogPrint (BCLog::ALL, "magic type time tenant magic-type-time-uuid-hashed-signed \n");
+    LogPrint (BCLog::ALL, "%s %s %s %s %s\n",
+      payload.substr( 0, OPBLOCKTENANT_MAGICLEN*2),
+      payload.substr( OPBLOCKTENANT_MAGICLEN*2, OPBLOCKTENANT_OPERATIONLEN*2),
+      payload.substr( OPBLOCKTENANT_MAGICLEN*2+OPBLOCKTENANT_OPERATIONLEN*2, OPBLOCKTENANT_TIMELEN*2),
+      payload.substr( OPBLOCKTENANT_MAGICLEN*2+OPBLOCKTENANT_OPERATIONLEN*2+OPBLOCKTENANT_TIMELEN*2, OPBLOCKTENANT_TENANTLEN*2),
+      payload.substr( 0, payload.length()-(OPBLOCKTENANT_MAGICLEN*2+OPBLOCKTENANT_OPERATIONLEN*2+OPBLOCKTENANT_TIMELEN*2+OPBLOCKTENANT_TENANTLEN*2)));
+    LogPrint (BCLog::ALL, "\n");
+
+
+
+
+
+    return true;
+}
+
 bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload)
 {
 
@@ -948,6 +1907,188 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
         }
 
         // return false;
+
+        // commit to wallet and relay to network
+        CTransactionRef txRef = MakeTransactionRef(tx);
+        vpwallets[0]->CommitTransaction(txRef, {}, {});
+    }
+
+    return true;
+}
+
+bool generate_blockuuid_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload)
+{
+
+    LogPrint (BCLog::ALL, "BUILD BLOCKUUID TRANSACTION (generate_blockuuid_transaction)\n");
+    LogPrint (BCLog::ALL, "The blockuuid transaction contains:\n");
+    LogPrint (BCLog::ALL, "1) An input transaction from which to pay for the blockuuid transaction.\n");
+    LogPrint (BCLog::ALL, "2) An output for making change. \n");
+    LogPrint (BCLog::ALL, "3) An output containing the blockuuid payload, prepended with 106 as a single byte.\n");
+    LogPrint (BCLog::ALL, "On daemon startup, a blockchain scan for blockuuid transactions is done.\n");
+    LogPrint (BCLog::ALL, "For each blockuuid transaction encountered, a uuid is added to global variable blockuuidList.\n");
+    LogPrint (BCLog::ALL, "\n");
+
+    auto vpwallets = GetWallets(wallet_context);
+    size_t nWallets = vpwallets.size();
+    if (nWallets < 1) {
+        return false;
+    }
+
+    CAmount setValue;
+    std::set<std::pair<const CWalletTx*, unsigned int>> setCoins;
+    if (!select_coins_for_opreturn(vpwallets.front().get(), setCoins, setValue)) {
+        return false;
+    }
+
+    if (setCoins.size() == 0) {
+        return false;
+    }
+ 
+    // get vin/vout
+    std::set<std::pair<const CWalletTx*, unsigned int>>::iterator it = setCoins.begin();
+    COutPoint out{it->first->tx->GetHash(), it->second};
+    CTxIn txIn(out);
+
+    //CScript receiver = it->first->tx->vout[0].scriptPubKey;
+    CScript receiver = it->first->tx->vout[it->second].scriptPubKey;
+ 
+    CTxOut txOut(setValue, receiver);
+
+
+    LogPrint (BCLog::ALL, "Input size %d\n", setCoins.size());
+    LogPrint (BCLog::ALL, "Input hash %s\n", it->first->tx->GetHash().ToString());
+    LogPrint (BCLog::ALL, "Input index %d\n", it->second);
+    LogPrint (BCLog::ALL, "Output scriptPubKey %s\n", HexStr(receiver).substr(0, 30));
+
+    // Flag error and exit gracefully if attempt is made to create transaction with empty scriptPubKey
+    if (receiver.size() == 0) {
+        LogPrint (BCLog::POS, "%s: attempt to create transaction with empty scriptPubKey. scriptPubKeyOut: %s\n", __func__, HexStr(receiver).substr(0, 30));
+        return false;
+    }
+
+    // build tx
+    tx.nVersion = CTransaction::CURRENT_VERSION;
+    tx.vin.push_back(txIn);
+    tx.vout.push_back(txOut);
+
+    // build blockuuid output (OP_RETURN + payload)
+    CTxOut txOpOut = build_opreturn_txout(opPayload);
+    tx.vout.push_back(txOpOut);
+
+    {
+        //! sign tx once to get complete size
+        LOCK(vpwallets[0]->cs_wallet);
+        if (!vpwallets[0]->SignTransaction(tx)) {
+            return false;
+        }
+
+        // calculate and adjust fee (with 32byte fudge)
+        unsigned int nBytes = GetSerializeSize(tx) + 32;
+        CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
+        tx.vout[0].nValue -= nFee;
+
+        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::ALL, "Input value in satoshis:  %llu\n", setValue);
+        LogPrint (BCLog::ALL, "Transaction bytes: %d\n", nBytes);
+        LogPrint (BCLog::ALL, "Transaction fee in satoshis: %llu\n", nFee);
+        LogPrint (BCLog::ALL, "Change in satoshis: %llu\n", tx.vout[0].nValue);
+        LogPrint (BCLog::ALL, "\n");
+
+        //! sign tx again with correct fee in place
+        if (!vpwallets[0]->SignTransaction(tx)) {
+            return false;
+        }
+
+        // commit to wallet and relay to network
+        CTransactionRef txRef = MakeTransactionRef(tx);
+        vpwallets[0]->CommitTransaction(txRef, {}, {});
+    }
+
+    return true;
+}
+
+bool generate_blocktenant_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload)
+{
+
+    LogPrint (BCLog::ALL, "BUILD BLOCKTENANT TRANSACTION (generate_blocktenant_transaction)\n");
+    LogPrint (BCLog::ALL, "The blocktenant transaction contains:\n");
+    LogPrint (BCLog::ALL, "1) An input transaction from which to pay for the blocktenant transaction.\n");
+    LogPrint (BCLog::ALL, "2) An output for making change. \n");
+    LogPrint (BCLog::ALL, "3) An output containing the blocktenant payload, prepended with 106 as a single byte.\n");
+    LogPrint (BCLog::ALL, "On daemon startup, a blockchain scan for blocktenant transactions is done.\n");
+    LogPrint (BCLog::ALL, "For each blocktenant transaction encountered, a tenant is added to global variable blocktenantList.\n");
+    LogPrint (BCLog::ALL, "\n");
+
+    auto vpwallets = GetWallets(wallet_context);
+    size_t nWallets = vpwallets.size();
+    if (nWallets < 1) {
+        return false;
+    }
+
+    CAmount setValue;
+    std::set<std::pair<const CWalletTx*, unsigned int>> setCoins;
+    if (!select_coins_for_opreturn(vpwallets.front().get(), setCoins, setValue)) {
+        return false;
+    }
+
+    if (setCoins.size() == 0) {
+        return false;
+    }
+ 
+    // get vin/vout
+    std::set<std::pair<const CWalletTx*, unsigned int>>::iterator it = setCoins.begin();
+    COutPoint out{it->first->tx->GetHash(), it->second};
+    CTxIn txIn(out);
+
+    //CScript receiver = it->first->tx->vout[0].scriptPubKey;
+    CScript receiver = it->first->tx->vout[it->second].scriptPubKey;
+ 
+    CTxOut txOut(setValue, receiver);
+
+
+    LogPrint (BCLog::ALL, "Input size %d\n", setCoins.size());
+    LogPrint (BCLog::ALL, "Input hash %s\n", it->first->tx->GetHash().ToString());
+    LogPrint (BCLog::ALL, "Input index %d\n", it->second);
+    LogPrint (BCLog::ALL, "Output scriptPubKey %s\n", HexStr(receiver).substr(0, 30));
+
+    // Flag error and exit gracefully if attempt is made to create transaction with empty scriptPubKey
+    if (receiver.size() == 0) {
+        LogPrint (BCLog::POS, "%s: attempt to create transaction with empty scriptPubKey. scriptPubKeyOut: %s\n", __func__, HexStr(receiver).substr(0, 30));
+        return false;
+    }
+
+    // build tx
+    tx.nVersion = CTransaction::CURRENT_VERSION;
+    tx.vin.push_back(txIn);
+    tx.vout.push_back(txOut);
+
+    // build blocktenant output (OP_RETURN + payload)
+    CTxOut txOpOut = build_opreturn_txout(opPayload);
+    tx.vout.push_back(txOpOut);
+
+    {
+        //! sign tx once to get complete size
+        LOCK(vpwallets[0]->cs_wallet);
+        if (!vpwallets[0]->SignTransaction(tx)) {
+            return false;
+        }
+
+        // calculate and adjust fee (with 32byte fudge)
+        unsigned int nBytes = GetSerializeSize(tx) + 32;
+        CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
+        tx.vout[0].nValue -= nFee;
+
+        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::ALL, "Input value in satoshis:  %llu\n", setValue);
+        LogPrint (BCLog::ALL, "Transaction bytes: %d\n", nBytes);
+        LogPrint (BCLog::ALL, "Transaction fee in satoshis: %llu\n", nFee);
+        LogPrint (BCLog::ALL, "Change in satoshis: %llu\n", tx.vout[0].nValue);
+        LogPrint (BCLog::ALL, "\n");
+
+        //! sign tx again with correct fee in place
+        if (!vpwallets[0]->SignTransaction(tx)) {
+            return false;
+        }
 
         // commit to wallet and relay to network
         CTransactionRef txRef = MakeTransactionRef(tx);

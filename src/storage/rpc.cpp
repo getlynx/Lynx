@@ -34,6 +34,8 @@
 
 #include <pos/manager.h>
 
+#include <util/system.h>
+
 using namespace wallet;
 using node::ReadBlockFromDisk;
 
@@ -44,6 +46,9 @@ extern uint160 ghshAuthenticatetenantPubkey;
 
 // Nunber of consecutive authentication failures
 int gintAuthenticationFailures;
+
+// Store asset encrypt flag
+int gintStoreAssetEncryptFlag;
 
 // Authentication start time
 extern uint32_t gu32AuthenticationTime;
@@ -59,6 +64,18 @@ extern std::map<std::string, int> gmapBlockHeight;
 
 extern std::map<std::string, int> gmapTimeStamp;
 
+extern std::map<std::string, std::string> gmapExtension;
+
+extern std::map<std::string, std::string> gmapEncrypted;
+
+int gintFetchAssetFullProtocol;
+
+int gintFetchDone;
+
+std::string gstrAssetExtension;
+
+std::string gstrAssetFilename;
+
 static RPCHelpMan store()
 {
     return RPCHelpMan{"store",
@@ -66,6 +83,7 @@ static RPCHelpMan store()
          {
              {"filepath", RPCArg::Type::STR, RPCArg::Optional::NO, "Full path of file to be uploaded"},
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Custom unique identifier (32 characters, hexadecimal format, must be unique across all files)"},
+             {"encrypt", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Encrypt flag 0|1 (0: No, 1: Yes, default: No)"},
          },
 
 
@@ -75,7 +93,7 @@ static RPCHelpMan store()
                     {RPCResult::Type::OBJ, "", "",
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
-                          {RPCResult::Type::STR, "message", "Not authenticated as tenent | Not authenticated | Repeated UUID | Improper length UUID | Invalid hex notation UUID | Zero length asset filesize"},
+                          {RPCResult::Type::STR, "message", "Not authenticated as tenent | Not authenticated | Repeated UUID | Improper length UUID | Invalid hex notation UUID | Zero length asset filesize | Insufficiently funded wallet"},
                           {RPCResult::Type::STR, "identifier", "Universally unique asset identifier"},
                           {RPCResult::Type::STR, "tenant", "Hashed public tenant key"},
                           {RPCResult::Type::NUM, "filesize", "filesize (B)"},
@@ -83,6 +101,7 @@ static RPCHelpMan store()
                           {RPCResult::Type::STR, "storagetime", "Storage date and time"},
                           {RPCResult::Type::NUM, "currentblock", "Current block"},
                           {RPCResult::Type::STR, "stakingstatus", "enabled | disabled"},
+                          {RPCResult::Type::STR, "encrypted", "yes | no"},
                     }},
                 }
             },
@@ -98,6 +117,19 @@ static RPCHelpMan store()
 
 
 
+    // Get wallets
+    auto vctWallets = GetWallets(*storage_context);
+
+    // Number of suitable inputs
+    int intNumberOfSuitableInputs;
+
+    // Get number of suitable inputs
+    estimate_coins_for_opreturn(vctWallets.front().get(), intNumberOfSuitableInputs);
+
+    LogPrint (BCLog::ALL, "suitable inputs %d \n", intNumberOfSuitableInputs);
+
+
+
     // Entry
     UniValue entry(UniValue::VOBJ);
 
@@ -107,19 +139,19 @@ static RPCHelpMan store()
 
 
     // Staking status
-    std::string strStakingslStatus;
+    std::string strStakingStatus;
 
     // If staking disabled
     if (gblnDisableStaking) {
 
         // Set to disabled
-        strStakingslStatus = "disabled";
+        strStakingStatus = "disabled";
 
     // Else not if staking disabled
     } else {
 
         // Set to enabled
-        strStakingslStatus = "enabled";
+        strStakingStatus = "enabled";
 
     // End if staking disabled
     }
@@ -142,11 +174,12 @@ static RPCHelpMan store()
         entry.pushKV("message", "Not authenticated as tenant.");
         entry.pushKV("identifier", "n/a");
         entry.pushKV("tenant", "n/a");
-        entry.pushKV("filesize", 0);
+        entry.pushKV("filesize (B)", 0);
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", intTipHeight);
-        entry.pushKV("stakingstatus", strStakingslStatus);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", "n/a");
         results.push_back(entry);
         return results;
     }
@@ -161,11 +194,12 @@ static RPCHelpMan store()
         entry.pushKV("message", "Please authenticate to use this command.");
         entry.pushKV("identifier", "n/a");
         entry.pushKV("tenant", "n/a");
-        entry.pushKV("filesize", 0);
+        entry.pushKV("filesize (B)", 0);
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", intTipHeight);
-        entry.pushKV("stakingstatus", strStakingslStatus);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", "n/a");
         results.push_back(entry);
         return results;
 
@@ -187,11 +221,12 @@ static RPCHelpMan store()
             entry.pushKV("message", "Please authenticate to use this command.");
             entry.pushKV("identifier", "n/a");
             entry.pushKV("tenant", "n/a");
-            entry.pushKV("filesize", 0);
+            entry.pushKV("filesize (B)", 0);
             entry.pushKV("storagefee", 0);
             entry.pushKV("storagetime", "n/a");
             entry.pushKV("currentblock", intTipHeight);
-            entry.pushKV("stakingstatus", strStakingslStatus);
+            entry.pushKV("stakingstatus", strStakingStatus);
+            entry.pushKV("encrypted", "n/a");
             results.push_back(entry);
             return results;
         }
@@ -203,18 +238,98 @@ static RPCHelpMan store()
 
 
 
+    // Encrypt 
+    std::string strEncrypt = "0";
+    int intEncrypt;
+
+    // First optional parameter
+    std::string strFirstOptionalParameter;
+
     // Get asset filename
     std::string strAssetFilename = request.params[0].get_str();
+
+    int filelen = read_file_size (strAssetFilename);
+
+    LogPrint (BCLog::ALL, "transactions %d \n", filelen/512/256+1);
+
+    if (intNumberOfSuitableInputs < ((filelen/512/256)+1)) {
+
+        // Report and exit
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Insufficiently funded wallet.");
+        entry.pushKV("identifier", "n/a");
+        entry.pushKV("tenant", "n/a");
+        entry.pushKV("filesize (B)", filelen);
+        entry.pushKV("storagefee", 0);
+        entry.pushKV("storagetime", "n/a");
+        entry.pushKV("currentblock", intTipHeight);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", "n/a");
+        results.push_back(entry);
+        return results;
+
+    }
 
     // Initialize asset custom uuid
     std::string strAssetUUID = "";
 
-    // If custom uuid
+    // Returned uuid
+    std::string strAssetUUID0;
+
+    // If first optional parameter
     if(!request.params[1].isNull()) {
 
-        // Get custom uuid
-        strAssetUUID = request.params[1].get_str();
+        // Get first optional parameter
+        strFirstOptionalParameter = request.params[1].get_str();
+
+        // If size > 1
+        if (strFirstOptionalParameter.size() > 1) {
+
+            // Set custom uuid
+            strAssetUUID = strFirstOptionalParameter;
+         
+        // Else not if size > 1
+        } else {
+
+            // If 1
+            if (strFirstOptionalParameter == "1") {
+
+                // Set encrypt
+                strEncrypt = "1";
+
+            // End if 1    
+            }
+
+        // End if size > 1
+        }
+
+    // End if first optional parameter
     }
+
+    // If encrypt flag
+    if(!request.params[2].isNull()) {
+
+        // Get encrypt flag
+        strEncrypt = request.params[2].get_str();
+
+    // End if encrypt flag
+    }
+
+
+
+    // Convert encrypt flag to integer
+    intEncrypt = stoi (strEncrypt);
+
+    // For file_to_hexchunks
+    gintStoreAssetEncryptFlag = intEncrypt;
+
+
+
+LogPrint (BCLog::ALL, "uuid %s \n", strAssetUUID);
+LogPrint (BCLog::ALL, "encrypt %d \n", intEncrypt);
+LogPrint (BCLog::ALL, "\n");
+
+
 
     // If custom uuid
     if (strAssetUUID != "") {
@@ -225,6 +340,35 @@ static RPCHelpMan store()
         // If uuid valid (length, hex notation)
         if (is_valid_uuid(strAssetUUID, intUUIDInvalidityType)) {
 
+
+
+
+
+            std::string strUUID1 = strAssetUUID;
+            LogPrint (BCLog::ALL, "UUID1 %s \n", strUUID1);
+            std::vector<uint8_t> vctUUID1(strUUID1.begin(), strUUID1.end());
+            uint160 u16UUID2(Hash160(vctUUID1));
+            LogPrint (BCLog::ALL, "UUID2 %s \n", u16UUID2.ToString());
+            std::string strUUID2 = u16UUID2.ToString();
+            std::string strUUID3 = strUUID2;
+            for (int i = 0; i < 8; i++) {
+                strUUID3[i] = strUUID1[i];
+            }
+            LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
+            std::string strUUID4 = strUUID3;
+            for (int i = 40; i < 64; i++) {
+                strUUID4 = strUUID4 + strUUID1[i];
+            }
+            LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
+
+            strAssetUUID0 = strAssetUUID;
+
+            strAssetUUID = strUUID4;
+                
+
+            
+    
+    
             // Existing uuid's
             std::vector<std::string> vctExistingUUIDs;
 
@@ -243,13 +387,14 @@ static RPCHelpMan store()
                     // Report and exit
                     entry.pushKV("result", "failure");
                     entry.pushKV("message", "A duplicate unique identifier was discovered.");
-                    entry.pushKV("identifier", strAssetUUID);
+                    entry.pushKV("identifier", strAssetUUID0);
                     entry.pushKV("tenant", authUser.ToString());
-                    entry.pushKV("filesize", 0);
+                    entry.pushKV("filesize (B)", 0);
                     entry.pushKV("storagefee", 0);
                     entry.pushKV("storagetime", "n/a");
                     entry.pushKV("currentblock", intTipHeight);
-                    entry.pushKV("stakingstatus", strStakingslStatus);
+                    entry.pushKV("stakingstatus", strStakingStatus);
+                    entry.pushKV("encrypted", "n/a");
                     results.push_back(entry);
                     return results;
                 }     
@@ -268,11 +413,12 @@ static RPCHelpMan store()
                 entry.pushKV("message", "The custom unique identifier provided has an invalid length.");
                 entry.pushKV("identifier", strAssetUUID);
                 entry.pushKV("tenant", authUser.ToString());
-                entry.pushKV("filesize", 0);
+                entry.pushKV("filesize (B)", 0);
                 entry.pushKV("storagefee", 0);
                 entry.pushKV("storagetime", "n/a");
                 entry.pushKV("currentblock", intTipHeight);
-                entry.pushKV("stakingstatus", strStakingslStatus);
+                entry.pushKV("stakingstatus", strStakingStatus);
+                entry.pushKV("encrypted", "n/a");
                 results.push_back(entry);
                 return results;
             }
@@ -287,11 +433,12 @@ static RPCHelpMan store()
                 entry.pushKV("message", "Invalid UUID hex notation.");
                 entry.pushKV("identifier", strAssetUUID);
                 entry.pushKV("tenant", authUser.ToString());
-                entry.pushKV("filesize", 0);
+                entry.pushKV("filesize (B)", 0);
                 entry.pushKV("storagefee", 0);
                 entry.pushKV("storagetime", "n/a");
                 entry.pushKV("currentblock", intTipHeight);
-                entry.pushKV("stakingstatus", strStakingslStatus);
+                entry.pushKV("stakingstatus", strStakingStatus);
+                entry.pushKV("encrypted", "n/a");
                 results.push_back(entry);
                 return results;
             }
@@ -316,13 +463,58 @@ static RPCHelpMan store()
                 // uuid_not_found_to_not_exist = 0;
             //}
         //}
+
+
+
+
+
+        std::string strUUID1 = strAssetUUID;
+        LogPrint (BCLog::ALL, "UUID1 %s \n", strUUID1);
+        std::vector<uint8_t> vctUUID1(strUUID1.begin(), strUUID1.end());
+        uint160 u16UUID2(Hash160(vctUUID1));
+        LogPrint (BCLog::ALL, "UUID2 %s \n", u16UUID2.ToString());
+        std::string strUUID2 = u16UUID2.ToString();
+        std::string strUUID3 = strUUID2;
+        for (int i = 0; i < 8; i++) {
+            strUUID3[i] = strUUID1[i];
+        }
+        LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
+        std::string strUUID4 = strUUID3;
+        for (int i = 40; i < 64; i++) {
+            strUUID4 = strUUID4 + strUUID1[i];
+        }
+        LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
+
+        strAssetUUID0 = strAssetUUID;
+
+        strAssetUUID = strUUID4;
+            
+        
+        
+
+
     }
 
     // If asset filesize > 0
     if (read_file_size(strAssetFilename) > 0) {
 
+        std::string extension;
+        size_t dotposition = strAssetFilename.rfind('.');
+
+        if (dotposition != std::string::npos && dotposition != strAssetFilename.size() - 1) {
+            extension = strAssetFilename.substr(dotposition + 1);
+            if (extension.size() != 4) {
+                extension.resize(4);
+            }
+        }
+
+        gstrAssetExtension = extension;
+
+        gstrAssetFilename = strAssetFilename;
+
         // Add put task
-        add_put_task(strAssetFilename, strAssetUUID);
+        // add_put_task(strAssetFilename, strAssetUUID);
+        add_put_task("", strAssetUUID);
 
         // LogPrint (BCLog::ALL, "uuid %s\n", strAssetUUID);
 
@@ -364,18 +556,26 @@ static RPCHelpMan store()
         // Convert to string 
         std::string strTransactionFee = ossTransactionFee.str();
 
+        // Encrypted status
+        std::string strEncryptedStatus = "no";
+
+        if (intEncrypt == 1) {
+            strEncryptedStatus = "yes";
+        }
+
 
 
         // Report and exit
         entry.pushKV("result", "success");
         entry.pushKV("message", "n/a");
-        entry.pushKV("identifier", strAssetUUID);
+        entry.pushKV("identifier", strAssetUUID0);
         entry.pushKV("tenant", authUser.ToString());
-        entry.pushKV("filesize", intAssetFilesize);
+        entry.pushKV("filesize (B)", intAssetFilesize);
         entry.pushKV("storagefee", strTransactionFee);
         entry.pushKV("storagetime", strFormattedCurrentTimestamp);
         entry.pushKV("currentblock", intTipHeight);
-        entry.pushKV("stakingstatus", strStakingslStatus);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", strEncryptedStatus);
         results.push_back(entry);
         return results;
 
@@ -387,11 +587,12 @@ static RPCHelpMan store()
         entry.pushKV("message", "Zero length asset filesize.");
         entry.pushKV("identifier", "n/a");
         entry.pushKV("tenant", authUser.ToString());
-        entry.pushKV("filesize", 0);
+        entry.pushKV("filesize (B)", 0);
         entry.pushKV("storagefee", 0);
         entry.pushKV("storagetime", "n/a");
         entry.pushKV("currentblock", intTipHeight);
-        entry.pushKV("stakingstatus", strStakingslStatus);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", "n/a");
         results.push_back(entry);
         return results;
     }
@@ -400,13 +601,14 @@ static RPCHelpMan store()
     };
 }
 
+/*
 static RPCHelpMan fetchall()
 {
     return RPCHelpMan{"fetchall",
         "\nRetrieve asset(s) stored on the Lynx blockchain in reverse chronological order\nLearn more at https://docs.getlynx.io/\n",
          {
              {"count", RPCArg::Type::STR, RPCArg::Optional::NO, "The number of assets to fetch (enter 0 to signify all)."}, 
-             {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the file."},
+             {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "Fully qualified asset download path."},
          },
          RPCResult{
 //             RPCResult::Type::STR, "", "success or failure"},
@@ -417,7 +619,8 @@ static RPCHelpMan fetchall()
                     {RPCResult::Type::OBJ, "", "",
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
-                          {RPCResult::Type::STR, "message", "invslid path | Not authenticated | Nunber of assets fetched: x"},
+                          {RPCResult::Type::STR, "message", "invalid path | Not authenticated | Nunber of assets fetched: x"},
+                          {RPCResult::Type::STR, "tenant", "Store asset authenticated tenant"},
                     }},
                 }
             },
@@ -439,54 +642,119 @@ static RPCHelpMan fetchall()
     // Entry
     UniValue unvEntry(UniValue::VOBJ);
 
+    // Get input parameters
     std::string strCount = request.params[0].get_str();
-    std::string path = request.params[1].get_str();
+    std::string strPath = request.params[1].get_str();
 
+    // If unauthenticated
     if (authUser.ToString() == "0000000000000000000000000000000000000000") {
 
+        // Report and exit
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Not authenticated.");
+        unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
         return unvResults;
     }
 
-    if (!does_path_exist(path)) {
+    // If bad path
+    if (!does_path_exist(strPath)) {
+
+        // Report and exit
         unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid path: " + path + ".");
+        unvEntry.pushKV("message", "Invalid path: " + strPath + ".");
+        unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
         return unvResults;
     }
 
+    // Number of assets to fetch
     int intCount;
 
+    // Attempt to convert to integer
     try {
         intCount = stoi(strCount);
+
+    // Invalid integer    
     } catch (const std::invalid_argument& e) {
+
+        // Report and exit
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid count: " + strCount + ".");
+        unvEntry.pushKV("tenant", "n/a");
         unvResults.push_back(unvEntry);
         return unvResults;
     }
 
+    // Vector of uuid's
     std::vector<std::string> vctUUIDs;
+
+    // Get uuid's plus metadata
     scan_blocks_for_uuids(*storage_chainman, vctUUIDs, intCount);
+
+    // uuid
     std::string strUUID;
+
+    // Traverse uuid's
     for (auto& uuid : vctUUIDs) {
+
+        // Get uuid
         strUUID = uuid;
-        add_get_task(std::make_pair(uuid, path));
-        sleep (2);
+
+        // if (scan_blocks_for_pubkey (*storage_chainman, strUUID)) {
+
+            // Initialize to fetch not done
+            gintFetchDone = 0;
+
+            // Perform fetch
+            add_get_task(std::make_pair(strUUID, strPath));
+
+            // Whikle fetch not done
+            while (gintFetchDone == 0) {
+
+                // Sleep
+                sleep (1);
+
+            // End while fetch not done
+            }
+
+        // }
+    
+    // End traverse uuid's
     }
 
+    // Construct message
     std::string strMessage = "Number of assets fetched: " + std::to_string(intCount);
 
+    // Report 
     unvEntry.pushKV("result", "success");
     unvEntry.pushKV("message", strMessage);
+
+    // If manager
+    if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+
+        // No tenant
+        unvEntry.pushKV("tenant", "n/a");
+
+    // Else not if manager
+    } else {
+
+        // Tenant
+        unvEntry.pushKV("tenant", authUser.ToString());
+
+    // end if manager
+    }
+
     unvResults.push_back(unvEntry);
+
+    // Exit
     return unvResults;            
 
 },
     };
 }
+
+*/
 
 static RPCHelpMan fetch()
 {
@@ -495,6 +763,7 @@ static RPCHelpMan fetch()
          {
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The 64-character unique identifier of the asset."},
              {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the asset."},
+             // {"pubkeyflag", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant."},
              {"showtenant", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant information."},
          },
          RPCResult{
@@ -506,8 +775,9 @@ static RPCHelpMan fetch()
                     {RPCResult::Type::OBJ, "", "",
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
-                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID length"},
-                          {RPCResult::Type::NUM, "tenant", "Authenticated store tenant public key"},
+                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID | UUID not found | Blocked UUID"},
+                          {RPCResult::Type::STR, "tenant", "Authenticated store tenant public key"},
+                          {RPCResult::Type::STR, "encrypted", "yes | no"},
                     }},
                 }
             },
@@ -529,83 +799,174 @@ static RPCHelpMan fetch()
     // Entry
     UniValue unvEntry(UniValue::VOBJ);
 
-    std::string uuid = request.params[0].get_str();
-    std::string path = request.params[1].get_str();
+    // Get input
+    std::string strUUID = request.params[0].get_str();
+    std::string strPath = request.params[1].get_str();
     std::string strTenantFlag;
+
+    // Display tenant flag
     int intTenantFlag = 1;
 
+    // If optional third input
     if (!request.params[2].isNull()) {
+
+        // Get display tenant flag
         strTenantFlag = request.params[2].get_str();
+
+        // Convert to integer
         intTenantFlag = stoi (strTenantFlag);
     }
 
-    if (!does_path_exist(path)) {
+    // Always display tenant (scan_blocks_for_pubkey detects encryption and sets gintFetchAssetFullProtocol)
+    intTenantFlag = 1;
+
+    // If bad path
+    if (!does_path_exist(strPath)) {
+
+        // Report and exit
         unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid path " + path + ".");
+        unvEntry.pushKV("message", "Invalid path " + strPath + ".");
         unvEntry.pushKV("tenant", "n/a");
+        unvEntry.pushKV("encrypted", "n/a");
         unvResults.push_back(unvEntry);
-
-        // Exit
         return unvResults;
-
-//         return std::string("Invalid path.");
     }
-    if (uuid.size() == OPENCODING_UUID*2) {
 
+    // If uuid correct length
+    if (strUUID.size() == OPENCODING_UUID*2) {
+
+        // If display tenant
         if (intTenantFlag == 1) {
 
-            if (!scan_blocks_for_pubkey (*storage_chainman, uuid)) {
 
+
+
+
+            std::string strUUID1 = strUUID;
+            LogPrint (BCLog::ALL, "UUID1 %s \n", strUUID1);
+            std::vector<uint8_t> vctUUID1(strUUID1.begin(), strUUID1.end());
+            uint160 u16UUID2(Hash160(vctUUID1));
+            LogPrint (BCLog::ALL, "UUID2 %s \n", u16UUID2.ToString());
+            std::string strUUID2 = u16UUID2.ToString();
+            std::string strUUID3 = strUUID2;
+            for (int i = 0; i < 8; i++) {
+                strUUID3[i] = strUUID1[i];
+            }
+            LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
+            std::string strUUID4 = strUUID3;
+            for (int i = 40; i < 64; i++) {
+                strUUID4 = strUUID4 + strUUID1[i];
+            }
+            LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
+
+            strUUID = strUUID4;
+
+
+
+
+
+            LogPrint (BCLog::ALL, "strUUID %s \n", strUUID);
+            LogPrint (BCLog::ALL, "\n");
+
+            if (is_blockuuid_member(strUUID)) {
+
+                // Report and exit
                 unvEntry.pushKV("result", "failure");
-                unvEntry.pushKV("message", "UUID not found.");
+                unvEntry.pushKV("message", "Blocked UUID: " + strUUID + ".");
                 unvEntry.pushKV("tenant", "n/a");
+                unvEntry.pushKV("encrypted", "n/a");
                 unvResults.push_back(unvEntry);
-
-                // Exit
                 return unvResults;
 
+            }
+                
+            
+    
+    
+
+            // If tenant unfound (bad uuid)
+            if (!scan_blocks_for_pubkey (*storage_chainman, strUUID)) {
+
+                // Report and exit
+                unvEntry.pushKV("result", "failure");
+                unvEntry.pushKV("message", "UUID not found: " + strUUID + ".");
+                unvEntry.pushKV("tenant", "n/a");
+                unvEntry.pushKV("encrypted", "n/a");
+                unvResults.push_back(unvEntry);
+                return unvResults;
+
+            // Else not if tenant unfound (bad uuid)
             } else {
 
-               add_get_task(std::make_pair(uuid, path));
-//                 sleep (7);
-//                 add_get_task(std::make_pair(uuid, path));
 
+
+                if (is_blocktenant_member(ghshAuthenticatetenantPubkey.ToString())) {
+
+                    // Report and exit
+                    unvEntry.pushKV("result", "failure");
+                    unvEntry.pushKV("message", "Blocked tenant: " + ghshAuthenticatetenantPubkey.ToString() + ".");
+                    unvEntry.pushKV("tenant", "n/a");
+                    unvEntry.pushKV("encrypted", "n/a");
+                    unvResults.push_back(unvEntry);
+                    return unvResults;
+    
+                }
+                    
+                
+        
+LogPrint (BCLog::ALL, "gintFetchAssetFullProtocol from fetch() %d \n", gintFetchAssetFullProtocol);
+LogPrint (BCLog::ALL, "\n");
+
+// return "test";
+
+                std::string strFetchAssetEncryptedStatus = "no";
+                if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
+                    strFetchAssetEncryptedStatus = "yes";
+                }
+
+                // Fetch
+                add_get_task(std::make_pair(strUUID, strPath));
+
+                // Repoet and exit
                 unvEntry.pushKV("result", "success");
                 unvEntry.pushKV("message", "n/a");
                 unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
-//                unvEntry.pushKV("tenant", "n/a");
+                unvEntry.pushKV("encrypted", strFetchAssetEncryptedStatus);
                 unvResults.push_back(unvEntry);
-
-                // Exit
                 return unvResults;
 
-//                 return get_result_hash();
-
+            // End if tenant unfound (bad uuid)
             }
 
+        // Else not if display tenant
         } else {
 
-            add_get_task(std::make_pair(uuid, path));
-            
+            // Fetch
+            add_get_task(std::make_pair(strUUID, strPath));
+           
+            // Report and exit 
             unvEntry.pushKV("result", "success");
             unvEntry.pushKV("message", "n/a");
             unvEntry.pushKV("tenant", "n/a");
+            unvEntry.pushKV("encrypted", "n/a");
             unvResults.push_back(unvEntry);
-            
-            // Exit
             return unvResults;            
 
+        // End if display tenant
         }
 
+    // Else not if uuid correct length
     } else {
-        unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid UUID length.");
-        unvEntry.pushKV("tenant", "n/a");
-        unvResults.push_back(unvEntry);
 
-        // Exit
+        // Report and exit
+        unvEntry.pushKV("result", "failure");
+        unvEntry.pushKV("message", "Invalid UUID length: " + strUUID + ".");
+        unvEntry.pushKV("tenant", "n/a");
+        unvEntry.pushKV("encrypted", "n/a");
+        unvResults.push_back(unvEntry);
         return unvResults;
 
+    // End if uuid correct length
     } 
 
 },
@@ -615,20 +976,23 @@ static RPCHelpMan fetch()
 static RPCHelpMan list()
 {
     return RPCHelpMan{"list",
-                "\nLists metadata for tenant's blockchain files in chronological order (newest first).\n",
+                "\nLists metadata for tenants's blockchain assets in chronological order (newest first).\n",
                 {
                     // Optional number of uuid's to return, defaults to all.
-                    {"count", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Number of results to display. If omitted, shows all results."},
+                    {"count", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Number of results to return (0 for all).  If omitted, shows most recent 10 results."},
                 }, {
 
                     RPCResult{
                         RPCResult::Type::ARR, "", "", {{
                             RPCResult::Type::ARR, "", "", {{
                                 RPCResult::Type::OBJ, "", "", {
-                                {RPCResult::Type::STR, "uuid", "Unique identifier of the file"},
-                                {RPCResult::Type::NUM, "length", "File size in bytes"},
-                                {RPCResult::Type::NUM, "height", "Starting block number for file storage (may span multiple blocks)"},
-                                {RPCResult::Type::STR, "timestamp", "Date and time file storage began"},
+                                {RPCResult::Type::STR, "uuid", "Unique identifier of the asset"},
+                                {RPCResult::Type::STR, "message", "Not authenticated"},
+                                {RPCResult::Type::NUM, "length", "Asset filesize in bytes"},
+                                {RPCResult::Type::NUM, "height", "Starting block number for asset storage (may span multiple blocks)"},
+                                {RPCResult::Type::STR, "timestamp", "Date and time asset storage began"},
+                                {RPCResult::Type::STR, "extension", "Asset extension"},
+                                {RPCResult::Type::STR, "encrypted", "yes | no"},
                             }},
                         }},
                     }
@@ -642,11 +1006,31 @@ static RPCHelpMan list()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
 
+    // Output data structures
+    UniValue unvResult0(UniValue::VOBJ);
+    UniValue unvResult1(UniValue::VARR);
+    UniValue unvResult2(UniValue::VARR);
+
     // If not authenticated
     if (authUser.ToString() == "0000000000000000000000000000000000000000") {
 
-        // Retuen message to command line
-        return "Not authenticated.";
+        // Pack results
+        unvResult0.pushKV("uuid", "n/a");
+        unvResult0.pushKV("message", "Not authenticated");
+        unvResult0.pushKV("length", 0);
+        unvResult0.pushKV("height", 0);
+        unvResult0.pushKV("timestamp", "n/a");
+        unvResult0.pushKV("extension", "n/a");
+        unvResult0.pushKV("encrypted", "n/a");
+
+        // Pack results
+        unvResult1.push_back (unvResult0);
+
+        // Pack results
+        unvResult2.push_back (unvResult1);
+
+        // Return results
+        return unvResult2;
 
     // End if not authenticated
     }
@@ -686,11 +1070,6 @@ static RPCHelpMan list()
 
     // Get list of uuids
     scan_blocks_for_uuids(*storage_chainman, vctUUIDs, intCount);
-
-    // Output data structures
-    UniValue unvResult0(UniValue::VOBJ);
-    UniValue unvResult1(UniValue::VARR);
-    UniValue unvResult2(UniValue::VARR);
 
     // Asset filelength
     int intFileLength;
@@ -774,9 +1153,12 @@ static RPCHelpMan list()
 
             // Pack results
             unvResult0.pushKV("uuid", strUUID);
+            unvResult0.pushKV("message", "n/a");
             unvResult0.pushKV("length", intFileLength);
             unvResult0.pushKV("height", intBlockHeight);
             unvResult0.pushKV("timestamp", strFormattedLocalTime);
+            unvResult0.pushKV("extension", gmapExtension[strUUID]);
+            unvResult0.pushKV("encrypted", gmapEncrypted[strUUID]);
 
             // Pack results
             unvResult1.push_back (unvResult0);
@@ -888,12 +1270,80 @@ static RPCHelpMan tenants()
     };
 }
 
+static RPCHelpMan listblockeduuids()
+{
+    return RPCHelpMan{"listblockeduuids",
+                "\nDisplay the current list of blocked UUIDs.\n",
+                {},
+                {
+                    RPCResult{
+                        RPCResult::Type::ARR, "", "",
+                        {{RPCResult::Type::STR, "", "A blocked UUID."}}},
+                },
+                RPCExamples{
+                    HelpExampleCli("listblockeduuids", "")
+            + HelpExampleRpc("listblockeduuids", "")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+        return std::string("Role-based restriction: Current role cannot perform this action");
+    }
+
+    UniValue ret(UniValue::VARR);
+
+    std::vector<std::string> tempList;
+    copy_blockuuid_list(tempList);
+    for (auto& l : tempList) {
+        ret.push_back(l);
+    }
+
+    return ret;
+},
+    };
+}
+
+static RPCHelpMan listblockedtenants()
+{
+    return RPCHelpMan{"listblockedtenants",
+                "\nDisplay the current list of blocked tenants.\n",
+                {},
+                {
+                    RPCResult{
+                        RPCResult::Type::ARR, "", "",
+                        {{RPCResult::Type::STR, "", "A blocked tenant."}}},
+                },
+                RPCExamples{
+                    HelpExampleCli("listblockedtenants", "")
+            + HelpExampleRpc("listblockedtenants", "")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+        return std::string("Role-based restriction: Current role cannot perform this action");
+    }
+
+    UniValue ret(UniValue::VARR);
+
+    std::vector<std::string> tempList;
+    copy_blocktenant_list(tempList);
+    for (auto& l : tempList) {
+        ret.push_back(l);
+    }
+
+    return ret;
+},
+    };
+}
+
 static RPCHelpMan auth()
 {
     return RPCHelpMan{"auth",
                 "\nAuthenticate a data storage tenant for a 72 block (~6 hour) session.\n",
                 {
-                    {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO, "WIF-Format Privatekey."},
+                    // {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO, "WIF-Format Privatekey."},
                 },
                 {
                     RPCResult{
@@ -920,6 +1370,20 @@ static RPCHelpMan auth()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
+
+    /*
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "disablestaking %d \n", gArgs.GetBoolArg("-disablestaking", false));
+
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "rpcuser %s \n", gArgs.GetArg("-rpcuser", ""));
+
+    LogPrint (BCLog::ALL, "\n");
+
+    LogPrint (BCLog::ALL, "rpctenant %s \n", gArgs.GetArg("-rpctenant", ""));
+    */
 
     // Results
     UniValue unvResults(UniValue::VARR);
@@ -949,7 +1413,8 @@ static RPCHelpMan auth()
     }
 
     // Get private key
-    std::string strPrivateKey = request.params[0].get_str();
+    // std::string strPrivateKey = request.params[0].get_str();
+    std::string strPrivateKey = gArgs.GetArg("-rpctenant", "");
 
     // If private key empty or invalid
     if (strPrivateKey.empty() || !set_auth_user(strPrivateKey)) {
@@ -957,7 +1422,7 @@ static RPCHelpMan auth()
         // Report
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid key.");
-        unvEntry.pushKV("capacity", 0);
+        unvEntry.pushKV("capacity (KB)", 0);
         unvEntry.pushKV("sessionstart", "n/a");
         unvEntry.pushKV("sessionend", "n/a");
         unvEntry.pushKV("sessionstartblock", "n/a");
@@ -988,7 +1453,7 @@ static RPCHelpMan auth()
             // Report
             unvEntry.pushKV("result", "failure");
             unvEntry.pushKV("message", "Unauthorized tenant.");
-            unvEntry.pushKV("capacity", 0);
+            unvEntry.pushKV("capacity (KB)", 0);
             unvEntry.pushKV("sessionstart", "n/a");
             unvEntry.pushKV("sessionend", "n/a");
             unvEntry.pushKV("sessionstartblock", "n/a");
@@ -1010,10 +1475,10 @@ static RPCHelpMan auth()
             // Exit
             return unvResults;
 
-        // Else not if authorized    
+        // Else not if unauthorized    
         } else {
 
-            // Get walletsa
+            // Get wallets
             auto vctWallets = GetWallets(*storage_context);
 
             // Get number of wallets
@@ -1025,7 +1490,7 @@ static RPCHelpMan auth()
                 // Report and exit
                 unvEntry.pushKV("result", "failure");
                 unvEntry.pushKV("message", "No wallet.");
-                unvEntry.pushKV("capacity", 0);
+                unvEntry.pushKV("capacity (KB)", 0);
                 unvEntry.pushKV("sessionstart", "n/a");
                 unvEntry.pushKV("sessionend", "n/a");
                 unvEntry.pushKV("sessionstartblock", "n/a");
@@ -1102,7 +1567,7 @@ static RPCHelpMan auth()
             }
 
             // capacity
-            unvEntry.pushKV("capacity", u32Capacity);
+            unvEntry.pushKV("capacity (KB)", u32Capacity);
 
             // Get current time
             uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
@@ -1311,6 +1776,486 @@ static RPCHelpMan allow()
     };
 }
 
+static RPCHelpMan blockuuid()
+{
+    return RPCHelpMan{"blockuuid",
+                "\nBlock UUID from fetch.\n",
+                {
+                    {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "UUID to be blocked."},
+                },
+
+
+
+                RPCResult{
+                    RPCResult::Type::ARR, "", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "result", "success | failure"},
+                            {RPCResult::Type::STR, "message", "Invalid length | Invalid hex notation | Not authenticated as manager | error-generating-blockuuidpayload | error-generating-blockuuidtransaction"},
+                            {RPCResult::Type::STR, "uuid", "UUID to be blocked"},
+                        }},
+                    }
+                },
+    
+    
+
+                    RPCExamples{
+                    HelpExampleCli("blockuuid", "80a24ff2fac560fb14543e322b5745b86d814fbc6acb238f97f2897564342756")
+            + HelpExampleRpc("blockuuid", "80a24ff2fac560fb14543e322b5745b86d814fbc6acb238f97f2897564342756")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    // if (check_mempool_for_authdata(mempool)) {
+        // return std::string("authtx-in-mempool");
+    // }
+
+    // Entry
+    UniValue entry(UniValue::VOBJ);
+
+    // Results
+    UniValue results(UniValue::VARR);
+
+    // Snag uuid
+    std::string strUUID = request.params[0].get_str();
+
+    // uuid invalidity type
+    int intUUIDInvalidityType;
+
+    // If not authenticated as manager
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Not authenticated as manager");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    // If uuid invalid (length, hex notation)
+    if (!is_valid_uuid(strUUID, intUUIDInvalidityType)) {
+
+        // If invalid length
+        if (intUUIDInvalidityType == 1) {
+
+            entry.pushKV("result", "failure");
+            entry.pushKV("message", "Invalid length");
+            entry.pushKV("uuid", strUUID);
+            results.push_back(entry);
+            return results;
+        }
+
+        // If invalid hex notation
+        if (intUUIDInvalidityType == 2) {
+
+            entry.pushKV("result", "failure");
+            entry.pushKV("message", "Invalid hex notation");
+            entry.pushKV("uuid", strUUID);
+            results.push_back(entry);
+            return results;
+        }
+
+    }
+    
+    int intBlockUUIDType;
+    uint32_t u32Time;
+    CMutableTransaction mtxTransaction;
+    std::string strOPRETURNPayload;
+
+    intBlockUUIDType = 0;
+    u32Time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+
+    if (!generate_blockuuid_payload(strOPRETURNPayload, intBlockUUIDType, u32Time, strUUID)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blockuuidpayload");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    if (!generate_blockuuid_transaction(*storage_context, mtxTransaction, strOPRETURNPayload)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blockuuidtransaction");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
+    }
+
+
+
+
+
+    entry.pushKV("result", "success");
+    entry.pushKV("message", "n/a");
+    entry.pushKV("uuid", strUUID);
+    results.push_back(entry);
+    return results;
+
+
+
+
+
+},
+    };
+}
+
+static RPCHelpMan blocktenant()
+{
+    return RPCHelpMan{"blocktenant",
+                "\nBlock tenant from fetch.\n",
+                {
+                    {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "Tenant pubkey to be blocked."},
+                },
+
+
+
+                RPCResult{
+                    RPCResult::Type::ARR, "", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "result", "success | failure"},
+                            {RPCResult::Type::STR, "message", "Not authenticated as manager | Incorrect length | error-generating-blocktenantpayload | error-generating-blocktenanttransaction"},
+                            {RPCResult::Type::STR, "uuid", "Tenant pubkey to be blocked"},
+                        }},
+                    }
+                },
+    
+    
+
+                    RPCExamples{
+                    HelpExampleCli("blocktenant", "00112233445566778899aabbccddeeff00112233")
+            + HelpExampleRpc("blocktenant", "00112233445566778899aabbccddeeff00112233")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    // if (check_mempool_for_authdata(mempool)) {
+        // return std::string("authtx-in-mempool");
+    // }
+
+    // Entry
+    UniValue entry(UniValue::VOBJ);
+
+    // Results
+    UniValue results(UniValue::VARR);
+
+    // Snag tenant
+    std::string strTenant = request.params[0].get_str();
+
+    if (strTenant.size() != OPBLOCKTENANT_TENANTLEN*2) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Incorrect length.");
+        entry.pushKV("tenant", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    // If not authenticated as manager
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Not authenticated as manager");
+        entry.pushKV("tenant", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    int intBlockTenantType;
+    uint32_t u32Time;
+    CMutableTransaction mtxTransaction;
+    std::string strOPRETURNPayload;
+
+    intBlockTenantType = 0;
+    u32Time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+
+    if (!generate_blocktenant_payload(strOPRETURNPayload, intBlockTenantType, u32Time, strTenant)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blocktenantpayload");
+        entry.pushKV("uuid", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    if (!generate_blocktenant_transaction(*storage_context, mtxTransaction, strOPRETURNPayload)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blocktenanttransaction");
+        entry.pushKV("uuid", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
+
+
+
+
+
+    entry.pushKV("result", "success");
+    entry.pushKV("message", "n/a");
+    entry.pushKV("tenant", strTenant);
+    results.push_back(entry);
+    return results;
+
+
+
+
+
+},
+    };
+}
+
+static RPCHelpMan unblocktenant()
+{
+    return RPCHelpMan{"unblocktenant",
+                "\nUnblock tenant from fetch.\n",
+                {
+                    {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "Tenant pubkey to be unblocked."},
+                },
+
+
+
+                RPCResult{
+                    RPCResult::Type::ARR, "", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "result", "success | failure"},
+                            {RPCResult::Type::STR, "message", "Not authenticated as manager | Incorrect length | error-generating-blocktenantpayload | error-generating-blocktenanttransaction"},
+                            {RPCResult::Type::STR, "uuid", "Tenant pubkey to be unblocked"},
+                        }},
+                    }
+                },
+    
+    
+
+                    RPCExamples{
+                    HelpExampleCli("unblocktenant", "00112233445566778899aabbccddeeff00112233")
+            + HelpExampleRpc("unblocktenant", "00112233445566778899aabbccddeeff00112233")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    // if (check_mempool_for_authdata(mempool)) {
+        // return std::string("authtx-in-mempool");
+    // }
+
+    // Entry
+    UniValue entry(UniValue::VOBJ);
+
+    // Results
+    UniValue results(UniValue::VARR);
+
+    // Snag tenant
+    std::string strTenant = request.params[0].get_str();
+
+    if (strTenant.size() != OPBLOCKTENANT_TENANTLEN*2) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Incorrect length.");
+        entry.pushKV("tenant", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    // If not authenticated as manager
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Not authenticated as manager");
+        entry.pushKV("tenant", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    int intBlockTenantType;
+    uint32_t u32Time;
+    CMutableTransaction mtxTransaction;
+    std::string strOPRETURNPayload;
+
+    intBlockTenantType = 1;
+    u32Time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+
+    if (!generate_blocktenant_payload(strOPRETURNPayload, intBlockTenantType, u32Time, strTenant)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blocktenantpayload");
+        entry.pushKV("uuid", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    if (!generate_blocktenant_transaction(*storage_context, mtxTransaction, strOPRETURNPayload)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blocktenanttransaction");
+        entry.pushKV("uuid", strTenant);
+        results.push_back(entry);
+        return results;
+
+    }
+
+
+
+
+
+    entry.pushKV("result", "success");
+    entry.pushKV("message", "n/a");
+    entry.pushKV("tenant", strTenant);
+    results.push_back(entry);
+    return results;
+
+
+
+
+
+},
+    };
+}
+
+static RPCHelpMan unblockuuid()
+{
+    return RPCHelpMan{"unblockuuid",
+                "\nUnblock UUID from fetch.\n",
+                {
+                    {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "UUID to be unblocked."},
+                },
+
+
+
+                RPCResult{
+                    RPCResult::Type::ARR, "", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "result", "success | failure"},
+                            {RPCResult::Type::STR, "message", "Invalid length | Invalid hex notation | Not authenticated as manager | error-generating-blockuuidpayload | error-generating-blockuuidtransaction"},
+                            {RPCResult::Type::STR, "uuid", "UUID to be unblocked"},
+                        }},
+                    }
+                },
+    
+    
+
+                    RPCExamples{
+                    HelpExampleCli("unblockuuid", "80a24ff2fac560fb14543e322b5745b86d814fbc6acb238f97f2897564342756")
+            + HelpExampleRpc("unblockuuid", "80a24ff2fac560fb14543e322b5745b86d814fbc6acb238f97f2897564342756")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    // if (check_mempool_for_authdata(mempool)) {
+        // return std::string("authtx-in-mempool");
+    // }
+
+    // Entry
+    UniValue entry(UniValue::VOBJ);
+
+    // Results
+    UniValue results(UniValue::VARR);
+
+    // Snag uuid
+    std::string strUUID = request.params[0].get_str();
+
+    // uuid invalidity type
+    int intUUIDInvalidityType;
+
+    // If not authenticated as manager
+    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Not authenticated as manager");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    // If uuid invalid (length, hex notation)
+    if (!is_valid_uuid(strUUID, intUUIDInvalidityType)) {
+
+        // If invalid length
+        if (intUUIDInvalidityType == 1) {
+
+            entry.pushKV("result", "failure");
+            entry.pushKV("message", "Invalid length");
+            entry.pushKV("uuid", strUUID);
+            results.push_back(entry);
+            return results;
+        }
+
+        // If invalid hex notation
+        if (intUUIDInvalidityType == 2) {
+
+            entry.pushKV("result", "failure");
+            entry.pushKV("message", "Invalid hex notation");
+            entry.pushKV("uuid", strUUID);
+            results.push_back(entry);
+            return results;
+        }
+
+    }
+    
+    int intBlockUUIDType;
+    uint32_t u32Time;
+    CMutableTransaction mtxTransaction;
+    std::string strOPRETURNPayload;
+
+    intBlockUUIDType = 1;
+    u32Time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+
+    if (!generate_blockuuid_payload(strOPRETURNPayload, intBlockUUIDType, u32Time, strUUID)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blockuuidpayload");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
+    }
+
+    if (!generate_blockuuid_transaction(*storage_context, mtxTransaction, strOPRETURNPayload)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "error-generating-blockuuidtransaction");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
+    }
+
+
+
+
+
+    entry.pushKV("result", "success");
+    entry.pushKV("message", "n/a");
+    entry.pushKV("uuid", strUUID);
+    results.push_back(entry);
+    return results;
+
+
+
+
+
+},
+    };
+}
+
 static RPCHelpMan deny()
 {
     return RPCHelpMan{"deny",
@@ -1375,8 +2320,14 @@ void RegisterStorageRPCCommands(CRPCTable& t)
 {
     static const CRPCCommand commands[]{
         {"storage", &store},
-        {"storage", &fetchall},
+        // {"storage", &fetchall},
         {"storage", &fetch},
+        {"storage", &blockuuid},
+        {"storage", &unblockuuid},
+        {"storage", &listblockeduuids},
+        {"storage", &listblockedtenants},
+        {"storage", &blocktenant},
+        {"storage", &unblocktenant},
         {"storage", &list},
         {"storage", &status},
         {"storage", &tenants},

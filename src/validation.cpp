@@ -2458,6 +2458,70 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
                 const CScript opreturn_out = tx.vout[vout].scriptPubKey;
                 if (opreturn_out.IsOpReturn()) {
                     int error_level;
+
+
+
+                        // If auth chunk, rather than data chunk
+                        if (is_opreturn_an_authdata (opreturn_out, error_level) || is_opreturn_a_blockuuiddata (opreturn_out, error_level) || is_opreturn_a_blocktenantdata (opreturn_out, error_level)) {
+
+                            
+                            
+                            if (is_opreturn_an_authdata (opreturn_out, error_level)) {
+                            
+                                // Validate authdata, and popoulate authList
+                                if (!found_opreturn_in_authdata (opreturn_out, error_level)) {
+                                    LogPrint (BCLog::ALL, "\n");
+                                    LogPrint (BCLog::ALL, "invalid authdata message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                } else {
+                                    LogPrint (BCLog::ALL, "\n");
+                                    LogPrint (BCLog::ALL, "valid authdata message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                }
+                            
+                            }
+                            
+                            
+                            
+                            if (is_opreturn_a_blockuuiddata (opreturn_out, error_level)) {
+                            
+                                // Validate blockuuiddata, and popoulate blockuuidList
+                                if (!found_opreturn_in_blockuuiddata (opreturn_out, error_level)) {
+                                    LogPrint (BCLog::ALL, "\n");
+                                    LogPrint (BCLog::ALL, "invalid blockuuid message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                } else {
+                                    LogPrint (BCLog::ALL, "\n");
+                                    LogPrint (BCLog::ALL, "valid blockuuid message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                }
+                            
+                            }
+                            
+                            
+                            
+                            if (is_opreturn_a_blocktenantdata (opreturn_out, error_level)) {
+                            
+                                // Validate blocktenantdata, and popoulate blocktenantList
+                                if (!found_opreturn_in_blocktenantdata (opreturn_out, error_level)) {
+                                    LogPrint (BCLog::ALL, "\n");
+                                    LogPrint (BCLog::ALL, "invalid tenant message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                } else {
+                                    LogPrint (BCLog::ALL, "\n");
+                                    LogPrint (BCLog::ALL, "valid blocktenant message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                }
+                            
+                            }
+                            
+                            
+                            
+                        } else {
+                
+                            continue;
+                            
+                        }
+                            
+                            
+
+
+
+                    /*
                     if (!is_opreturn_an_authdata(opreturn_out, error_level)) {
                         continue;
                     }
@@ -2466,6 +2530,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
                     } else {
                         LogPrintf("valid authdata message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
                     }
+                    */
                 }
             }
         }
