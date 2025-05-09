@@ -265,82 +265,98 @@ bool blnfncCheckProofOfStake(
     Chainstate& chain_state,          
     BlockValidationState& state,      
     const CBlockIndex* ibliCurrentBlock,    
-    const CTransaction& tx,           
+    const CTransaction& itxnStakeTransaction,           
     int64_t icmpCandidateBlockTime,                    
     unsigned int icmpDifficulty,               
     uint256& ou25ProofOfStakeHash,        
     uint256& ou25WeightedDifficulty)      
 {
-    // ibliCurrentBlock points to the latest block in our chain
-    // icmpCandidateBlockTime represents when the new block was created
 
-    // Get access to the block database through the chain state
-    auto& pblocktree { chain_state.m_blockman.m_block_tree_db };
+    // auto& pblocktree { chain_state.m_blockman.m_block_tree_db };
 
-    // Verify this is a valid staking transaction with at least one input
-    if (!tx.IsCoinStake() || tx.vin.size() < 1) {
-        LogPrintf("ERROR: %s: malformed-txn %s\n", __func__, tx.GetHash().ToString());
+    // If coin stake or no inputs
+    if (!itxnStakeTransaction.IsCoinStake() || itxnStakeTransaction.vin.size() < 1) {
+        LogPrintf("ERROR: %s: malformed-txn %s\n", __func__, itxnStakeTransaction.GetHash().ToString());
         return false;
     }
 
-    // Reference to hold the previous transaction (though unused in this function)
-    CTransactionRef txPrev;
+    // CTransactionRef txPrev;
 
-    // Get the first input of the coinstake transaction
-    // This input (known as the kernel) must meet the staking target
-    // Kernel (input 0) must match the stake hash target per coin age (icmpDifficulty)
-    const CTxIn& txin = tx.vin[0];
+    // Stake transaction input
+    const CTxIn& txiStakeTransactionInput = itxnStakeTransaction.vin[0];
 
-    // Variables to store information about the staking coin
-    uint32_t cmpUTXOBlockTime;    // Timestamp of block containing the staked coin
-    int nDepth;                 // How many blocks deep is the staked coin
-    CScript kernelPubKey;       // Public key script that controls the stake
-    CAmount mntStakeAmount;             // Amount of coins being staked
+    // UTXO block time
+    uint32_t cmpUTXOBlockTime;    
 
-    // Try to find the coin being staked in the UTXO (unspent transaction output) set
-    Coin coin;
-    if (!chain_state.CoinsTip().GetCoin(txin.prevout, coin) || coin.IsSpent()) {
-        return false;  // Coin doesn't exist or was already spent
+    // Stake depth
+    int intStakeDepth;                 
+
+    // scriptPubKey
+    CScript scrScriptPubKey;       
+
+    // Stake amount
+    CAmount mntStakeAmount;            
+
+    // Stake coin 
+    Coin coiStakeCoin;
+
+    // If not coin || spent 
+    if (!chain_state.CoinsTip().GetCoin(txiStakeTransactionInput.prevout, coiStakeCoin) || coiStakeCoin.IsSpent()) {
+        return false;  
     }
 
-    // Find the block that contains the coin being staked
-    CBlockIndex* pindex = chain_state.m_chain[coin.nHeight];
-    if (!pindex) {
-        return false;  // Block not found in main chain
+    // Set stake block
+    CBlockIndex* bliStakeBlock = chain_state.m_chain[coiStakeCoin.nHeight];
+
+    // If No stake block
+    if (!bliStakeBlock) {
+        return false; 
     }
 
-    // Calculate the coin's age in blocks and verify it meets minimum age requirement
-    nDepth = ibliCurrentBlock->nHeight - coin.nHeight;
-    // Required depth is the lesser of COINBASE_MATURITY or half the chain height
+    // Set stake depth
+    intStakeDepth = ibliCurrentBlock->nHeight - coiStakeCoin.nHeight;
+
+    // Set required depth
     int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(ibliCurrentBlock->nHeight / 2));
-    if (nRequiredDepth > nDepth) {
-        return false;  // Coin isn't mature enough to stake
+
+    // If required depth > stake depth
+    if (nRequiredDepth > intStakeDepth) {
+        return false;  
     }
 
-    // Store the staking coin's details for validation
-    kernelPubKey = coin.out.scriptPubKey;      // Script controlling the coins
-    mntStakeAmount = coin.out.nValue;                   // Amount being staked
-    cmpUTXOBlockTime = pindex->GetBlockTime();    // When the coin's block was mined
+    // Get scriptPubKey
+    scrScriptPubKey = coiStakeCoin.out.scriptPubKey;      
 
-    // Get the spending transaction's signature details
-    const CScript& scriptSig = txin.scriptSig;
-    const CScriptWitness* witness = &txin.scriptWitness;
-    ScriptError serror = SCRIPT_ERR_OK;
-    std::vector<uint8_t> vchAmount(8);
+    // Get stake amount
+    mntStakeAmount = coiStakeCoin.out.nValue;                   
 
-    // Verify the transaction signature is valid and the spender owns the coins
-    if (!VerifyScript(scriptSig, kernelPubKey, witness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&tx, 0, mntStakeAmount, MissingDataBehavior::FAIL), &serror)) {
-        LogPrintf("ERROR: %s: verify-script-failed, txn %s, reason %s\n", __func__, tx.GetHash().ToString(), ScriptErrorString(serror));
+    // Get UTXO block time
+    cmpUTXOBlockTime = bliStakeBlock->GetBlockTime();    
+
+    // Get sciptSig
+    const CScript& scrScriptSig = txiStakeTransactionInput.scriptSig;
+
+    // Get script witness
+    const CScriptWitness* scwScriptWitness = &txiStakeTransactionInput.scriptWitness;
+
+    // Initializine script error
+    ScriptError sceScriptError = SCRIPT_ERR_OK;
+
+    // std::vector<uint8_t> vchAmount(8);
+
+    // If invalid script
+    if (!VerifyScript(scrScriptSig, scrScriptPubKey, scwScriptWitness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&itxnStakeTransaction, 0, mntStakeAmount, MissingDataBehavior::FAIL), &sceScriptError)) {
+        LogPrintf("ERROR: %s: verify-script-failed, txn %s, reason %s\n", __func__, itxnStakeTransaction.GetHash().ToString(), ScriptErrorString(sceScriptError));
         return false;
     }
 
+    // Check stake kernel hash
     if (!blnfncCheckStakeKernelHash (ibliCurrentBlock, icmpDifficulty, cmpUTXOBlockTime,
-            mntStakeAmount, txin.prevout, icmpCandidateBlockTime, ou25ProofOfStakeHash, ou25WeightedDifficulty, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
-        LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, proof of stake hash=%s\n", __func__, tx.GetHash().ToString(), ou25ProofOfStakeHash.ToString());
+            mntStakeAmount, txiStakeTransactionInput.prevout, icmpCandidateBlockTime, ou25ProofOfStakeHash, ou25WeightedDifficulty, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
+        LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, proof of stake hash=%s\n", __func__, itxnStakeTransaction.GetHash().ToString(), ou25ProofOfStakeHash.ToString());
         return false;
     }
 
-    // All validation checks passed - this is a valid stake
     return true;
 }
 
