@@ -493,9 +493,9 @@ static RPCHelpMan fetch()
     return RPCHelpMan{"fetch",
         "\nRetrieve an asset stored on the Lynx blockchain.\nLearn more at https://docs.getlynx.io/\n",
          {
-             {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The unique identifier of the asset."},
+             {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The 64-character unique identifier of the asset."},
              {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the asset."},
-             {"pubkeyflag", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant."},
+             {"showtenant", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant information."},
          },
          RPCResult{
 //             RPCResult::Type::STR, "", "success or failure"},
@@ -517,9 +517,9 @@ static RPCHelpMan fetch()
 
 
          RPCExamples{
-            "\nRetrieve file 00112233445566778899aabbccddeeff and store in /home/username/downloads.\n"
-            + HelpExampleCli("fetch", "00112233445566778899aabbccddeeff /home/username/downloads")
-        + HelpExampleRpc("fetch", "00112233445566778899aabbccddeeff /home/username/downloads")
+            "\nRetrieve file 2cf6eabc7af83152d5ad7d4ff9aeeb66f81dde70731b800bb0cd18300d9cb402 and store in /home/username/downloads.\n"
+            + HelpExampleCli("fetch", "2cf6eabc7af83152d5ad7d4ff9aeeb66f81dde70731b800bb0cd18300d9cb402 /home/username/downloads")
+        + HelpExampleRpc("fetch", "2cf6eabc7af83152d5ad7d4ff9aeeb66f81dde70731b800bb0cd18300d9cb402 /home/username/downloads")
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
