@@ -1351,22 +1351,22 @@ static RPCHelpMan auth()
                         {
                             {RPCResult::Type::OBJ, "", "",
                             {
-                                  {RPCResult::Type::STR, "result", "success | failure"},
-                                  {RPCResult::Type::STR, "message", "Authenticated as Manager | Authenticated as tenant | Invalid key | Unauthorized tenant | No wallet"},
-                                  {RPCResult::Type::NUM, "capacity", "Number of aqvailable store asset KB."},
-                                  {RPCResult::Type::STR, "sessionstart", "Authentication session start timestamp."},
-                                  {RPCResult::Type::STR, "sessionend", "Authentication session end timestamp."},
-                                  {RPCResult::Type::STR, "sessionstartblock", "Authentication session start block."},
-                                  {RPCResult::Type::STR, "sessionendtime", "Authentication session end block."},
-                                  {RPCResult::Type::STR, "stakingstatus", "enabled | disabled"},
+                                {RPCResult::Type::STR, "result", "Indicates whether the operation succeeded or failed (i.e. success | failure)."},
+                                {RPCResult::Type::STR, "message", "Shows the user's access role or describes any error (i.e. Invalid key, Unauthorized, No wallet)."},
+                                {RPCResult::Type::NUM, "capacity", "Current available storage capacity in kilobytes."},
+                                {RPCResult::Type::STR, "sessionstart", "Records the time when the user's session began (i.e. 2025-05-10T14:30:00Z)."},
+                                {RPCResult::Type::STR, "sessionend", "Estimated time when the user's session will expire (i.e. 2025-05-10T18:30:00Z)."},
+                                {RPCResult::Type::STR, "sessionstartblock", "Specifies the block at which the user's session started (i.e. 3121467)."},
+                                {RPCResult::Type::STR, "sessionendblock", "Specifies the block at which the user's session will end (i.e. 3121539)."},
+                                {RPCResult::Type::STR, "stakingstatus", "Indicates whether staking is currently enabled or disabled (i.e. enabled | disabled)."},
                             }},
                         }
                     },
                 },
 
     RPCExamples{
-                    HelpExampleCli("auth", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo513hJazyCEj9s6eDiFj8")
-            + HelpExampleRpc("auth", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo513hJazyCEj9s6eDiFj8")
+                    HelpExampleCli("auth", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo514hJazyCEj9s6eDiFj8")
+            + HelpExampleRpc("auth", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo514hJazyCEj9s6eDiFj8")
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
