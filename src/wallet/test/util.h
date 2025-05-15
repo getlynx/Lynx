@@ -56,7 +56,7 @@ private:
     bool WriteKey(DataStream&& key, DataStream&& value, bool overwrite=true) override;
     bool EraseKey(DataStream&& key) override;
     bool HasKey(DataStream&& key) override;
-    bool ErasePrefix(Span<const std::byte> prefix) override;
+    bool ErasePrefix(Span<const std::byte> prefix);
 
 public:
     explicit MockableBatch(std::map<SerializeData, SerializeData>& records, bool pass) : m_records(records), m_pass(pass) {}
