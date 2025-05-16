@@ -78,3 +78,5 @@ tw
 ve
 vf
 vw
+src/.deps/
+src/wallet/test/.deps/

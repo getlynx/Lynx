@@ -17,6 +17,7 @@
 #include <optional>
 
 using wallet::CWallet;
+using wallet::CreateMockableWalletDatabase;
 using wallet::DatabaseFormat;
 using wallet::DatabaseOptions;
 using wallet::TxStateInactive;
@@ -70,7 +71,7 @@ static void WalletLoading(benchmark::Bench& bench, bool legacy_wallet)
         options.create_flags = WALLET_FLAG_DESCRIPTORS;
         options.require_format = DatabaseFormat::SQLITE;
     }
-    auto database = CreateMockWalletDatabase(options);
+    auto database = CreateMockableWalletDatabase();
     auto wallet = BenchLoadWallet(std::move(database), context, options);
 
     // Generate a bunch of transactions and addresses to put into the wallet
@@ -78,7 +79,7 @@ static void WalletLoading(benchmark::Bench& bench, bool legacy_wallet)
         AddTx(*wallet);
     }
 
-    database = DuplicateMockDatabase(wallet->GetDatabase(), options);
+    database = DuplicateMockDatabase(wallet->GetDatabase());
 
     // reload the wallet for the actual benchmark
     BenchUnloadWallet(std::move(wallet));
@@ -87,7 +88,7 @@ static void WalletLoading(benchmark::Bench& bench, bool legacy_wallet)
         wallet = BenchLoadWallet(std::move(database), context, options);
 
         // Cleanup
-        database = DuplicateMockDatabase(wallet->GetDatabase(), options);
+        database = DuplicateMockDatabase(wallet->GetDatabase());
         BenchUnloadWallet(std::move(wallet));
     });
 }
