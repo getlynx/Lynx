@@ -74,7 +74,7 @@ bool CheckStake(ChainstateManager& chainman, const CBlock* pblock)
         }
 
         BlockValidationState state;
-        if (!CheckProofOfStake(chainman.ActiveChainstate(), state, &mi->second, *pblock->vtx[1], pblock->nTime, pblock->nBits, proofHash, hashTarget)) {
+        if (!blnfncCheckProofOfStake(chainman.ActiveChainstate(), state, &mi->second, *pblock->vtx[1], pblock->nTime, pblock->nBits, proofHash, hashTarget)) {
             return error("%s: proof-of-stake checking failed.", __func__);
         }
         if (pblock->hashPrevBlock != chainman.ActiveChain().Tip()->GetBlockHash()) { // hashbestchain
@@ -563,7 +563,7 @@ bool CreateCoinStake (  wallet::CWallet* wallet,
 
         int64_t nBlockTime;
         COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
-        if (CheckKernel(chain_state, pindexPrev, nBits, nTime, prevoutStake, &nBlockTime)) {
+        if (blnfncCheckKernel(chain_state, pindexPrev, nBits, nTime, prevoutStake, &nBlockTime)) {
             LOCK(wallet->cs_wallet);
 
             // Found a kernel

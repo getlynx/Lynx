@@ -50,7 +50,7 @@ bool blnfncCheckStakeKernelHash(const CBlockIndex* pindexPrev,
  * Check kernel hash target and coinstake signature
  * Sets hashProofOfStake on success return
  */
-bool CheckProofOfStake(Chainstate& chain_state, BlockValidationState& state, const CBlockIndex* pindexPrev, const CTransaction& tx, int64_t nTime, unsigned int nBits, uint256& hashProofOfStake, uint256& targetProofOfStake) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool blnfncCheckProofOfStake(Chainstate& chain_state, BlockValidationState& state, const CBlockIndex* pindexPrev, const CTransaction& tx, int64_t nTime, unsigned int nBits, uint256& hashProofOfStake, uint256& targetProofOfStake) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 /**
  * Check whether the coinstake timestamp meets protocol
@@ -62,7 +62,7 @@ bool CheckCoinStakeTimestamp(int64_t nTimeBlock);
  * Also checks existence of kernel input and min age
  * Convenient for searching a kernel
  */
-bool CheckKernel(Chainstate& chain_state, const CBlockIndex* pindexPrev, unsigned int nBits, int64_t nTime, const COutPoint& prevout, int64_t* pBlockTime = nullptr);
+bool blnfncCheckKernel(Chainstate& chain_state, const CBlockIndex* pindexPrev, unsigned int nBits, int64_t nTime, const COutPoint& prevout, int64_t* pBlockTime = nullptr);
 
 bool AddToMapStakeSeen(const COutPoint& kernel, const uint256& blockHash);
 bool CheckStakeUnused(const COutPoint& kernel);

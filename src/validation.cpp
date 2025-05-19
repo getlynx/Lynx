@@ -2269,7 +2269,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         m_blockman.m_dirty_blockindex.insert(pindex);
 
         uint256 targetProofOfStake;
-        if (!CheckProofOfStake(*this, state, pindex->pprev, *block.vtx[1], block.nTime, block.nBits, pindex->hashProof, targetProofOfStake)) {
+        if (!blnfncCheckProofOfStake(*this, state, pindex->pprev, *block.vtx[1], block.nTime, block.nBits, pindex->hashProof, targetProofOfStake)) {
             return error("%s: Check proof of stake failed.", __func__);
         }
     }
