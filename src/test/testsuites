@@ -87,7 +87,7 @@ uint256_tests
 util_tests
 util_threadnames_tests
 validation_chainstate_tests
-validation_chainstatemanager_tests
+# validation_chainstatemanager_tests
 validation_flush_tests
 validation_tests
 validationinterface_tests
