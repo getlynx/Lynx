@@ -1691,6 +1691,62 @@ static RPCHelpMan auth()
     };
 }
 
+static RPCHelpMan capacity()
+{
+    return RPCHelpMan{"capacity",
+                "\nReport capacity (KB).\n",
+                {
+                    // {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO, "WIF-Format Privatekey."},
+                },
+                {
+                    RPCResult{
+                        RPCResult::Type::ARR, "", "",
+                        {
+                            {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::NUM, "capacity", "Current available storage capacity in kilobytes."},
+                            }},
+                        }
+                    },
+                },
+
+    RPCExamples{
+                    HelpExampleCli("capacity", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo514hJazyCEj9s6eDiFj8")
+            + HelpExampleRpc("capacity", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo514hJazyCEj9s6eDiFj8")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+
+    // Results
+    UniValue unvResults(UniValue::VARR);
+
+    // Entry
+    UniValue unvEntry(UniValue::VOBJ);
+
+            // Get wallets
+            auto vctWallets = GetWallets(*storage_context);
+
+            // Number of suitable inputs
+            int intNumberOfSuitableInputs;
+
+            // Get number of suitable inputs
+            estimate_coins_for_opreturn(vctWallets.front().get(), intNumberOfSuitableInputs);
+
+            // Set capacity in KB
+            uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1000;
+
+            // capacity
+            unvEntry.pushKV("capacity (KB)", u32Capacity);
+
+            unvResults.push_back(unvEntry);
+
+            // Exit
+            return unvResults;
+
+},
+    };
+}
+
 static RPCHelpMan allow()
 {
     return RPCHelpMan{"allow",
@@ -2334,6 +2390,7 @@ void RegisterStorageRPCCommands(CRPCTable& t)
         {"storage", &auth},
         {"storage", &allow},
         {"storage", &deny},
+        {"storage", &capacity},
     };
 
     for (const auto& c : commands) {
