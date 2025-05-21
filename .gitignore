@@ -80,3 +80,5 @@ vf
 vw
 src/.deps/
 src/wallet/test/.deps/
+deps/
+src/test/.deps/
