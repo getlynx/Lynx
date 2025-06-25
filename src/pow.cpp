@@ -62,7 +62,8 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     if (pindexLast->nHeight + 1 > params.lastPoWBlock) {
         return GetNextWorkRequiredPoS(pindexLast, params);
     } else {
-        if (Params().NetworkIDString() == CBaseChainParams::TESTNET) {
+        // if (Params().NetworkIDString() == CBaseChainParams::TESTNET) {
+        if (Params().GetChainType() == ChainType::TESTNET) {
 	    return nProofOfWorkLimit;
         }
         return GetNextWorkRequiredDigiShield(pindexLast, params);
