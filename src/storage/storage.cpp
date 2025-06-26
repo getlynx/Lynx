@@ -69,6 +69,9 @@ std::map<std::string, std::string> gmapEncrypted;
 
 extern int gintFetchAssetFullProtocol;
 
+// Tenwant
+std::map<std::string, std::string> gmapTenant;
+
 
 
 
@@ -547,6 +550,8 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                                 // If less uuids found than asked for
                                 if (intUUIDCount < pintCount) {
 
+                                    gmapTenant[strUUID] = ghshAuthenticatetenantPubkey.ToString();
+
                                     // Add blockheight to global map for processing later
                                     // Key on uuid
                                     gmapBlockHeight[strUUID] = height;
@@ -569,6 +574,8 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
 
                             // Else not not all uuids asked for (all asked for)
                             } else {
+
+                                gmapTenant[strUUID] = ghshAuthenticatetenantPubkey.ToString();
 
                                 // Add blockheight to global map for processing later
                                 // Key on uuid
@@ -602,6 +609,8 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                                     // If less uuids found than asked for
                                     if (intUUIDCount < pintCount) {
 
+                                        gmapTenant[strUUID] = ghshAuthenticatetenantPubkey.ToString();
+
                                         // Add blockheight to global map for processing later
                                         // Key on uuid
                                         gmapBlockHeight[strUUID] = height;
@@ -624,6 +633,8 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
 
                                 // Else not not all uuids asked for (all asked for)
                                 } else {
+
+                                    gmapTenant[strUUID] = ghshAuthenticatetenantPubkey.ToString();
 
                                     // Add blockheight to global map for processing later
                                     // Key on uuid

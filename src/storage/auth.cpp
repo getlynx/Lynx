@@ -126,7 +126,7 @@ bool is_blockuuid_member(std::string uuid)
         LogPrint (BCLog::ALL, "l uuid %s %s \n", l, uuid);
         LogPrint (BCLog::ALL, "\n");
 
-    if (l == uuid) {
+    if (l.substr(0,8) == uuid.substr(0,8)) {
             return true;
         }
     }

@@ -68,6 +68,8 @@ extern std::map<std::string, std::string> gmapExtension;
 
 extern std::map<std::string, std::string> gmapEncrypted;
 
+extern std::map<std::string, std::string> gmapTenant;
+
 int gintFetchAssetFullProtocol;
 
 int gintFetchDone;
@@ -988,6 +990,7 @@ static RPCHelpMan list()
                                 RPCResult::Type::OBJ, "", "", {
                                 {RPCResult::Type::STR, "uuid", "Unique identifier of the asset"},
                                 {RPCResult::Type::STR, "message", "Not authenticated"},
+                                {RPCResult::Type::STR, "tenant", "Store asset tenant"},
                                 {RPCResult::Type::NUM, "length", "Asset filesize in bytes"},
                                 {RPCResult::Type::NUM, "height", "Starting block number for asset storage (may span multiple blocks)"},
                                 {RPCResult::Type::STR, "timestamp", "Date and time asset storage began"},
@@ -1017,6 +1020,7 @@ static RPCHelpMan list()
         // Pack results
         unvResult0.pushKV("uuid", "n/a");
         unvResult0.pushKV("message", "Not authenticated");
+        unvResult0.pushKV("tenant", "n/a");
         unvResult0.pushKV("length", 0);
         unvResult0.pushKV("height", 0);
         unvResult0.pushKV("timestamp", "n/a");
@@ -1080,11 +1084,29 @@ static RPCHelpMan list()
     // Asset timestamp (seconds since epoch (first second of 1970))
     int intTimeStamp;
 
+    // Store asset tenant
+    std::string strTenant;
+
     // Traverse returned uuids
     for (auto& strUUID : vctUUIDs) {
 
         // Initialize file length
         intFileLength = 0;
+
+        // Traverse tenant map
+        for (const auto& m : gmapTenant) {
+
+            // If match
+            if (m.first == strUUID) {
+
+                // Get tenant
+                strTenant = m.second;
+
+            // End if match
+            }
+
+        // End traverse tenant map
+        }
 
         // Traverse filelength map
         for (const auto& m : gmapFileLength) {
@@ -1154,6 +1176,7 @@ static RPCHelpMan list()
             // Pack results
             unvResult0.pushKV("uuid", strUUID);
             unvResult0.pushKV("message", "n/a");
+            unvResult0.pushKV("tenant", strTenant);
             unvResult0.pushKV("length", intFileLength);
             unvResult0.pushKV("height", intBlockHeight);
             unvResult0.pushKV("timestamp", strFormattedLocalTime);
@@ -1354,6 +1377,7 @@ static RPCHelpMan auth()
                                 {RPCResult::Type::STR, "result", "Indicates whether the operation succeeded or failed (i.e. success | failure)."},
                                 {RPCResult::Type::STR, "message", "Shows the user's access role or describes any error (i.e. Invalid key, Unauthorized, No wallet)."},
                                 {RPCResult::Type::NUM, "capacity", "Current available storage capacity in kilobytes."},
+                                {RPCResult::Type::NUM, "tenant", "User pubkey."},
                                 {RPCResult::Type::STR, "sessionstart", "Records the time when the user's session began (i.e. 2025-05-10T14:30:00Z)."},
                                 {RPCResult::Type::STR, "sessionend", "Estimated time when the user's session will expire (i.e. 2025-05-10T18:30:00Z)."},
                                 {RPCResult::Type::STR, "sessionstartblock", "Specifies the block at which the user's session started (i.e. 3121467)."},
@@ -1422,6 +1446,7 @@ static RPCHelpMan auth()
         // Report
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid key.");
+        unvEntry.pushKV("tenant", "n/a");
         unvEntry.pushKV("capacity (KB)", 0);
         unvEntry.pushKV("sessionstart", "n/a");
         unvEntry.pushKV("sessionend", "n/a");
@@ -1453,6 +1478,7 @@ static RPCHelpMan auth()
             // Report
             unvEntry.pushKV("result", "failure");
             unvEntry.pushKV("message", "Unauthorized tenant.");
+            unvEntry.pushKV("tenant", "n/a");
             unvEntry.pushKV("capacity (KB)", 0);
             unvEntry.pushKV("sessionstart", "n/a");
             unvEntry.pushKV("sessionend", "n/a");
@@ -1490,6 +1516,7 @@ static RPCHelpMan auth()
                 // Report and exit
                 unvEntry.pushKV("result", "failure");
                 unvEntry.pushKV("message", "No wallet.");
+                unvEntry.pushKV("tenant", "n/a");
                 unvEntry.pushKV("capacity (KB)", 0);
                 unvEntry.pushKV("sessionstart", "n/a");
                 unvEntry.pushKV("sessionend", "n/a");
@@ -1555,6 +1582,9 @@ static RPCHelpMan auth()
                 // message
                 unvEntry.pushKV("message", "You are authenticated as the manager.");
             }
+
+            // tenant
+            unvEntry.pushKV("tenant", authUser.ToString());
 
             // Set capacity in KB
             uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1000;
