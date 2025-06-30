@@ -30,6 +30,11 @@ extern int gintFetchDone;
 
 extern int gintFetchAssetFullProtocol;
 
+std::string gstrAssetCharacters;
+
+extern int gintReturnJSONAssetFlag;
+
+
 
 /*
 bool check_chunk_contextual(std::string chunk, int& protocol, int& error_level)
@@ -247,11 +252,17 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
     lastchunk = false;
     filepath = strip_trailing_slash(get_info.second) + "/" + get_info.first;
 
-    FILE* in = fopen(filepath.c_str(), "wb");
+    FILE* in;
+
+if (gintReturnJSONAssetFlag == 0) {
+
+    in = fopen(filepath.c_str(), "wb");
     if (!in) {
         error_level = ERR_FILEOPEN;
         return false;
     }
+
+}
 
     for (auto& chunk : encoded_chunks) {
 
@@ -568,18 +579,36 @@ if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
 
 if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
 
-    // if (!write_partial_stream(in, (char*)buffer, (chunkdata.size() / 2) - extskip)) {
-    if (!write_partial_stream(in, (char*)buffer, intDecryptedFilesize)) {
-        error_level = ERR_FILEWRITE;
-        return false;
+    if (gintReturnJSONAssetFlag != 0) {
+
+        gstrAssetCharacters.append(reinterpret_cast<const char*>(buffer), intDecryptedFilesize);
+
+    } else {
+
+        // if (!write_partial_stream(in, (char*)buffer, (chunkdata.size() / 2) - extskip)) {
+        if (!write_partial_stream(in, (char*)buffer, intDecryptedFilesize)) {
+            error_level = ERR_FILEWRITE;
+            return false;
+        }
+
     }
 
 } else {
 
-    if (!write_partial_stream(in, (char*)buffer, (chunkdata.size() / 2) - extskip)) {
-    // if (!write_partial_stream(in, (char*)buffer, intDecryptedFilesize)) {
-        error_level = ERR_FILEWRITE;
-        return false;
+// result.append(reinterpret_cast<const char*>(buffer), 5);
+
+    if (gintReturnJSONAssetFlag != 0) {
+
+        gstrAssetCharacters.append(reinterpret_cast<const char*>(buffer), (chunkdata.size() / 2) - extskip);
+
+    } else {
+
+        if (!write_partial_stream(in, (char*)buffer, (chunkdata.size() / 2) - extskip)) {
+        // if (!write_partial_stream(in, (char*)buffer, intDecryptedFilesize)) {
+            error_level = ERR_FILEWRITE;
+            return false;
+        }
+
     }
     
 }
@@ -600,7 +629,11 @@ if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
         ++thischunk;
     }
 
+if (gintReturnJSONAssetFlag == 0) {
+
     fclose(in);
+
+}
 
     LogPrint (BCLog::ALL, "(build_file_from_chunks)\n");
 

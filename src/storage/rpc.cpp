@@ -78,6 +78,12 @@ std::string gstrAssetExtension;
 
 std::string gstrAssetFilename;
 
+extern std::string gstrAssetCharacters;
+
+int gintReturnJSONAssetFlag;
+
+void perform_get_task(std::pair<std::string, std::string> get_info, int& error_level);
+
 static RPCHelpMan store()
 {
     return RPCHelpMan{"store",
@@ -766,7 +772,7 @@ static RPCHelpMan fetch()
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The 64-character unique identifier of the asset."},
              {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the asset."},
              // {"pubkeyflag", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant."},
-             {"showtenant", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant information."},
+             {"returnasset", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 1 to return json asset (not for lynx-cli)."},
          },
          RPCResult{
 //             RPCResult::Type::STR, "", "success or failure"},
@@ -780,6 +786,7 @@ static RPCHelpMan fetch()
                           {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID | UUID not found | Blocked UUID"},
                           {RPCResult::Type::STR, "tenant", "Authenticated store tenant public key"},
                           {RPCResult::Type::STR, "encrypted", "yes | no"},
+                          {RPCResult::Type::STR, "asset", "asset"},
                     }},
                 }
             },
@@ -806,21 +813,22 @@ static RPCHelpMan fetch()
     std::string strPath = request.params[1].get_str();
     std::string strTenantFlag;
 
-    // Display tenant flag
+    // Always display tenant (scan_blocks_for_pubkey detects encryption and sets gintFetchAssetFullProtocol)
     int intTenantFlag = 1;
+
+    // Return json asset flag
+    std::string strReturnJSONAssetFlag;
+    int intReturnJSONAssetFlag = 0;
 
     // If optional third input
     if (!request.params[2].isNull()) {
 
-        // Get display tenant flag
-        strTenantFlag = request.params[2].get_str();
+        // Get return json asset flag
+        strReturnJSONAssetFlag = request.params[2].get_str();
 
         // Convert to integer
-        intTenantFlag = stoi (strTenantFlag);
+        intReturnJSONAssetFlag = stoi (strReturnJSONAssetFlag);
     }
-
-    // Always display tenant (scan_blocks_for_pubkey detects encryption and sets gintFetchAssetFullProtocol)
-    intTenantFlag = 1;
 
     // If bad path
     if (!does_path_exist(strPath)) {
@@ -830,6 +838,7 @@ static RPCHelpMan fetch()
         unvEntry.pushKV("message", "Invalid path " + strPath + ".");
         unvEntry.pushKV("tenant", "n/a");
         unvEntry.pushKV("encrypted", "n/a");
+        // unvEntry.pushKV("asset", "n/a");
         unvResults.push_back(unvEntry);
         return unvResults;
     }
@@ -877,6 +886,7 @@ static RPCHelpMan fetch()
                 unvEntry.pushKV("message", "Blocked UUID: " + strUUID + ".");
                 unvEntry.pushKV("tenant", "n/a");
                 unvEntry.pushKV("encrypted", "n/a");
+                // unvEntry.pushKV("asset", "n/a");
                 unvResults.push_back(unvEntry);
                 return unvResults;
 
@@ -894,6 +904,7 @@ static RPCHelpMan fetch()
                 unvEntry.pushKV("message", "UUID not found: " + strUUID + ".");
                 unvEntry.pushKV("tenant", "n/a");
                 unvEntry.pushKV("encrypted", "n/a");
+                // unvEntry.pushKV("asset", "n/a");
                 unvResults.push_back(unvEntry);
                 return unvResults;
 
@@ -909,6 +920,7 @@ static RPCHelpMan fetch()
                     unvEntry.pushKV("message", "Blocked tenant: " + ghshAuthenticatetenantPubkey.ToString() + ".");
                     unvEntry.pushKV("tenant", "n/a");
                     unvEntry.pushKV("encrypted", "n/a");
+                    // unvEntry.pushKV("asset", "n/a");
                     unvResults.push_back(unvEntry);
                     return unvResults;
     
@@ -926,14 +938,52 @@ LogPrint (BCLog::ALL, "\n");
                     strFetchAssetEncryptedStatus = "yes";
                 }
 
-                // Fetch
-                add_get_task(std::make_pair(strUUID, strPath));
+// Fetch
 
+gintReturnJSONAssetFlag = intReturnJSONAssetFlag;
+
+if (intReturnJSONAssetFlag != 0) {
+
+    gstrAssetCharacters.clear();
+
+    int dummy;
+
+    perform_get_task(std::make_pair(strUUID, strPath), dummy);
+
+    LogPrint (BCLog::ALL, "aSsEt %d %d %d %d %d \n",  gstrAssetCharacters.c_str()[0], 
+                                                 gstrAssetCharacters.c_str()[1], 
+                                                 gstrAssetCharacters.c_str()[2], 
+                                                 gstrAssetCharacters.c_str()[3], 
+                                                 gstrAssetCharacters.c_str()[4]);
+
+LogPrint (BCLog::ALL, "filler \n");
+LogPrint (BCLog::ALL, "filler \n");
+LogPrint (BCLog::ALL, "filler \n");
+LogPrint (BCLog::ALL, "filler \n");
+LogPrint (BCLog::ALL, "filler \n");
+
+    LogPrint (BCLog::ALL, "AsSeT %s \n", gstrAssetCharacters);
+
+    // FILE* f = fopen("/root/dkdk.test", "w");
+    // fwrite(gstrAssetCharacters.data(), 1, gstrAssetCharacters.size(), f);
+    // fclose(f);
+
+} else {
+
+    add_get_task(std::make_pair(strUUID, strPath));
+
+}
                 // Repoet and exit
                 unvEntry.pushKV("result", "success");
                 unvEntry.pushKV("message", "n/a");
                 unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
                 unvEntry.pushKV("encrypted", strFetchAssetEncryptedStatus);
+
+if (intReturnJSONAssetFlag == 1) {
+
+    unvEntry.pushKV("asset", gstrAssetCharacters);
+
+}
                 unvResults.push_back(unvEntry);
                 return unvResults;
 
@@ -965,6 +1015,7 @@ LogPrint (BCLog::ALL, "\n");
         unvEntry.pushKV("message", "Invalid UUID length: " + strUUID + ".");
         unvEntry.pushKV("tenant", "n/a");
         unvEntry.pushKV("encrypted", "n/a");
+        // unvEntry.pushKV("asset", "n/a");
         unvResults.push_back(unvEntry);
         return unvResults;
 
