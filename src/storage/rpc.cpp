@@ -968,9 +968,9 @@ LogPrint (BCLog::ALL, "filler \n");
 
     LogPrint (BCLog::ALL, "AsSeT %s \n", gstrAssetCharacters);
 
-    FILE* f = fopen(gstrAssetFullyQualifiedFilepath.c_str(), "w");
-    fwrite(gstrAssetCharacters.data(), 1, gstrAssetCharacters.size(), f);
-    fclose(f);
+    // FILE* f = fopen(gstrAssetFullyQualifiedFilepath.c_str(), "w");
+    // fwrite(gstrAssetCharacters.data(), 1, gstrAssetCharacters.size(), f);
+    // fclose(f);
 
 } else {
 
