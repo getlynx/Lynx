@@ -82,6 +82,8 @@ extern std::string gstrAssetCharacters;
 
 int gintReturnJSONAssetFlag;
 
+extern std::string gstrAssetFullyQualifiedFilepath;
+
 void perform_get_task(std::pair<std::string, std::string> get_info, int& error_level);
 
 static RPCHelpMan store()
@@ -787,6 +789,7 @@ static RPCHelpMan fetch()
                           {RPCResult::Type::STR, "tenant", "Authenticated store tenant public key"},
                           {RPCResult::Type::STR, "encrypted", "yes | no"},
                           {RPCResult::Type::STR, "asset", "asset"},
+                          {RPCResult::Type::STR, "filepath", "filepath"},
                     }},
                 }
             },
@@ -820,16 +823,6 @@ static RPCHelpMan fetch()
     std::string strReturnJSONAssetFlag;
     int intReturnJSONAssetFlag = 0;
 
-    // If optional third input
-    if (!request.params[2].isNull()) {
-
-        // Get return json asset flag
-        strReturnJSONAssetFlag = request.params[2].get_str();
-
-        // Convert to integer
-        intReturnJSONAssetFlag = stoi (strReturnJSONAssetFlag);
-    }
-
     // If bad path
     if (!does_path_exist(strPath)) {
 
@@ -843,6 +836,15 @@ static RPCHelpMan fetch()
         return unvResults;
     }
 
+    // If optional third input
+    if (!request.params[2].isNull()) {
+
+        strReturnJSONAssetFlag = request.params[2].get_str();
+        intReturnJSONAssetFlag = stoi (strReturnJSONAssetFlag);
+
+    // Else not if optional second argument
+    } 
+    
     // If uuid correct length
     if (strUUID.size() == OPENCODING_UUID*2) {
 
@@ -946,15 +948,17 @@ if (intReturnJSONAssetFlag != 0) {
 
     gstrAssetCharacters.clear();
 
-    int dummy;
+    int error_level;
 
-    perform_get_task(std::make_pair(strUUID, strPath), dummy);
+    perform_get_task(std::make_pair(strUUID, strPath), error_level);
 
-    LogPrint (BCLog::ALL, "aSsEt %d %d %d %d %d \n",  gstrAssetCharacters.c_str()[0], 
-                                                 gstrAssetCharacters.c_str()[1], 
-                                                 gstrAssetCharacters.c_str()[2], 
-                                                 gstrAssetCharacters.c_str()[3], 
-                                                 gstrAssetCharacters.c_str()[4]);
+LogPrint (BCLog::ALL, "error_level %d \n", error_level);
+
+LogPrint (BCLog::ALL, "aSsEt %d %d %d %d %d \n",  gstrAssetCharacters.c_str()[0], 
+                                                  gstrAssetCharacters.c_str()[1], 
+                                                  gstrAssetCharacters.c_str()[2], 
+                                                  gstrAssetCharacters.c_str()[3], 
+                                                  gstrAssetCharacters.c_str()[4]);
 
 LogPrint (BCLog::ALL, "filler \n");
 LogPrint (BCLog::ALL, "filler \n");
@@ -964,16 +968,16 @@ LogPrint (BCLog::ALL, "filler \n");
 
     LogPrint (BCLog::ALL, "AsSeT %s \n", gstrAssetCharacters);
 
-    // FILE* f = fopen("/root/dkdk.test", "w");
-    // fwrite(gstrAssetCharacters.data(), 1, gstrAssetCharacters.size(), f);
-    // fclose(f);
+    FILE* f = fopen(gstrAssetFullyQualifiedFilepath.c_str(), "w");
+    fwrite(gstrAssetCharacters.data(), 1, gstrAssetCharacters.size(), f);
+    fclose(f);
 
 } else {
 
     add_get_task(std::make_pair(strUUID, strPath));
 
 }
-                // Repoet and exit
+                // Report and exit
                 unvEntry.pushKV("result", "success");
                 unvEntry.pushKV("message", "n/a");
                 unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
@@ -982,6 +986,7 @@ LogPrint (BCLog::ALL, "filler \n");
 if (intReturnJSONAssetFlag == 1) {
 
     unvEntry.pushKV("asset", gstrAssetCharacters);
+    unvEntry.pushKV("filepath", gstrAssetFullyQualifiedFilepath);
 
 }
                 unvResults.push_back(unvEntry);

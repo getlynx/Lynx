@@ -34,6 +34,8 @@ std::string gstrAssetCharacters;
 
 extern int gintReturnJSONAssetFlag;
 
+std::string gstrAssetFullyQualifiedFilepath;
+
 
 
 /*
@@ -658,10 +660,17 @@ LogPrint (BCLog::ALL, "chunkdata.size %d buffer %d %d %d %d \n", chunkdata.size(
 
         std::string newfilepath = filepath + "." + extension;
 
-        if (std::rename(filepath.c_str(), newfilepath.c_str())) {
-            error_level = ERR_EXTENSION;
-            return false;
+        if (gintReturnJSONAssetFlag == 0) {
+
+            if (std::rename(filepath.c_str(), newfilepath.c_str())) {
+                error_level = ERR_EXTENSION;
+                return false;
+            }
+
         }
+
+        filepath = newfilepath;
+
     } else {
         LogPrint (BCLog::ALL, "No extension found.\n");
         LogPrint (BCLog::ALL, "\n");
@@ -694,6 +703,8 @@ LogPrint (BCLog::ALL, "chunkdata.size %d buffer %d %d %d %d \n", chunkdata.size(
     LogPrint (BCLog::ALL, "elapsed binlify_from_hex %ld \n", t_bfh);
     LogPrint (BCLog::ALL, "\n");
 #endif
+
+    gstrAssetFullyQualifiedFilepath = filepath;
 
     gintFetchDone = 1;   
 
