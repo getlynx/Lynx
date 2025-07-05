@@ -772,9 +772,9 @@ static RPCHelpMan fetch()
         "\nRetrieve an asset stored on the Lynx blockchain.\nLearn more at https://docs.getlynx.io/\n",
          {
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The 64-character unique identifier of the asset."},
-             {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The full path where you want to download the asset."},
+             {"path", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "The full path where you want to download the asset."},
              // {"pubkeyflag", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 0 to return no tenant."},
-             {"returnasset", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 1 to return json asset (not for lynx-cli)."},
+             // {"returnasset", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Enter 1 to return json asset (not for lynx-cli)."},
          },
          RPCResult{
 //             RPCResult::Type::STR, "", "success or failure"},
@@ -785,11 +785,11 @@ static RPCHelpMan fetch()
                     {RPCResult::Type::OBJ, "", "",
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
-                          {RPCResult::Type::STR, "message", "Invalid path | Invalid UUID | UUID not found | Blocked UUID"},
+                          {RPCResult::Type::STR, "message", "Invalid path | UUID not found | Blocked UUID | Blocked tenant | Error scanning blockchain for asset"},
                           {RPCResult::Type::STR, "tenant", "Authenticated store tenant public key"},
                           {RPCResult::Type::STR, "encrypted", "yes | no"},
                           {RPCResult::Type::STR, "asset", "asset"},
-                          {RPCResult::Type::STR, "filepath", "filepath"},
+                          {RPCResult::Type::STR, "asset filename", "asset filename"},
                     }},
                 }
             },
@@ -813,7 +813,7 @@ static RPCHelpMan fetch()
 
     // Get input
     std::string strUUID = request.params[0].get_str();
-    std::string strPath = request.params[1].get_str();
+    std::string strPath = "";
     std::string strTenantFlag;
 
     // Always display tenant (scan_blocks_for_pubkey detects encryption and sets gintFetchAssetFullProtocol)
@@ -823,27 +823,30 @@ static RPCHelpMan fetch()
     std::string strReturnJSONAssetFlag;
     int intReturnJSONAssetFlag = 0;
 
-    // If bad path
-    if (!does_path_exist(strPath)) {
+    // If optional second input
+    if (!request.params[1].isNull()) {
 
-        // Report and exit
-        unvEntry.pushKV("result", "failure");
-        unvEntry.pushKV("message", "Invalid path " + strPath + ".");
-        unvEntry.pushKV("tenant", "n/a");
-        unvEntry.pushKV("encrypted", "n/a");
-        // unvEntry.pushKV("asset", "n/a");
-        unvResults.push_back(unvEntry);
-        return unvResults;
-    }
+        strPath = request.params[1].get_str();
 
-    // If optional third input
-    if (!request.params[2].isNull()) {
+        // If bad path
+        if (!does_path_exist(strPath)) {
 
-        strReturnJSONAssetFlag = request.params[2].get_str();
-        intReturnJSONAssetFlag = stoi (strReturnJSONAssetFlag);
+            // Report and exit
+            unvEntry.pushKV("result", "failure");
+            unvEntry.pushKV("message", "Invalid path " + strPath + ".");
+            unvEntry.pushKV("tenant", "n/a");
+            unvEntry.pushKV("encrypted", "n/a");
+            // unvEntry.pushKV("asset", "n/a");
+            unvResults.push_back(unvEntry);
+            return unvResults;
+        }
 
     // Else not if optional second argument
-    } 
+    } else {
+
+        intReturnJSONAssetFlag = 1;
+
+    }
     
     // If uuid correct length
     if (strUUID.size() == OPENCODING_UUID*2) {
@@ -946,6 +949,20 @@ gintReturnJSONAssetFlag = intReturnJSONAssetFlag;
 
 if (intReturnJSONAssetFlag != 0) {
 
+    // If not authenticated
+    if (authUser.ToString() == "0000000000000000000000000000000000000000") {
+
+        // Report and exit
+        unvEntry.pushKV("result", "failure");
+        unvEntry.pushKV("message", "Not authenticated.");
+        unvEntry.pushKV("tenant", "n/a");
+        unvEntry.pushKV("encrypted", "n/a");
+        // unvEntry.pushKV("asset", "n/a");
+        unvResults.push_back(unvEntry);
+        return unvResults;
+
+    }
+
     gstrAssetCharacters.clear();
 
     int error_level;
@@ -953,6 +970,19 @@ if (intReturnJSONAssetFlag != 0) {
     perform_get_task(std::make_pair(strUUID, strPath), error_level);
 
 LogPrint (BCLog::ALL, "error_level %d \n", error_level);
+
+    if (error_level != 0) {
+
+        // Report and exit
+        unvEntry.pushKV("result", "failure");
+        unvEntry.pushKV("message", "Error scanning blockchain for asset.");
+        unvEntry.pushKV("tenant", "n/a");
+        unvEntry.pushKV("encrypted", "n/a");
+        // unvEntry.pushKV("asset", "n/a");
+        unvResults.push_back(unvEntry);
+        return unvResults;
+
+    }
 
 LogPrint (BCLog::ALL, "aSsEt %d %d %d %d %d \n",  gstrAssetCharacters.c_str()[0], 
                                                   gstrAssetCharacters.c_str()[1], 

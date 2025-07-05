@@ -252,7 +252,16 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
     protocol = 0;
     thischunk = 1;
     lastchunk = false;
+
+if (gintReturnJSONAssetFlag == 0) {
+
     filepath = strip_trailing_slash(get_info.second) + "/" + get_info.first;
+
+} else {
+
+   filepath = get_info.first;
+
+}
 
     FILE* in;
 
