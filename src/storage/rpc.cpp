@@ -159,6 +159,13 @@ static RPCHelpMan store()
     // there is a good chance the tenant could present a duplicate UUID. 
     // The blockchain is scanned to check custom UUIDs for uniqueness.
     //
+    // ---
+    //
+    // The optional file extension is stored on the blockchain with the asset contents.
+    // 
+    // A file extension is defined to be the presented asset filename characters 
+    // to the right of the rightmost dot, up to and including four characters.
+    //
 
     // Get wallets
     auto vctWallets = GetWallets(*storage_context);
@@ -848,6 +855,13 @@ static RPCHelpMan fetch()
     // excluding the path and the extension. 
     // At asset fetch time, the asset mantissa is the obfuscated UUID.
     //
+    // ---
+    // 
+    // Only authenticated users can JSON fetch assets.
+    // 
+    // When the authenticated user executes a lynx-cli fetch command, and omits the optional path, 
+    // the asset contents and the asset filename are returned via JSON entries, rather than disk storage.
+    // 
 
     // Results
     UniValue unvResults(UniValue::VARR);
