@@ -169,6 +169,14 @@ static RPCHelpMan store()
     // A file extension is defined to be the presented asset filename characters 
     // to the right of the rightmost dot, up to and including four characters.
     //
+    // ---
+    //
+    // When the tenant executes a lynx-cli store command, the daemon will, optionally, 
+    // encrypt the asset data using the unobfuscated UUID as the encryption key. 
+    // The daemon then stores the encrypted asset on the blockchain as a key value pair, 
+    // where the key is the obfuscated UUID and the value is the encrypted asset data. 
+    //
+
 
     // Get wallets
     auto vctWallets = GetWallets(*storage_context);
@@ -854,6 +862,10 @@ static RPCHelpMan fetch()
     //
     // When the user executes a 'lynx-cli' fetch command, the user presents an asset UUID. 
     // The presented asset UUID is the unobfuscated UUID. 
+    //
+    // The presented unobfuscated UUID is obfuscated and 
+    // used as the key to extract the asset data from the blockchain.
+    //
     // The asset mantissa is the fully qualified asset filename, 
     // excluding the path and the extension. 
     // At asset fetch time, the asset mantissa is the obfuscated UUID.
@@ -864,6 +876,10 @@ static RPCHelpMan fetch()
     // 
     // When the authenticated user executes a lynx-cli fetch command, and omits the optional path, 
     // the asset contents and the asset filename are returned via JSON entries, rather than disk storage.
+    // 
+    // ---
+    //
+    // For encrypted assets, the unobfuscated UUID is the decryption key.
     // 
 
     // Results
