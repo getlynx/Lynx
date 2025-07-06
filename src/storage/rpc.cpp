@@ -149,7 +149,10 @@ static RPCHelpMan store()
     // Uniqueness is not checked at UUID generation time. 
     // The number of possible 32 8-bit integers is (256)32 = 1.16 ∗ (10)77. 
     // At a sustained rate of one store per second, it would require 
-    // one-hundred-billion-septendecillion centuries to randomly generate them all. 
+    // one-hundred-billion-septendecillion centuries to randomly generate them all, 
+    // where one septendecillion is 
+    // 1,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000, 
+    // and the age of the universe is 13, 000, 000, 000 years. 
     // The sun will die long before the same UUID gets generated twice, on average.
     //
     // Because the blockchain size will grow without bound over time, 
