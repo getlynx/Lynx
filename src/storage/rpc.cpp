@@ -1174,7 +1174,7 @@ static RPCHelpMan list()
 {
 
     //
-    // Only tenants and managers can list.
+    // Only authenticated users can list.
     // 
     // When an authenticated user executes a 'lynx-cli list' command, 
     // information about assets is returned, for instance the UUID. 
