@@ -1173,12 +1173,44 @@ static RPCHelpMan list()
 {
 
     //
-    // Only authenticated users can list.
+    // Users are either authenticated or not. 
+    // Users authenticated as tenants are tenants. 
+    // Users authenticated as managers are managers.
+    //
+    // Only authenticated users can list assets.
+    //
+    // When an authenticated user executes a lynx-cli list command, 
+    // information about assets is returned, in reverse chronological order, 
+    // beginning with the block tip. 
+    // If the optional count argument is omitted, 
+    // information about the most recent ten assets is returned. 
+    // If count contains a positive integer, 
+    // information about the specified number of assets is returned. 
+    // If count contains a zero, information about all applicable assets is returned.
     // 
-    // When an authenticated user executes a 'lynx-cli list' command, 
-    // information about assets is returned, for instance the UUID. 
-    // The returned UUID is the obfuscated UUID.
+    // When a tenant executes a lynx-cli list command, 
+    // information about assets stored while the given tenant was authenticated is returned.
     // 
+    // When a manager executes a lynx-cli list command, 
+    // information about assets is returned, regardless of the authenticated store asset tenant.
+    // 
+    // The following information is returned: 
+    //
+    // uuid: The obfuscated UUID.
+    // 
+    // message: Failure message.
+    // 
+    // tenant: Authenticated store asset tenant. length: Asset length in bytes.
+    // 
+    // height: Block tip height at store asset time
+    //
+    // timestamp: The number of seconds since the first second in 1970 at store asset time. 
+    // 
+    // extension: Asset filename extension.
+    //
+    // encrypted: Encryption flag.
+    //
+
 
     // Output data structures
     UniValue unvResult0(UniValue::VOBJ);
