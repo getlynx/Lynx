@@ -142,11 +142,11 @@ static RPCHelpMan store()
     // using the unobfuscated UUID as the encryption key.
     // We call this the obfuscated UUID.
     //
-    // The asset is then stored on the blockchain by the obfuscated UUID. 
-    // Said another way, assets are stored on the blockchain as key value pairs, 
+    // The asset is then stored on the blockchain as a key value pair, 
     // where the key is the obfuscated UUID, and the value is the asset contents.
     //
     // Finally, the unobfuscated UUID is returned to the tenant.
+    //
     // Uniqueness is not checked at UUID generation time. 
     // The number of possible 32 8-bit integers is (256)32 = 1.16 ∗ (10)77. 
     // At a sustained rate of one store per second, it would require 
