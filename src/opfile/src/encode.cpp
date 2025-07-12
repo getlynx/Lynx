@@ -23,6 +23,10 @@ extern std::string gstrAssetExtension;
 
 extern std::string gstrAssetFilename;
 
+extern int gintJSONAssetStore;
+
+extern std::string gstrJSONAssetStoreCharacters;
+
 bool file_to_hexchunks(std::string filepath, int& protocol, int& error_level, int& total_chunks, std::vector<std::string>& data_chunks, unsigned char* key) {
 
 LogPrint (BCLog::ALL, "encrypt from file_to_hexchunks %d \n", gintStoreAssetEncryptFlag);
@@ -48,7 +52,14 @@ LogPrint (BCLog::ALL, "\n");
         protocol = 1;
     }
 
-    int filelen = read_file_size(filepath);
+    int filelen;
+
+    if (gintJSONAssetStore == 0) {
+        filelen = read_file_size(filepath);
+    } else {
+        filelen = gstrJSONAssetStoreCharacters.size();        
+    }
+
     if (filelen < 0) {
         error_level = ERR_FILESZ;
         return false;
@@ -493,11 +504,15 @@ bool build_chunks_with_headers(std::pair<std::string, std::string>& putinfo, int
     //! start off using protocol 00, unless we detect an extension
     protocol = 0;
 
+LogPrint (BCLog::ALL, "json 5.1 \n");
+
     if (!file_to_hexchunks(filepath, protocol, error_level, total_chunks, data_chunks, key)) {
 
         // pass error_level through
         return false;
     }
+
+LogPrint (BCLog::ALL, "json 5.2 \n");
 
     std::string strProtocol = "00";
     if ((protocol == 1) && (gintStoreAssetEncryptFlag == 0)) {

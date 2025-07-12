@@ -15,6 +15,12 @@
 
 #include <openssl/sha.h>
 
+extern int gintJSONAssetStore;
+
+extern std::string gstrJSONAssetStoreCharacters;
+
+extern char gchrJSONAssetStoreCharacters[200000];
+
 unsigned char binvalue(const char v) {
     if (v >= '0' && v <= '9') {
         return v-'0';
@@ -62,11 +68,18 @@ int read_file_size(std::string filepath) {
 }
 
 bool read_file_stream(std::string filepath, char* buffer, int buflen) {
-    FILE* in = fopen(filepath.c_str(), "rb");
-    if (!in)
-        return false;
-    fread(buffer, 1, buflen, in);
-    fclose(in);
+
+    if (gintJSONAssetStore == 0) {
+        FILE* in = fopen(filepath.c_str(), "rb");
+        if (!in)
+            return false;
+        fread(buffer, 1, buflen, in);
+        fclose(in);
+    } else {
+        // std::strcpy(buffer, gstrJSONAssetStoreCharacters.c_str());
+        memcpy(buffer, gstrJSONAssetStoreCharacters.data(), gstrJSONAssetStoreCharacters.size());
+        // buffer = gchrJSONAssetStoreCharacters;
+    }
     return true;
 }
 

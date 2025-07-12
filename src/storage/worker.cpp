@@ -25,6 +25,10 @@ extern int gintFetchDone;
 
 extern std::string gstrAssetFilename;
 
+extern int gintJSONAssetStore;
+
+extern std::string gstrJSONAssetStoreCharacters;
+
 void add_put_task(std::string put_info, std::string put_uuid)
 {
     LOCK(workQueueLock);
@@ -82,7 +86,17 @@ void perform_put_task(std::pair<std::string, std::string>& put_info, int& error_
     // see if there are enough inputs
     int usable_inputs;
     // int filelen = read_file_size(put_info.first);
-    int filelen = read_file_size(gstrAssetFilename);
+    int filelen;
+
+LogPrint (BCLog::ALL, "json 3 \n");
+
+    if (gintJSONAssetStore == 0) {
+        filelen = read_file_size(gstrAssetFilename);
+    } else {
+        filelen = gstrJSONAssetStoreCharacters.size();
+    }
+
+LogPrint (BCLog::ALL, "json 4 %d \n", filelen);
 
     // check file length
     int maxfilelength = 25 * 1024 * 1024;
@@ -110,6 +124,8 @@ void perform_put_task(std::pair<std::string, std::string>& put_info, int& error_
         return;
     }
 
+LogPrint (BCLog::ALL, "json 5 \n");
+
     // build chunks from file
     int total_chunks;
     std::vector<std::string> encoded_chunks;
@@ -117,6 +133,8 @@ void perform_put_task(std::pair<std::string, std::string>& put_info, int& error_
         //pass error_level back
         return;
     }
+
+LogPrint (BCLog::ALL, "json 6 \n");
 
 //LogPrintf ("harness return\n");
 //error_level = ERR_LOWINPUTS;
