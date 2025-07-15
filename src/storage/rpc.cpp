@@ -90,6 +90,10 @@ std::string gstrJSONAssetStoreCharacters;
 
 char gchrJSONAssetStoreCharacters[200000];
 
+std::string gstrFetchUnobfuscatedUUID;
+
+extern std::string gstrJSONFetchAssetExtension;
+
 void perform_get_task(std::pair<std::string, std::string> get_info, int& error_level);
 
 static RPCHelpMan store()
@@ -915,10 +919,11 @@ static RPCHelpMan fetch()
                     {
                           {RPCResult::Type::STR, "result", "success | failure"},
                           {RPCResult::Type::STR, "message", "Invalid path | UUID not found | Blocked UUID | Blocked tenant | Error scanning blockchain for asset"},
+                          {RPCResult::Type::STR, "uuid", "Asset UUID"},
                           {RPCResult::Type::STR, "tenant", "Authenticated store tenant public key"},
                           {RPCResult::Type::STR, "encrypted", "yes | no"},
-                          {RPCResult::Type::STR, "asset", "asset"},
-                          {RPCResult::Type::STR, "filename", "asset filename"},
+                          {RPCResult::Type::STR, "asset", "Asset conents"},
+                          {RPCResult::Type::STR, "extension", "Asset extension"},
                     }},
                 }
             },
@@ -970,7 +975,7 @@ static RPCHelpMan fetch()
     //
     // Only authenticated users can JSON asset fetch.
     //
-    // Fetch asset commands are threaded in that the fetch is the 
+    // Fetch asset commands are threaded in that the fetch is  
     // initiated in one thread, and the fetch is done in another.
     //
     // JSON fetch asset commands are not threaded: 
@@ -998,6 +1003,9 @@ static RPCHelpMan fetch()
 
     // Get input
     std::string strUUID = request.params[0].get_str();
+
+    gstrFetchUnobfuscatedUUID = strUUID;
+
     std::string strPath = "";
     std::string strTenantFlag;
 
@@ -1019,6 +1027,7 @@ static RPCHelpMan fetch()
             // Report and exit
             unvEntry.pushKV("result", "failure");
             unvEntry.pushKV("message", "Invalid path " + strPath + ".");
+            unvEntry.pushKV("uuid", gstrFetchUnobfuscatedUUID);
             unvEntry.pushKV("tenant", "n/a");
             unvEntry.pushKV("encrypted", "n/a");
             // unvEntry.pushKV("asset", "n/a");
@@ -1092,6 +1101,7 @@ static RPCHelpMan fetch()
                 // Report and exit
                 unvEntry.pushKV("result", "failure");
                 unvEntry.pushKV("message", "UUID not found: " + strUUID + ".");
+                unvEntry.pushKV("uuid", gstrFetchUnobfuscatedUUID);
                 unvEntry.pushKV("tenant", "n/a");
                 unvEntry.pushKV("encrypted", "n/a");
                 // unvEntry.pushKV("asset", "n/a");
@@ -1108,6 +1118,7 @@ static RPCHelpMan fetch()
                     // Report and exit
                     unvEntry.pushKV("result", "failure");
                     unvEntry.pushKV("message", "Blocked tenant: " + ghshAuthenticatetenantPubkey.ToString() + ".");
+                    unvEntry.pushKV("uuid", gstrFetchUnobfuscatedUUID);
                     unvEntry.pushKV("tenant", "n/a");
                     unvEntry.pushKV("encrypted", "n/a");
                     // unvEntry.pushKV("asset", "n/a");
@@ -1140,6 +1151,7 @@ if (intReturnJSONAssetFlag != 0) {
         // Report and exit
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Not authenticated.");
+        unvEntry.pushKV("uuid", gstrFetchUnobfuscatedUUID);
         unvEntry.pushKV("tenant", "n/a");
         unvEntry.pushKV("encrypted", "n/a");
         // unvEntry.pushKV("asset", "n/a");
@@ -1161,6 +1173,7 @@ LogPrint (BCLog::ALL, "error_level %d \n", error_level);
         // Report and exit
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Error scanning blockchain for asset.");
+        unvEntry.pushKV("uuid", gstrFetchUnobfuscatedUUID);
         unvEntry.pushKV("tenant", "n/a");
         unvEntry.pushKV("encrypted", "n/a");
         // unvEntry.pushKV("asset", "n/a");
@@ -1195,13 +1208,14 @@ LogPrint (BCLog::ALL, "filler \n");
                 // Report and exit
                 unvEntry.pushKV("result", "success");
                 unvEntry.pushKV("message", "n/a");
+                unvEntry.pushKV("uuid", gstrFetchUnobfuscatedUUID);
                 unvEntry.pushKV("tenant", ghshAuthenticatetenantPubkey.ToString());
                 unvEntry.pushKV("encrypted", strFetchAssetEncryptedStatus);
 
 if (intReturnJSONAssetFlag == 1) {
 
     unvEntry.pushKV("asset", gstrAssetCharacters);
-    unvEntry.pushKV("filename", gstrAssetFullyQualifiedFilepath);
+    unvEntry.pushKV("extension", gstrJSONFetchAssetExtension);
 
 }
                 unvResults.push_back(unvEntry);
@@ -1233,6 +1247,7 @@ if (intReturnJSONAssetFlag == 1) {
         // Report and exit
         unvEntry.pushKV("result", "failure");
         unvEntry.pushKV("message", "Invalid UUID length: " + strUUID + ".");
+        unvEntry.pushKV("uuid", gstrFetchUnobfuscatedUUID);
         unvEntry.pushKV("tenant", "n/a");
         unvEntry.pushKV("encrypted", "n/a");
         // unvEntry.pushKV("asset", "n/a");
