@@ -36,6 +36,10 @@ extern int gintReturnJSONAssetFlag;
 
 std::string gstrAssetFullyQualifiedFilepath;
 
+extern std::string gstrFetchUnobfuscatedUUID;
+
+std::string gstrJSONFetchAssetExtension;
+
 
 
 /*
@@ -255,7 +259,8 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
 
 if (gintReturnJSONAssetFlag == 0) {
 
-    filepath = strip_trailing_slash(get_info.second) + "/" + get_info.first;
+    // filepath = strip_trailing_slash(get_info.second) + "/" + get_info.first;
+    filepath = strip_trailing_slash(get_info.second) + "/" + gstrFetchUnobfuscatedUUID;
 
 } else {
 
@@ -648,6 +653,8 @@ if (gintReturnJSONAssetFlag == 0) {
 
     LogPrint (BCLog::ALL, "(build_file_from_chunks)\n");
 
+    gstrJSONFetchAssetExtension = "";
+
     //! if protocol 01, rename file with extension
     if (((protocol == 1) || (protocol == 3))) {
 
@@ -666,6 +673,8 @@ LogPrint (BCLog::ALL, "chunkdata.size %d buffer %d %d %d %d \n", chunkdata.size(
 
         LogPrint (BCLog::ALL, "Extension found: %s", extension.c_str());
         LogPrint (BCLog::ALL, "\n");
+
+        gstrJSONFetchAssetExtension = extension;
 
         std::string newfilepath = filepath + "." + extension;
 
