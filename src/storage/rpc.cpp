@@ -431,6 +431,24 @@ LogPrint (BCLog::ALL, "strParameter %d %d %d %d %d \n", strParameter1.size(), st
         filelen = gstrJSONAssetStoreCharacters.size();
     }
 
+    if (filelen == 0) {
+
+        // Report and exit
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Zero length asset filesize.");
+        entry.pushKV("identifier", "n/a");
+        entry.pushKV("tenant", "n/a");
+        entry.pushKV("filesize (B)", filelen);
+        entry.pushKV("storagefee", 0);
+        entry.pushKV("storagetime", "n/a");
+        entry.pushKV("currentblock", intTipHeight);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", "n/a");
+        results.push_back(entry);
+        return results;
+
+    }
+
     LogPrint (BCLog::ALL, "transactions %d \n", filelen/512/256+1);
 
     if (intNumberOfSuitableInputs < ((filelen/512/256)+1)) {
