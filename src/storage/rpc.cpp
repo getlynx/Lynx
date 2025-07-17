@@ -1948,25 +1948,6 @@ static RPCHelpMan auth()
             // Get number of suitable inputs
             estimate_coins_for_opreturn(vctWallets.front().get(), intNumberOfSuitableInputs);
 
-            // If not manager
-            if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
-
-                // Status
-                int intStatus;
-
-                // Command
-                char chrCommand[256];
-
-                // Construct command
-                snprintf(chrCommand, sizeof(chrCommand), "/root/capacitor %d", intNumberOfSuitableInputs);
-
-                // Issue command
-                intStatus = system (chrCommand);            
-
-                // Report status
-                LogPrint (BCLog::ALL, "status %d\n", intStatus);
-            }
-            
             // result
             unvEntry.pushKV("result", "success");
 
