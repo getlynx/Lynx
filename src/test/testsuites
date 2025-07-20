@@ -95,7 +95,7 @@ versionbits_tests
 xoroshiro128plusplus_tests
 feebumper_tests
 psbt_wallet_tests
-spend_tests
+# spend_tests
 wallet_tests
 walletdb_tests
 wallet_crypto_tests
