@@ -23,13 +23,13 @@ static bool KeyFilter(const std::string& type)
     return WalletBatch::IsKeyType(type) || type == DBKeys::HDCHAIN;
 }
 
-class DummyCursor : public DatabaseCursor
+class SalvageDummyCursor: public DatabaseCursor
 {
     Status Next(DataStream& key, DataStream& value) override { return Status::FAIL; }
 };
 
-/** RAII class that provides access to a DummyDatabase. Never fails. */
-class DummyBatch : public DatabaseBatch
+/** RAII class that provides access to a SalvageDummyDatabase. Never fails. */
+class SalvageDummyBatch : public DatabaseBatch
 {
 private:
     bool ReadKey(DataStream&& key, DataStream& value) override { return true; }
@@ -42,7 +42,7 @@ public:
     void Flush() override {}
     void Close() override {}
 
-    std::unique_ptr<DatabaseCursor> GetNewCursor() override { return std::make_unique<DummyCursor>(); }
+    std::unique_ptr<DatabaseCursor> GetNewCursor() override { return std::make_unique<SalvageDummyCursor>(); }
     bool TxnBegin() override { return true; }
     bool TxnCommit() override { return true; }
     bool TxnAbort() override { return true; }
@@ -50,7 +50,7 @@ public:
 
 /** A dummy WalletDatabase that does nothing and never fails. Only used by salvage.
  **/
-class DummyDatabase : public WalletDatabase
+class SalvageDummyDatabase : public WalletDatabase
 {
 public:
     void Open() override {};
@@ -65,7 +65,7 @@ public:
     void ReloadDbEnv() override {}
     std::string Filename() override { return "dummy"; }
     std::string Format() override { return "dummy"; }
-    std::unique_ptr<DatabaseBatch> MakeBatch(bool flush_on_close = true) override { return std::make_unique<DummyBatch>(); }
+    std::unique_ptr<DatabaseBatch> MakeBatch(bool flush_on_close = true) override { return std::make_unique<SalvageDummyBatch>(); }
 };
 
 bool RecoverDatabaseFile(const ArgsManager& args, const fs::path& file_path, bilingual_str& error, std::vector<bilingual_str>& warnings)
@@ -180,7 +180,7 @@ bool RecoverDatabaseFile(const ArgsManager& args, const fs::path& file_path, bil
     }
 
     DbTxn* ptxn = env->TxnBegin();
-    CWallet dummyWallet(nullptr, "", std::make_unique<DummyDatabase>());
+    CWallet dummyWallet(nullptr, "", std::make_unique<SalvageDummyDatabase>());
     for (KeyValPair& row : salvagedData)
     {
         /* Filter for only private key type KV pairs to be added to the salvaged wallet */
