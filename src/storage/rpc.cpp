@@ -1968,7 +1968,7 @@ static RPCHelpMan auth()
             unvEntry.pushKV("tenant", authUser.ToString());
 
             // Set capacity in KB
-            uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1000;
+            uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1024;
 
             // If manager
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
