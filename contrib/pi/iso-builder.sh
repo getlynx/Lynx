@@ -6,9 +6,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ################################################################################
 #
 # PURPOSE:
-#   This script creates a customized Raspberry Pi OS image with Lynx cryptocurrency
+#   This script creates a customized Raspberry Pi OS 64-bit ARM image with Lynx cryptocurrency
 #   node software pre-installed and configured. It downloads a base Raspberry Pi
-#   OS image, modifies it to include Lynx node setup, and creates a ready-to-use
+#   OS 64-bit ARM image, modifies it to include Lynx node setup, and creates a ready-to-use
 #   image file for distribution.
 #
 # AUTHOR: Lynx Development Team
@@ -22,7 +22,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 #   This script performs the following operations in sequence:
 #
 #   1. IMAGE ACQUISITION:
-#      - Downloads latest Raspberry Pi OS Lite ARM image (if no URL provided)
+#      - Downloads latest Raspberry Pi OS Lite 64-bit ARM image (if no URL provided)
 #      - Or downloads a specific image from provided URL
 #      - Extracts the compressed .xz image file
 #      - Validates the image file integrity
@@ -41,12 +41,12 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ################################################################################
 #
 # USAGE:
-#   ./iso-builder.sh                    # Download and use latest Raspberry Pi OS
+#   ./iso-builder.sh                    # Download and use latest Raspberry Pi OS 64-bit ARM
 #   ./iso-builder.sh "URL_TO_IMAGE.XZ"  # Use specific image URL
 #
 # EXAMPLES:
 #   ./iso-builder.sh
-#   ./iso-builder.sh "https://downloads.raspberrypi.org/raspios_lite_armhf/images/raspios_lite_armhf-2023-05-03/2023-05-03-raspios-bullseye-armhf-lite.img.xz"
+#   ./iso-builder.sh "https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2023-05-03/2023-05-03-raspios-bullseye-arm64-lite.img.xz"
 #
 ################################################################################
 #
@@ -55,7 +55,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 #   - Root privileges (required for mounting operations)
 #   - Internet connection (for downloading images)
 #   - Sufficient disk space (at least 8GB free space recommended)
-#   - ARM-compatible system (for ARM image processing)
+#   - 64-bit ARM-compatible system (for 64-bit ARM image processing)
 #
 # DEPENDENCIES:
 #   - bash, wget, curl, unxz, xz
@@ -75,8 +75,8 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ################################################################################
 #
 # OUTPUT FILES:
-#   - YYYY-MM-DD-Lynx.img (extracted and modified image)
-#   - YYYY-MM-DD-Lynx.img.xz (final compressed distribution file)
+#   - YYYY-MM-DD-Lynx-RPI-ISO.img (extracted and modified 64-bit ARM image)
+#   - YYYY-MM-DD-Lynx-RPI-ISO.img.xz (final compressed distribution file)
 #
 # TEMPORARY FILES:
 #   - Downloaded .xz file (deleted after extraction)
@@ -146,7 +146,7 @@ if [ -z "$1" ]; then
     echo "No target URL provided, finding the latest Raspberry Pi OS Lite release..."
     
     # Base URL for Raspberry Pi OS Lite releases
-    base_url="https://downloads.raspberrypi.org/raspios_lite_armhf/images/"
+    base_url="https://downloads.raspberrypi.org/raspios_lite_arm64/images/"
     
     # Function to get the latest release directory
     get_latest_release() {
@@ -156,8 +156,8 @@ if [ -z "$1" ]; then
         
         # Get the directory listing and find the latest release folder
         while IFS= read -r line; do
-            # Look for directory links that match the pattern raspios_lite_armhf-YYYY-MM-DD
-            if [[ $line =~ href=\"(raspios_lite_armhf-[0-9]{4}-[0-9]{2}-[0-9]{2})/\" ]]; then
+            # Look for directory links that match the pattern raspios_lite_arm*-YYYY-MM-DD
+            if [[ $line =~ href=\"(raspios_lite_arm[^-]*-[0-9]{4}-[0-9]{2}-[0-9]{2})/\" ]]; then
                 local dir_name="${BASH_REMATCH[1]}"
                 local date_part=$(echo "$dir_name" | grep -o '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}')
                 
