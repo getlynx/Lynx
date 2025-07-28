@@ -1,6 +1,140 @@
 #!/bin/bash
 set -euo pipefail
 
+################################################################################
+# LYNX NODE BUILDER SCRIPT
+################################################################################
+#
+# PURPOSE:
+#   This script automates the setup and maintenance of a Lynx cryptocurrency node
+#   on ARM-based systems (Raspberry Pi, ARM64 servers, etc.). It handles the
+#   complete lifecycle from initial setup to ongoing maintenance.
+#
+# AUTHOR: Lynx Development Team
+# VERSION: 2.0
+# LAST UPDATED: 2025
+# DOCUMENTATION: https://docs.getlynx.io/
+#
+################################################################################
+#
+# FUNCTIONALITY OVERVIEW:
+#   This script performs the following operations in sequence:
+#
+#   1. SYSTEM SETUP:
+#      - Creates systemd timer (builder.timer) to run every 12 minutes
+#      - Sets up 4GB swap file if current swap is less than 3GB
+#      - Installs Lynx ARM binaries if not present
+#      - Creates systemd service (lynx.service) for the Lynx daemon
+#
+#   2. USER EXPERIENCE:
+#      - Adds convenient aliases to ~/.bashrc for common Lynx operations
+#      - Creates a beautiful MOTD (Message of the Day) with node status
+#      - Provides quick access to wallet commands, system monitoring, and logs
+#
+#   3. NODE MAINTENANCE:
+#      - Ensures Lynx daemon is running
+#      - Monitors blockchain synchronization status
+#      - Automatically restarts daemon during sync
+#      - Disables timer once sync is complete
+#
+################################################################################
+#
+# ALIASES CREATED (type 'motd' to see all):
+#   WALLET COMMANDS:
+#     gb    - Get wallet balances
+#     gna   - Generate new address
+#     lag   - List address groupings
+#     sta   - Send to address
+#     swe   - Sweep a wallet (send all funds)
+#
+#   SYSTEM COMMANDS:
+#     lv    - Show Lynx version
+#     lyc   - Edit Lynx config file
+#     lyl   - View Lynx debug log (real-time)
+#     lynx  - Restart Lynx daemon
+#     jou   - View builder script logs
+#     gbi   - Get blockchain info
+#     lelp  - Show Lynx help
+#     stat  - Check Lynx service status
+#
+#   USEFUL COMMANDS:
+#     htop  - Monitor system resources
+#     motd  - Show help message again
+#
+################################################################################
+#
+# SYSTEM REQUIREMENTS:
+#   - ARM architecture (aarch64 or arm*)
+#   - Debian/Ubuntu-based system
+#   - Root privileges
+#   - Internet connection
+#   - Minimum 4GB RAM recommended
+#
+# DEPENDENCIES:
+#   - systemd
+#   - wget, curl, unzip
+#   - fallocate, mkswap, swapon
+#   - logger (for system logging)
+#
+################################################################################
+#
+# INSTALLATION:
+#   This script is typically downloaded and executed by iso-builder.sh during
+#   the initial system setup. It can also be run manually:
+#
+#   wget -O /usr/local/bin/builder.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/pi/builder.sh
+#   chmod +x /usr/local/bin/builder.sh
+#   /usr/local/bin/builder.sh
+#
+################################################################################
+#
+# OPERATION MODES:
+#   - INITIAL SETUP: Creates all necessary files and services
+#   - MAINTENANCE: Runs every 12 minutes via systemd timer
+#   - SYNC MONITORING: Checks blockchain sync status and manages daemon
+#
+# LOGGING:
+#   - All operations are logged to systemd journal
+#   - View logs: journalctl -t builder.sh -f
+#   - Logging is reduced after 6 hours of uptime to prevent spam
+#
+################################################################################
+#
+# SECURITY FEATURES:
+#   - RPC credentials are read from lynx.conf (not hardcoded)
+#   - All file operations use proper permissions
+#   - Systemd services run with appropriate security contexts
+#   - Swap file has restricted permissions (600)
+#
+################################################################################
+#
+# TROUBLESHOOTING:
+#   - Check service status: systemctl status lynx
+#   - View debug logs: tail -f ~/.lynx/debug.log
+#   - Check builder logs: journalctl -t builder.sh -f
+#   - Restart daemon: systemctl restart lynx
+#   - Manual sync check: lynx-cli getblockchaininfo
+#
+# EXIT CODES:
+#   0 - Success
+#   1 - RPC credentials not found
+#   Other - Various system errors
+#
+################################################################################
+#
+# NETWORK PORTS:
+#   - Lynx daemon typically uses port 22566 (configurable in lynx.conf)
+#   - RPC typically uses port 8332 (configurable in lynx.conf)
+#
+# FILES CREATED:
+#   - /etc/systemd/system/builder.service
+#   - /etc/systemd/system/builder.timer
+#   - /etc/systemd/system/lynx.service
+#   - /swapfile (if needed)
+#   - ~/.bashrc (aliases added)
+#
+################################################################################
+
 # Get system uptime in seconds for conditional logging
 uptime_seconds=$(cat /proc/uptime | cut -d' ' -f1 | cut -d'.' -f1)
 # Threshold for conditional logging (6 hours = 21600 seconds)
