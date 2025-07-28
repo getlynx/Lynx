@@ -8,7 +8,6 @@
 
 #include <kernel/chainparams.h>
 
-#include <chainparamsbase.h>
 #include <consensus/params.h>
 #include <netaddress.h>
 #include <primitives/block.h>
@@ -22,10 +21,10 @@
 #include <unordered_map>
 #include <vector>
 
+class ArgsManager;
+
 /**
  * Creates and returns a std::unique_ptr<CChainParams> of the chosen chain.
- * @returns a CChainParams* of the chosen chain.
- * @throws a std::runtime_error if the chain is not supported.
  */
 std::unique_ptr<const CChainParams> CreateChainParams(const ArgsManager& args, const ChainType chain);
 
@@ -36,8 +35,7 @@ std::unique_ptr<const CChainParams> CreateChainParams(const ArgsManager& args, c
 const CChainParams &Params();
 
 /**
- * Sets the params returned by Params() to those for the given chain name.
- * @throws std::runtime_error when the chain is not supported.
+ * Sets the params returned by Params() to those for the given chain type.
  */
 void SelectParams(const ChainType chain);
 

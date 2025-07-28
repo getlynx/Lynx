@@ -18,6 +18,7 @@
 #include <blockfilter.h>
 #include <chain.h>
 #include <chainparams.h>
+#include <chainparamsbase.h>
 #include <consensus/amount.h>
 #include <deploymentstatus.h>
 #include <hash.h>
@@ -123,24 +124,25 @@
 #include <zmq/zmqrpc.h>
 #endif
 
-using interfaces::WalletLoader;
+// using interfaces::WalletLoader;
 
+using kernel::DEFAULT_STOPAFTERBLOCKIMPORT;
 using kernel::DumpMempool;
 using kernel::ValidationCacheSizes;
 
 using node::ApplyArgsManOptions;
+using node::BlockManager;
 using node::CacheSizes;
 using node::CalculateCacheSizes;
 using node::DEFAULT_PERSIST_MEMPOOL;
 using node::DEFAULT_PRINTPRIORITY;
-using node::DEFAULT_STOPAFTERBLOCKIMPORT;
+using node::fReindex;
 using node::LoadChainstate;
 using node::MempoolPath;
-using node::ShouldPersistMempool;
 using node::NodeContext;
+using node::ShouldPersistMempool;
 using node::ThreadImport;
 using node::VerifyLoadedChainstate;
-using node::fReindex;
 
 std::thread chunkman;
 std::thread stakeman;
@@ -355,9 +357,8 @@ void Shutdown(NodeContext& node)
 
 #if ENABLE_ZMQ
     if (g_zmq_notification_interface) {
-        UnregisterValidationInterface(g_zmq_notification_interface);
-        delete g_zmq_notification_interface;
-        g_zmq_notification_interface = nullptr;
+        UnregisterValidationInterface(g_zmq_notification_interface.get());
+        g_zmq_notification_interface.reset();
     }
 #endif
 
@@ -1059,8 +1060,9 @@ bool AppInitParameterInteraction(const ArgsManager& args, bool use_syscall_sandb
         if (const auto error{ApplyArgsManOptions(args, chainman_opts_dummy)}) {
             return InitError(*error);
         }
-        node::BlockManager::Options blockman_opts_dummy{
+        BlockManager::Options blockman_opts_dummy{
             .chainparams = chainman_opts_dummy.chainparams,
+            .blocks_dir = args.GetBlocksDirPath(),
         };
         if (const auto error{ApplyArgsManOptions(args, blockman_opts_dummy)}) {
             return InitError(*error);
@@ -1446,10 +1448,14 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     }
 
 #if ENABLE_ZMQ
-    g_zmq_notification_interface = CZMQNotificationInterface::Create();
+    g_zmq_notification_interface = CZMQNotificationInterface::Create(
+        [&chainman = node.chainman](CBlock& block, const CBlockIndex& index) {
+            assert(chainman);
+            return chainman->m_blockman.ReadBlockFromDisk(block, index);
+        });
 
     if (g_zmq_notification_interface) {
-        RegisterValidationInterface(g_zmq_notification_interface);
+        RegisterValidationInterface(g_zmq_notification_interface.get());
     }
 #endif
 
@@ -1464,8 +1470,9 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     };
     Assert(!ApplyArgsManOptions(args, chainman_opts)); // no error can happen, already checked in AppInitParameterInteraction
 
-    node::BlockManager::Options blockman_opts{
+    BlockManager::Options blockman_opts{
         .chainparams = chainman_opts.chainparams,
+        .blocks_dir = args.GetBlocksDirPath(),
     };
     Assert(!ApplyArgsManOptions(args, blockman_opts)); // no error can happen, already checked in AppInitParameterInteraction
 
@@ -1683,7 +1690,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     }
 
     chainman.m_load_block = std::thread(&util::TraceThread, "loadblk", [=, &chainman, &args] {
-        ThreadImport(chainman, vImportFiles, args, ShouldPersistMempool(args) ? MempoolPath(args) : fs::path{});
+        ThreadImport(chainman, vImportFiles, ShouldPersistMempool(args) ? MempoolPath(args) : fs::path{});
     });
 
     // Wait for genesis block to be processed

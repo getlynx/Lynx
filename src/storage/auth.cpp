@@ -1156,7 +1156,8 @@ gu32BlockHeight = height;
         bliBlockIndex  = chnActiveChain[height];
 
         // Read block from disk
-        if (!ReadBlockFromDisk(blkBlock, bliBlockIndex , chainman.GetConsensus())) {
+        // if (!ReadBlockFromDisk(blkBlock, bliBlockIndex , chainman.GetConsensus())) {
+        if (!chainman.m_blockman.ReadBlockFromDisk(blkBlock, *bliBlockIndex)) {
             return false;
         }
 
@@ -1349,7 +1350,8 @@ gu32BlockHeight = height;
         bliBlockIndex  = chnActiveChain[height];
 
         // Read block from disk
-        if (!ReadBlockFromDisk(blkBlock, bliBlockIndex , chainman.GetConsensus())) {
+        // if (!ReadBlockFromDisk(blkBlock, bliBlockIndex , chainman.GetConsensus())) {
+        if (!chainman.m_blockman.ReadBlockFromDisk(blkBlock, *bliBlockIndex)) {
             return false;
         }
 
@@ -1501,7 +1503,8 @@ gu32BlockHeight = height;
         bliBlockIndex  = chnActiveChain[height];
 
         // Read block from disk
-        if (!ReadBlockFromDisk(blkBlock, bliBlockIndex , chainman.GetConsensus())) {
+        // if (!ReadBlockFromDisk(blkBlock, bliBlockIndex , chainman.GetConsensus())) {
+        if (!chainman.m_blockman.ReadBlockFromDisk(blkBlock, *bliBlockIndex)) {
             return false;
         }
 
@@ -1626,7 +1629,8 @@ bool scan_blocks_for_specific_authdata (ChainstateManager& chainman, uint160 has
     //start = clock ();    
 
         pindex = active_chain[height];
-        if (!ReadBlockFromDisk(block, pindex, chainman.GetConsensus())) {
+        // if (!ReadBlockFromDisk(block, pindex, chainman.GetConsensus())) {
+        if (!chainman.m_blockman.ReadBlockFromDisk(block, *pindex)) {
             return false;
         }
 

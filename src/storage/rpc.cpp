@@ -37,7 +37,7 @@
 #include <util/system.h>
 
 using namespace wallet;
-using node::ReadBlockFromDisk;
+// using node::ReadBlockFromDisk;
 
 // Staking state, set at daemon startup time
 extern bool gblnDisableStaking;
@@ -429,6 +429,24 @@ LogPrint (BCLog::ALL, "strParameter %d %d %d %d %d \n", strParameter1.size(), st
         filelen = read_file_size (strAssetFilename);
     } else {
         filelen = gstrJSONAssetStoreCharacters.size();
+    }
+
+    if (filelen == 0) {
+
+        // Report and exit
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "Zero length asset filesize.");
+        entry.pushKV("identifier", "n/a");
+        entry.pushKV("tenant", "n/a");
+        entry.pushKV("filesize (B)", filelen);
+        entry.pushKV("storagefee", 0);
+        entry.pushKV("storagetime", "n/a");
+        entry.pushKV("currentblock", intTipHeight);
+        entry.pushKV("stakingstatus", strStakingStatus);
+        entry.pushKV("encrypted", "n/a");
+        results.push_back(entry);
+        return results;
+
     }
 
     LogPrint (BCLog::ALL, "transactions %d \n", filelen/512/256+1);
@@ -1930,25 +1948,6 @@ static RPCHelpMan auth()
             // Get number of suitable inputs
             estimate_coins_for_opreturn(vctWallets.front().get(), intNumberOfSuitableInputs);
 
-            // If not manager
-            if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
-
-                // Status
-                int intStatus;
-
-                // Command
-                char chrCommand[256];
-
-                // Construct command
-                snprintf(chrCommand, sizeof(chrCommand), "/root/capacitor %d", intNumberOfSuitableInputs);
-
-                // Issue command
-                intStatus = system (chrCommand);            
-
-                // Report status
-                LogPrint (BCLog::ALL, "status %d\n", intStatus);
-            }
-            
             // result
             unvEntry.pushKV("result", "success");
 
@@ -1969,7 +1968,7 @@ static RPCHelpMan auth()
             unvEntry.pushKV("tenant", authUser.ToString());
 
             // Set capacity in KB
-            uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1000;
+            uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1024;
 
             // If manager
             if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
