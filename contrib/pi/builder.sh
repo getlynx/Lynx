@@ -135,6 +135,11 @@ set -euo pipefail
 #
 ################################################################################
 
+# Set HOME environment variable if not already set (needed when run from rc.local)
+if [ -z "${HOME:-}" ]; then
+    export HOME=/root
+fi
+
 # Get system uptime in seconds for conditional logging
 uptime_seconds=$(cat /proc/uptime | cut -d' ' -f1 | cut -d'.' -f1)
 # Threshold for conditional logging (6 hours = 21600 seconds)
