@@ -373,8 +373,10 @@ _IP=\$(hostname -I) || true
 if [ \"\$_IP\" ]; then
   printf \"My IP address is %s\n\" \"\$_IP\"
 fi
+
 printf \"\n\n\n\n\n\n\n\nLynx initialization will start in 60 seconds.\n\n\n\n\n\n\"
 sleep 60
+
 # Ping Google NS server to test public network access
 if timeout 10 /bin/ping -c 1 8.8.8.8
 then
