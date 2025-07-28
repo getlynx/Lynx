@@ -1,7 +1,145 @@
 #!/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Run script as root user
+################################################################################
+# LYNX ISO BUILDER SCRIPT
+################################################################################
+#
+# PURPOSE:
+#   This script creates a customized Raspberry Pi OS image with Lynx cryptocurrency
+#   node software pre-installed and configured. It downloads a base Raspberry Pi
+#   OS image, modifies it to include Lynx node setup, and creates a ready-to-use
+#   image file for distribution.
+#
+# AUTHOR: Lynx Development Team
+# VERSION: 2.0
+# LAST UPDATED: 2025
+# DOCUMENTATION: https://docs.getlynx.io/
+#
+################################################################################
+#
+# FUNCTIONALITY OVERVIEW:
+#   This script performs the following operations in sequence:
+#
+#   1. IMAGE ACQUISITION:
+#      - Downloads latest Raspberry Pi OS Lite ARM image (if no URL provided)
+#      - Or downloads a specific image from provided URL
+#      - Extracts the compressed .xz image file
+#      - Validates the image file integrity
+#
+#   2. IMAGE MODIFICATION:
+#      - Detects partition offsets (boot and root partitions)
+#      - Mounts partitions safely with proper error handling
+#      - Creates rc.local script for automatic Lynx node setup
+#      - Configures the image to download and run builder.sh on first boot
+#
+#   3. OUTPUT GENERATION:
+#      - Creates final image with date-stamped filename
+#      - Compresses the image using high-compression xz
+#      - Produces ready-to-distribute .img.xz file
+#
+################################################################################
+#
+# USAGE:
+#   ./iso-builder.sh                    # Download and use latest Raspberry Pi OS
+#   ./iso-builder.sh "URL_TO_IMAGE.XZ"  # Use specific image URL
+#
+# EXAMPLES:
+#   ./iso-builder.sh
+#   ./iso-builder.sh "https://downloads.raspberrypi.org/raspios_lite_armhf/images/raspios_lite_armhf-2023-05-03/2023-05-03-raspios-bullseye-armhf-lite.img.xz"
+#
+################################################################################
+#
+# SYSTEM REQUIREMENTS:
+#   - Linux system (tested on Debian/Ubuntu)
+#   - Root privileges (required for mounting operations)
+#   - Internet connection (for downloading images)
+#   - Sufficient disk space (at least 8GB free space recommended)
+#   - ARM-compatible system (for ARM image processing)
+#
+# DEPENDENCIES:
+#   - bash, wget, curl, unxz, xz
+#   - mount, umount, losetup
+#   - fdisk, stat, file
+#   - mkdir, mv, chmod
+#
+################################################################################
+#
+# SECURITY FEATURES:
+#   - Validates downloaded files before processing
+#   - Checks partition offsets to prevent mounting errors
+#   - Uses safe file operations (no wildcards)
+#   - Proper error handling and cleanup
+#   - Loop device management to prevent conflicts
+#
+################################################################################
+#
+# OUTPUT FILES:
+#   - YYYY-MM-DD-Lynx.img (extracted and modified image)
+#   - YYYY-MM-DD-Lynx.img.xz (final compressed distribution file)
+#
+# TEMPORARY FILES:
+#   - Downloaded .xz file (deleted after extraction)
+#   - Mount points: /mnt/lynx1, /mnt/lynx2 (cleaned up after use)
+#   - Loop devices (detached after processing)
+#
+################################################################################
+#
+# FIRST BOOT BEHAVIOR:
+#   When the created image boots for the first time:
+#   1. Displays IP address information
+#   2. Waits 60 seconds for network initialization
+#   3. Tests network connectivity (ping 8.8.8.8)
+#   4. Downloads and executes builder.sh from GitHub
+#   5. Sets up Lynx node automatically
+#   6. Reboots if network is unavailable (retries every 60 seconds)
+#
+################################################################################
+#
+# TROUBLESHOOTING:
+#   - "No .img file found": Check if download/extraction succeeded
+#   - "Failed to mount": Check loop device conflicts (use losetup -D)
+#   - "Invalid disk image": Verify downloaded file integrity
+#   - "Partition offset exceeds image size": Corrupted or wrong image file
+#   - "Overlapping loop device": Clean up with losetup -D and umount -f
+#
+# COMMON COMMANDS:
+#   losetup -a                    # Check attached loop devices
+#   losetup -D                    # Detach all loop devices
+#   umount -f /mnt/lynx1 /mnt/lynx2  # Force unmount
+#   file *.img                    # Check image file type
+#   fdisk -l *.img               # View partition information
+#
+################################################################################
+#
+# NETWORK REQUIREMENTS:
+#   - Outbound HTTPS access to GitHub (for builder.sh download)
+#   - Outbound HTTP/HTTPS to Raspberry Pi Foundation (for OS downloads)
+#   - ICMP access for network connectivity testing (ping 8.8.8.8)
+#
+# REMOTE RESOURCES:
+#   - GitHub: https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/pi/builder.sh
+#   - Raspberry Pi Foundation: https://downloads.raspberrypi.org/
+#
+################################################################################
+#
+# EXIT CODES:
+#   0 - Success
+#   1 - Error (various conditions with descriptive messages)
+#
+# LOGGING:
+#   - All operations output to stdout/stderr
+#   - Progress indicators for downloads
+#   - Detailed error messages for troubleshooting
+#
+################################################################################
+#
+# WARNING:
+#   This script requires root privileges and performs system-level operations.
+#   Ensure you have sufficient disk space and are running on a compatible system.
+#   The script will modify mounted filesystems and create loop devices.
+#
+################################################################################
 
 # If the download URL of the target img is not supplied, then find the latest release
 if [ -z "$1" ]; then
@@ -262,9 +400,10 @@ if losetup -a | grep -q "$img_file"; then
 fi
 
 currentDate=$(date +%F)
-mv "$img_file" "$currentDate"-Lynx.img
+mv "$img_file" "$currentDate"-Lynx-RPI-ISO.img
 
-echo "Compressing the modified target OS. This might take little while due to the high level of compression used with xz."
-xz -9 "$currentDate"-Lynx.img
+echo "Compressing the modified target OS. This might take a while due to the high level of compression used with xz."
+echo "Compression progress:"
+xz -9 -v "$currentDate"-Lynx-RPI-ISO.img
 
-echo "The file $currentDate-Lynx.img.xz is now ready for distribution."
+echo "The file $currentDate-Lynx-RPI-ISO.img.xz is now ready for distribution."
