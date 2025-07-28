@@ -2,7 +2,6 @@
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Run script as root user
-# wget -qO - https://raw.githubusercontent.com/getlynx/LynxCI-ISO-Creator/main/build.sh | bash -s "https://downloads.raspberrypi.org/raspios_lite_armhf/images/raspios_lite_armhf-2022-09-07/2022-09-06-raspios-bullseye-armhf-lite.img.xz"
 
 # If the download URL of the target img is not supplied, then find the latest release
 if [ -z "$1" ]; then
@@ -242,7 +241,7 @@ sleep 60
 if timeout 10 /bin/ping -c 1 8.8.8.8
 then
         sleep 30
-        wget -qO - https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/pi/deploy.sh | bash
+        wget -qO /usr/local/bin/builder.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/pi/builder.sh && chmod +x /usr/local/bin/builder.sh && /usr/local/bin/builder.sh
 else
         echo \"Network access was not detected. For best results, connect an ethernet cable to your home or work wifi router. This device will reboot and try again in 60 seconds. For more information, visit https://docs.getlynx.io/lynx-core/lynxci/iso-for-raspberry-pi\"
         sleep 60
