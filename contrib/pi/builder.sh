@@ -392,11 +392,55 @@ check_and_install_lynx_arm() {
     fi
     filename=$(basename "$download_url")
     logger -t builder.sh "Downloading $filename to $HOME..."
-    wget -q -O "$HOME/$filename" "$download_url" || { logger -t builder.sh "Failed to download $filename"; return 1; }
+    
+    # Download with progress and verification
+    wget --progress=bar:force -O "$HOME/$filename" "$download_url"
+    if [ $? -ne 0 ]; then
+        logger -t builder.sh "ERROR: Failed to download $filename"
+        return 1
+    fi
+    
+    # Verify download was successful
+    if [ ! -f "$HOME/$filename" ]; then
+        logger -t builder.sh "ERROR: Downloaded file $filename not found"
+        return 1
+    fi
+    
+    # Check file size (should be reasonable for a binary)
+    file_size=$(stat -c %s "$HOME/$filename")
+    if [ "$file_size" -lt 1000000 ]; then  # Less than 1MB is suspicious
+        logger -t builder.sh "ERROR: Downloaded file $filename is too small ($file_size bytes) - likely corrupted"
+        logger -t builder.sh "File contents (first 200 chars):"
+        head -c 200 "$HOME/$filename" | logger -t builder.sh
+        return 1
+    fi
+    
+    logger -t builder.sh "Download successful. File size: $file_size bytes"
     logger -t builder.sh "Extracting $filename..."
-    unzip -o "$HOME/$filename" -d /usr/local/bin/ || { logger -t builder.sh "Failed to extract $filename"; return 1; }
+    
+    # Extract with verification
+    unzip -o "$HOME/$filename" -d /usr/local/bin/
+    if [ $? -ne 0 ]; then
+        logger -t builder.sh "ERROR: Failed to extract $filename"
+        return 1
+    fi
+    
+    # Verify extraction was successful
+    if [ ! -f "/usr/local/bin/lynxd" ]; then
+        logger -t builder.sh "ERROR: lynxd not found after extraction"
+        logger -t builder.sh "Contents of /usr/local/bin/:"
+        ls -la /usr/local/bin/ | logger -t builder.sh
+        return 1
+    fi
     chmod +x /usr/local/bin/lynx* || logger -t builder.sh "Failed to chmod Lynx binaries"
-    logger -t builder.sh "Lynx ARM binary installed successfully."
+    
+    # Verify the binary was actually installed
+    if [ -f "/usr/local/bin/lynxd" ]; then
+        logger -t builder.sh "Lynx ARM binary installed successfully."
+    else
+        logger -t builder.sh "ERROR: Lynx binary installation failed - lynxd not found at /usr/local/bin/lynxd"
+        return 1
+    fi
 }
 
 # Function to create lynx.service systemd unit file if not present
@@ -436,6 +480,17 @@ EOF
 
 # Function to check if lynx service is running, and start if not
 ensure_lynx_service_running() {
+    # First verify the binary exists
+    if [ ! -f "/usr/local/bin/lynxd" ]; then
+        logger -t builder.sh "ERROR: Cannot start Lynx service - lynxd binary not found at /usr/local/bin/lynxd"
+        logger -t builder.sh "Attempting to reinstall Lynx binary..."
+        check_and_install_lynx_arm
+        if [ ! -f "/usr/local/bin/lynxd" ]; then
+            logger -t builder.sh "ERROR: Lynx binary installation failed. Cannot start service."
+            return 1
+        fi
+    fi
+    
     if pgrep -x "lynxd" >/dev/null; then
         # Only log if system has been running for 6 hours or less
         if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
