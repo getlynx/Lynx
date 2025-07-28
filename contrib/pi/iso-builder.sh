@@ -388,6 +388,9 @@ fi
 exit 0
 " > /mnt/lynx2/etc/rc.local
 
+# Set proper permissions for rc.local
+chmod 755 /mnt/lynx2/etc/rc.local
+
 # Clean up mounts and loop devices
 echo "Unmounting partitions and cleaning up loop devices..."
 umount /mnt/lynx2 2>/dev/null || true
