@@ -503,6 +503,8 @@ ensure_lynx_service_running() {
         sleep 5
         systemctl start lynx.service
         logger -t builder.sh "Lynx daemon started."
+        logger -t builder.sh "Disabling rc.local to prevent future builder.sh downloads"
+        chmod -x /etc/rc.local
         exit 0
     fi
 }
@@ -539,6 +541,8 @@ check_blockchain_sync() {
                 logger -t builder.sh "Blockchain sync complete. Stopping and disabling builder.timer."
                 systemctl stop builder.timer
                 systemctl disable builder.timer
+                logger -t builder.sh "Disabling rc.local to prevent future builder.sh downloads"
+                chmod -x /etc/rc.local
                 return
             else
                 #logger -t builder.sh "Blockchain still syncing or status unknown (got:$SYNC_STATUS). Restarting Lynx daemon."
