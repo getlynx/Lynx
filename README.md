@@ -1,4 +1,4 @@
-Lynx Core v25
+Lynx Core v26
 =======================================
 
 https://getlynx.io
@@ -7,7 +7,7 @@ https://getlynx.io
 
 [This comprehensive documentation](https://docs.getlynx.io/) will explain the key features and benefits of Lynx, with a focus on its energy efficiency and long-term data storage capabilities.
 
-The Lynx blockchain uses a Proof of Stake (PoS) consensus mechanism, which is much more energy-efficient than the traditional Proof of Work used by many other blockchains.   This makes Lynx an environmentally-friendly option for storing data. Otherwise, Lynx is a fork of Bitcoin v25.
+The Lynx blockchain uses a Proof of Stake (PoS) consensus mechanism, which is much more energy-efficient than the traditional Proof of Work used by many other blockchains. This makes Lynx an environmentally-friendly option for storing data. Otherwise, Lynx is a fork of Bitcoin v26.
 
 In addition, Lynx is designed to keep your data accessible and secure for over 250 years. No matter what happens, you can count on your information being there when you need it.
 
