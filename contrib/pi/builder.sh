@@ -101,7 +101,6 @@ set -euo pipefail
 ################################################################################
 #
 # SECURITY FEATURES:
-#   - RPC credentials are read from lynx.conf (not hardcoded)
 #   - All file operations use proper permissions
 #   - Systemd services run with appropriate security contexts
 #   - Swap file has restricted permissions (600)
@@ -110,15 +109,10 @@ set -euo pipefail
 #
 # TROUBLESHOOTING:
 #   - Check service status: systemctl status lynx
-#   - View debug logs: tail -f ~/.lynx/debug.log
+#   - View debug logs: tail -f $WorkingDirectory/.lynx/debug.log
 #   - Check builder logs: journalctl -t builder.sh -f
 #   - Restart daemon: systemctl restart lynx
 #   - Manual sync check: lynx-cli getblockchaininfo
-#
-# EXIT CODES:
-#   0 - Success
-#   1 - RPC credentials not found
-#   Other - Various system errors
 #
 ################################################################################
 #
@@ -135,10 +129,7 @@ set -euo pipefail
 #
 ################################################################################
 
-# Set HOME environment variable if not already set (needed when run from rc.local)
-if [ -z "${HOME:-}" ]; then
-    export HOME=/root
-fi
+WorkingDirectory=/var/lib/lynx
 
 # Get system uptime in seconds for conditional logging
 uptime_seconds=$(cat /proc/uptime | cut -d' ' -f1 | cut -d'.' -f1)
@@ -152,9 +143,9 @@ create_motd_function() {
 show_lynx_motd() {
     echo ""
     # Count stakes won in the last 24 hours
-    stakes_won=$(grep "New proof-of-stake block found" $HOME/.lynx/debug.log 2>/dev/null | grep "$(date -d '24 hours ago' '+%Y-%m-%d')" | wc -l)
+    stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/.lynx/debug.log 2>/dev/null | grep "$(date -d '24 hours ago' '+%Y-%m-%d')" | wc -l)
     if [ -z "$stakes_won" ] || [ "$stakes_won" = "0" ]; then
-        stakes_won=$(grep "New proof-of-stake block found" $HOME/.lynx/debug.log 2>/dev/null | grep "$(date '+%Y-%m-%d')" | wc -l)
+        stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/.lynx/debug.log 2>/dev/null | grep "$(date '+%Y-%m-%d')" | wc -l)
     fi
     
     # Calculate dynamic spacing based on number of digits
@@ -184,8 +175,8 @@ show_lynx_motd() {
     echo "║                                                                              ║"
     echo "║  SYSTEM COMMANDS:                                                            ║"
     echo "║    lv    - Show Lynx version (lynx-cli -version)                             ║"
-    echo "║    lyc   - Edit Lynx config (nano ~/.lynx/lynx.conf)                         ║"
-    echo "║    lyl   - View Lynx debug log (tail -f ~/.lynx/debug.log)                   ║"
+    echo "║    lyc   - Edit Lynx config (nano /var/lib/lynx/.lynx/lynx.conf)             ║"
+    echo "║    lyl   - View Lynx debug log (tail -f /var/lib/lynx/.lynx/debug.log)       ║"
     echo "║    lynx  - Restart Lynx daemon (systemctl restart lynx)                      ║"
     echo "║    jou   - View builder logs (journalctl -t builder.sh -n 100 -f)            ║"
     echo "║    gbi   - Get blockchain info (lynx-cli getblockchaininfo)                  ║"
@@ -206,9 +197,9 @@ show_lynx_motd() {
 EOF
 }
 
-# Function to add useful aliases and MOTD to $HOME/.bashrc
+# Function to add useful aliases and MOTD to /root/.bashrc
 add_aliases_to_bashrc() {
-    local BASHRC="$HOME/.bashrc"
+    local BASHRC="/root/.bashrc"
     local ALIAS_BLOCK_START="# === LYNX ALIASES START ==="
     local ALIAS_BLOCK_END="# === LYNX ALIASES END ==="
     local MOTD_BLOCK_START="# === LYNX MOTD START ==="
@@ -227,38 +218,20 @@ add_aliases_to_bashrc() {
     # Append the new alias block
     cat <<EOF >> "$BASHRC"
 $ALIAS_BLOCK_START
-# Function to get RPC credentials
-get_rpc_credentials() {
-    if [ -f \$HOME/.lynx/lynx.conf ]; then
-        RPC_USER=\$(grep "^main\.rpcuser=" \$HOME/.lynx/lynx.conf | cut -d'=' -f2)
-        RPC_PASS=\$(grep "^main\.rpcpassword=" \$HOME/.lynx/lynx.conf | cut -d'=' -f2)
-        
-        if [ -n "\$RPC_USER" ] && [ -n "\$RPC_PASS" ]; then
-            return 0
-        else
-            echo "RPC credentials not found in lynx.conf"
-            return 1
-        fi
-    else
-        echo "lynx.conf not found at \$HOME/.lynx/lynx.conf"
-        return 1
-    fi
-}
-
-alias gb='get_rpc_credentials && lynx-cli -rpcuser="\$RPC_USER" -rpcpassword="\$RPC_PASS" getbalances'
-alias gna='get_rpc_credentials && lynx-cli -rpcuser="\$RPC_USER" -rpcpassword="\$RPC_PASS" getnewaddress'
-alias lag='get_rpc_credentials && lynx-cli -rpcuser="\$RPC_USER" -rpcpassword="\$RPC_PASS" listaddressgroupings'
+alias gb='lynx-cli getbalances'
+alias gna='lynx-cli getnewaddress'
+alias lag='lynx-cli listaddressgroupings'
 alias lv='lynx-cli -version'
-alias lyc='nano \$HOME/.lynx/lynx.conf'
-alias lyl='tail -n 500 -f \$HOME/.lynx/debug.log'
-alias lynx='systemctl stop lynx && rm -rf \$HOME/.lynx/debug.log && systemctl start lynx'
-alias sta='get_rpc_credentials && lynx-cli -rpcuser="\$RPC_USER" -rpcpassword="\$RPC_PASS" sendtoaddress \$1 \$2'
+alias lyc='nano $WorkingDirectory/.lynx/lynx.conf'
+alias lyl='tail -n 500 -f $WorkingDirectory/.lynx/debug.log'
+alias lynx='systemctl stop lynx && rm -rf $WorkingDirectory/.lynx/debug.log && systemctl start lynx'
+alias sta='lynx-cli sendtoaddress \$1 \$2'
 alias jou='journalctl -t builder.sh -n 100 -f'
-alias gbi='get_rpc_credentials && lynx-cli -rpcuser="\$RPC_USER" -rpcpassword="\$RPC_PASS" getblockchaininfo'
-alias lelp='get_rpc_credentials && lynx-cli -rpcuser="\$RPC_USER" -rpcpassword="\$RPC_PASS" help'
+alias gbi='lynx-cli getblockchaininfo'
+alias lelp='lynx-cli help'
 alias motd='show_lynx_motd'
 alias stat='systemctl status lynx'
-swe() { get_rpc_credentials && lynx-cli -rpcuser="\$RPC_USER" -rpcpassword="\$RPC_PASS" sendtoaddress "\$1" "\$2" "" "" true; }
+swe() { lynx-cli sendtoaddress "\$1" "\$2" "" "" true; }
 $ALIAS_BLOCK_END
 
 $MOTD_BLOCK_START
@@ -391,27 +364,27 @@ check_and_install_lynx_arm() {
         return 1
     fi
     filename=$(basename "$download_url")
-    logger -t builder.sh "Downloading $filename to $HOME..."
+    logger -t builder.sh "Downloading $filename to $WorkingDirectory..."
     
     # Download with progress and verification
-    wget --progress=bar:force -O "$HOME/$filename" "$download_url"
+    wget --progress=bar:force -O "$WorkingDirectory/$filename" "$download_url"
     if [ $? -ne 0 ]; then
         logger -t builder.sh "ERROR: Failed to download $filename"
         return 1
     fi
     
     # Verify download was successful
-    if [ ! -f "$HOME/$filename" ]; then
+    if [ ! -f "$WorkingDirectory/$filename" ]; then
         logger -t builder.sh "ERROR: Downloaded file $filename not found"
         return 1
     fi
     
     # Check file size (should be reasonable for a binary)
-    file_size=$(stat -c %s "$HOME/$filename")
+    file_size=$(stat -c %s "$WorkingDirectory/$filename")
     if [ "$file_size" -lt 1000000 ]; then  # Less than 1MB is suspicious
         logger -t builder.sh "ERROR: Downloaded file $filename is too small ($file_size bytes) - likely corrupted"
         logger -t builder.sh "File contents (first 200 chars):"
-        head -c 200 "$HOME/$filename" | logger -t builder.sh
+        head -c 200 "$WorkingDirectory/$filename" | logger -t builder.sh
         return 1
     fi
     
@@ -419,7 +392,7 @@ check_and_install_lynx_arm() {
     logger -t builder.sh "Extracting $filename..."
     
     # Extract with verification
-    unzip -o "$HOME/$filename" -d /usr/local/bin/
+    unzip -o "$WorkingDirectory/$filename" -d /usr/local/bin/
     if [ $? -ne 0 ]; then
         logger -t builder.sh "ERROR: Failed to extract $filename"
         return 1
@@ -456,14 +429,22 @@ Wants=network-online.target
 
 [Service]
 Type=forking
-ExecStart=/usr/local/bin/lynxd -daemon=1 -assumevalid=fa71fe1bdfa0f68ef184c8cddc4c401cae852b566f36042ec59396c9273e8bce
-ExecStop=/usr/local/bin/lynx-cli stop
+ExecStartPre=/bin/mkdir -p $WorkingDirectory
+ExecStartPre=/bin/chown root:root $WorkingDirectory
+ExecStart=/usr/local/bin/lynxd -daemon=1 -datadir=$WorkingDirectory -assumevalid=fa71fe1bdfa0f68ef184c8cddc4c401cae852b566f36042ec59396c9273e8bce
+ExecStop=/usr/local/bin/lynx-cli -datadir=$WorkingDirectory stop
 Restart=on-failure
-RestartSec=90
+RestartSec=30
 User=root
-TimeoutStopSec=90
-Environment=HOME=/root
-WorkingDirectory=/root
+TimeoutStartSec=300
+TimeoutStopSec=60
+WorkingDirectory=$WorkingDirectory
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
@@ -509,53 +490,28 @@ ensure_lynx_service_running() {
     fi
 }
 
-# Function to read RPC credentials from lynx.conf
-get_rpc_credentials() {
-    if [ -f $HOME/.lynx/lynx.conf ]; then
-        RPC_USER=$(grep "^main\.rpcuser=" $HOME/.lynx/lynx.conf | cut -d'=' -f2)
-        RPC_PASS=$(grep "^main\.rpcpassword=" $HOME/.lynx/lynx.conf | cut -d'=' -f2)
-        
-        if [ -n "$RPC_USER" ] && [ -n "$RPC_PASS" ]; then
-            logger -t builder.sh "RPC credentials loaded from lynx.conf: user=$RPC_USER"
-            return 0
-        else
-            logger -t builder.sh "RPC credentials not found in lynx.conf"
-            return 1
-        fi
-    else
-        logger -t builder.sh "lynx.conf not found at $HOME/.lynx/lynx.conf"
-        return 1
-    fi
-}
-
 # Function to check if blockchain sync is complete
 check_blockchain_sync() {
-    # Get RPC credentials
-    if get_rpc_credentials; then
-        # Try to get blockchain info with error handling
-        SYNC_STATUS=$(/usr/local/bin/lynx-cli -rpcuser="$RPC_USER" -rpcpassword="$RPC_PASS" getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
+    # Try to get blockchain info with error handling
+    SYNC_STATUS=$(/usr/local/bin/lynx-cli getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
 
-        # Check if the command succeeded and returned valid data
-        if [ $? -eq 0 ] && [ -n "$SYNC_STATUS" ] && [ "$SYNC_STATUS" != "null" ]; then
-            if [ "$SYNC_STATUS" = "false" ]; then
-                logger -t builder.sh "Blockchain sync complete. Stopping and disabling builder.timer."
-                systemctl stop builder.timer
-                systemctl disable builder.timer
-                logger -t builder.sh "Disabling rc.local to prevent future builder.sh downloads"
-                chmod -x /etc/rc.local
-                return
-            else
-                #logger -t builder.sh "Blockchain still syncing or status unknown (got:$SYNC_STATUS). Restarting Lynx daemon."
-                logger -t builder.sh "Blockchain still syncing or status unknown. Expected behaviour. Restarting Lynx daemon. "
-                systemctl restart lynx.service
-            fi
+    # Check if the command succeeded and returned valid data
+    if [ $? -eq 0 ] && [ -n "$SYNC_STATUS" ] && [ "$SYNC_STATUS" != "null" ]; then
+        if [ "$SYNC_STATUS" = "false" ]; then
+            logger -t builder.sh "Blockchain sync complete. Stopping and disabling builder.timer."
+            systemctl stop builder.timer
+            systemctl disable builder.timer
+            logger -t builder.sh "Disabling rc.local to prevent future builder.sh downloads"
+            chmod -x /etc/rc.local
+            return
         else
-            logger -t builder.sh "Daemon not ready or RPC call failed. Will try again next time."
-            return 0
+            #logger -t builder.sh "Blockchain still syncing or status unknown (got:$SYNC_STATUS). Restarting Lynx daemon."
+            logger -t builder.sh "Blockchain still syncing or status unknown. Expected behaviour. Restarting Lynx daemon. "
+            systemctl restart lynx.service
         fi
     else
-        logger -t builder.sh "Failed to get RPC credentials. Cannot check blockchain sync."
-        return 1
+        logger -t builder.sh "Daemon not ready or RPC call failed. Will try again next time."
+        return 0
     fi
 }
 
