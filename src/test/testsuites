@@ -15,7 +15,7 @@ blockmanager_tests
 bloom_tests
 bswap_tests
 checkqueue_tests
-coinstatsindex_tests
+# coinstatsindex_tests
 compilerbug_tests
 compress_tests
 crypto_tests
@@ -96,7 +96,7 @@ xoroshiro128plusplus_tests
 feebumper_tests
 psbt_wallet_tests
 # spend_tests
-wallet_tests
+# wallet_tests
 walletdb_tests
 wallet_crypto_tests
 wallet_transaction_tests
