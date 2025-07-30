@@ -109,7 +109,7 @@ set -euo pipefail
 #
 # TROUBLESHOOTING:
 #   - Check service status: systemctl status lynx
-#   - View debug logs: tail -f $WorkingDirectory/.lynx/debug.log
+#   - View debug logs: tail -f $WorkingDirectory/debug.log
 #   - Check builder logs: journalctl -t builder.sh -f
 #   - Restart daemon: systemctl restart lynx
 #   - Manual sync check: lynx-cli getblockchaininfo
@@ -168,9 +168,9 @@ create_motd_function() {
 show_lynx_motd() {
     echo ""
     # Count stakes won in the last 24 hours
-    stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/.lynx/debug.log 2>/dev/null | grep "$(date -d '24 hours ago' '+%Y-%m-%d')" | wc -l)
+    stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '24 hours ago' '+%Y-%m-%d')" | wc -l)
     if [ -z "$stakes_won" ] || [ "$stakes_won" = "0" ]; then
-        stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/.lynx/debug.log 2>/dev/null | grep "$(date '+%Y-%m-%d')" | wc -l)
+        stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date '+%Y-%m-%d')" | wc -l)
     fi
     
     # Calculate dynamic spacing based on number of digits
@@ -200,8 +200,8 @@ show_lynx_motd() {
     echo "║                                                                              ║"
     echo "║  SYSTEM COMMANDS:                                                            ║"
     echo "║    lv    - Show Lynx version (lynx-cli -version)                             ║"
-    echo "║    lyc   - Edit Lynx config (nano /var/lib/lynx/.lynx/lynx.conf)             ║"
-    echo "║    lyl   - View Lynx debug log (tail -f /var/lib/lynx/.lynx/debug.log)       ║"
+    echo "║    lyc   - Edit Lynx config (nano /var/lib/lynx/lynx.conf)             ║"
+    echo "║    lyl   - View Lynx debug log (tail -f /var/lib/lynx/debug.log)             ║"
     echo "║    lynx  - Restart Lynx daemon (systemctl restart lynx)                      ║"
     echo "║    jou   - View builder logs (journalctl -t builder.sh -n 100 -f)            ║"
     echo "║    gbi   - Get blockchain info (lynx-cli getblockchaininfo)                  ║"
@@ -247,9 +247,9 @@ alias gb='lynx-cli getbalances'
 alias gna='lynx-cli getnewaddress'
 alias lag='lynx-cli listaddressgroupings'
 alias lv='lynx-cli -version'
-alias lyc='nano $WorkingDirectory/.lynx/lynx.conf'
-alias lyl='tail -n 500 -f $WorkingDirectory/.lynx/debug.log'
-alias lynx='systemctl stop lynx && rm -rf $WorkingDirectory/.lynx/debug.log && systemctl start lynx'
+alias lyc='nano $WorkingDirectory/lynx.conf'
+alias lyl='tail -n 500 -f $WorkingDirectory/debug.log'
+alias lynx='systemctl stop lynx && rm -rf $WorkingDirectory/debug.log && systemctl start lynx'
 alias sta='lynx-cli sendtoaddress \$1 \$2'
 alias jou='journalctl -t builder.sh -n 100 -f'
 alias gbi='lynx-cli getblockchaininfo'
@@ -456,7 +456,7 @@ Wants=network-online.target
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
-ExecStart=/usr/local/bin/lynxd -daemon=1 -datadir=$WorkingDirectory -assumevalid=fa71fe1bdfa0f68ef184c8cddc4c401cae852b566f36042ec59396c9273e8bce
+ExecStart=/usr/local/bin/lynxd -datadir=$WorkingDirectory -assumevalid=fa71fe1bdfa0f68ef184c8cddc4c401cae852b566f36042ec59396c9273e8bce
 ExecStop=/usr/local/bin/lynx-cli -datadir=$WorkingDirectory stop
 Restart=on-failure
 RestartSec=30
