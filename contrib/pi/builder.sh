@@ -184,12 +184,91 @@ show_lynx_motd() {
     else
         spacing="                                      "
     fi
+
+    # Count total blocks (UpdateTip) in the last 24 hours for yield calculation
+    total_blocks=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '24 hours ago' '+%Y-%m-%d')" | wc -l)
+    if [ -z "$total_blocks" ] || [ "$total_blocks" = "0" ]; then
+        total_blocks=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date '+%Y-%m-%d')" | wc -l)
+    fi
+    
+    # Calculate percent yield (stakes won / total blocks * 100)
+    if [ "$total_blocks" -gt 0 ]; then
+        # Use bc for floating point arithmetic with 2 decimal places
+        percent_yield=$(echo "scale=2; $stakes_won * 100 / $total_blocks" | bc 2>/dev/null || echo "0.00")
+    else
+        percent_yield="0.00"
+    fi
+    
+    # Calculate dynamic spacing for percent yield display
+    yield_digits=${#percent_yield}
+    if [ "$yield_digits" -le 6 ]; then
+        yield_spacing="                                    "
+    elif [ "$yield_digits" -eq 7 ]; then
+        yield_spacing="                                   "
+    else
+        yield_spacing="                                  "
+    fi
+    
+    # Count stakes won in the last 7 days
+    stakes_won_7d=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '7 days ago' '+%Y-%m-%d')" | wc -l)
+    if [ -z "$stakes_won_7d" ] || [ "$stakes_won_7d" = "0" ]; then
+        # Try to get stakes from the last 7 days by checking each day
+        stakes_won_7d=0
+        for i in {1..7}; do
+            daily_stakes=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d "$i days ago" '+%Y-%m-%d')" | wc -l)
+            stakes_won_7d=$((stakes_won_7d + daily_stakes))
+        done
+    fi
+    
+    # Calculate dynamic spacing for 7-day stakes display
+    stakes_7d_digits=${#stakes_won_7d}
+    if [ "$stakes_7d_digits" -eq 1 ]; then
+        spacing_7d="                                         "
+    elif [ "$stakes_7d_digits" -eq 2 ]; then
+        spacing_7d="                                        "
+    elif [ "$stakes_7d_digits" -eq 3 ]; then
+        spacing_7d="                                       "
+    else
+        spacing_7d="                                      "
+    fi
+    
+    # Count total blocks (UpdateTip) in the last 7 days for yield calculation
+    total_blocks_7d=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '7 days ago' '+%Y-%m-%d')" | wc -l)
+    if [ -z "$total_blocks_7d" ] || [ "$total_blocks_7d" = "0" ]; then
+        # Try to get blocks from the last 7 days by checking each day
+        total_blocks_7d=0
+        for i in {1..7}; do
+            daily_blocks=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d "$i days ago" '+%Y-%m-%d')" | wc -l)
+            total_blocks_7d=$((total_blocks_7d + daily_blocks))
+        done
+    fi
+    
+    # Calculate percent yield for 7 days (stakes won / total blocks * 100)
+    if [ "$total_blocks_7d" -gt 0 ]; then
+        # Use bc for floating point arithmetic with 2 decimal places
+        percent_yield_7d=$(echo "scale=2; $stakes_won_7d * 100 / $total_blocks_7d" | bc 2>/dev/null || echo "0.00")
+    else
+        percent_yield_7d="0.00"
+    fi
+    
+    # Calculate dynamic spacing for 7-day percent yield display
+    yield_7d_digits=${#percent_yield_7d}
+    if [ "$yield_7d_digits" -le 6 ]; then
+        yield_7d_spacing="                                    "
+    elif [ "$yield_7d_digits" -eq 7 ]; then
+        yield_7d_spacing="                                   "
+    else
+        yield_7d_spacing="                                  "
+    fi
     
     echo "╔══════════════════════════════════════════════════════════════════════════════╗"
     echo "║                           🦊 LYNX NODE COMMANDS 🦊                           ║"
     echo "╠══════════════════════════════════════════════════════════════════════════════╣"
     echo "║  NODE STATUS:                                                                ║"
     echo "║    🎯 Stakes won in last 24 hours: $stakes_won$spacing║"
+    echo "║    📊 Yield rate (stakes/blocks): ${percent_yield}%$yield_spacing║"
+    echo "║    🎯 Stakes won in last 7 days: $stakes_won_7d$spacing_7d║"
+    echo "║    📊 7-day yield rate (stakes/blocks): ${percent_yield_7d}%$yield_7d_spacing║"
     echo "║                                                                              ║"
     echo "║  WALLET COMMANDS:                                                            ║"
     echo "║    gb    - Get wallet balances (lynx-cli getbalances)                        ║"
@@ -200,7 +279,7 @@ show_lynx_motd() {
     echo "║                                                                              ║"
     echo "║  SYSTEM COMMANDS:                                                            ║"
     echo "║    lv    - Show Lynx version (lynx-cli -version)                             ║"
-    echo "║    lyc   - Edit Lynx config (nano /var/lib/lynx/lynx.conf)             ║"
+    echo "║    lyc   - Edit Lynx config (nano /var/lib/lynx/lynx.conf)                   ║"
     echo "║    lyl   - View Lynx debug log (tail -f /var/lib/lynx/debug.log)             ║"
     echo "║    lynx  - Restart Lynx daemon (systemctl restart lynx)                      ║"
     echo "║    jou   - View builder logs (journalctl -t builder.sh -n 100 -f)            ║"
