@@ -202,11 +202,11 @@ show_lynx_motd() {
     # Calculate dynamic spacing for percent yield display
     yield_digits=${#percent_yield}
     if [ "$yield_digits" -le 6 ]; then
-        yield_spacing="                                    "
+        yield_spacing="                                      "
     elif [ "$yield_digits" -eq 7 ]; then
-        yield_spacing="                                   "
+        yield_spacing="                                     "
     else
-        yield_spacing="                                  "
+        yield_spacing="                                    "
     fi
     
     # Count stakes won in the last 7 days
@@ -223,13 +223,13 @@ show_lynx_motd() {
     # Calculate dynamic spacing for 7-day stakes display
     stakes_7d_digits=${#stakes_won_7d}
     if [ "$stakes_7d_digits" -eq 1 ]; then
-        spacing_7d="                                         "
+        spacing_7d="                                           "
     elif [ "$stakes_7d_digits" -eq 2 ]; then
-        spacing_7d="                                        "
+        spacing_7d="                                          "
     elif [ "$stakes_7d_digits" -eq 3 ]; then
-        spacing_7d="                                       "
+        spacing_7d="                                         "
     else
-        spacing_7d="                                      "
+        spacing_7d="                                        "
     fi
     
     # Count total blocks (UpdateTip) in the last 7 days for yield calculation
@@ -254,11 +254,11 @@ show_lynx_motd() {
     # Calculate dynamic spacing for 7-day percent yield display
     yield_7d_digits=${#percent_yield_7d}
     if [ "$yield_7d_digits" -le 6 ]; then
-        yield_7d_spacing="                                    "
+        yield_7d_spacing="                                "
     elif [ "$yield_7d_digits" -eq 7 ]; then
-        yield_7d_spacing="                                   "
+        yield_7d_spacing="                               "
     else
-        yield_7d_spacing="                                  "
+        yield_7d_spacing="                              "
     fi
     
     echo "╔══════════════════════════════════════════════════════════════════════════════╗"
