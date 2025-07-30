@@ -344,7 +344,7 @@ show_lynx_motd
 $MOTD_BLOCK_END
 
 # Automatically change to root directory when switching to root user
-cd /
+cd /root
 EOF
 }
 
