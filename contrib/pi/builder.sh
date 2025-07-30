@@ -128,7 +128,32 @@ set -euo pipefail
 #   - ~/.bashrc (aliases added)
 #
 ################################################################################
+#
+# DATA DIRECTORY SETUP
+#
+# PURPOSE:
+#   Ensures the Lynx data directory exists with proper permissions and creates
+#   a symbolic link for backward compatibility with legacy configurations.
+#
+# OPERATIONS:
+#   - Creates /var/lib/lynx directory if it doesn't exist
+#   - Sets proper ownership (root:root) and permissions (755)
+#   - Creates symlink /root/.lynx -> /var/lib/lynx for compatibility
+#
+################################################################################
 
+# Create the Lynx data directory with proper permissions
+mkdir -p /var/lib/lynx
+chown root:root /var/lib/lynx
+chmod 755 /var/lib/lynx
+
+# Create symbolic link for backward compatibility with legacy configurations
+# This ensures that any scripts or tools expecting ~/.lynx will still work
+if [ ! -e /root/.lynx ]; then
+    ln -sf /var/lib/lynx /root/.lynx
+fi
+
+# Set the working directory variable for use throughout the script
 WorkingDirectory=/var/lib/lynx
 
 # Get system uptime in seconds for conditional logging
