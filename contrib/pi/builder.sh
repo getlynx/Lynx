@@ -308,6 +308,8 @@ add_aliases_to_bashrc() {
     local ALIAS_BLOCK_END="# === LYNX ALIASES END ==="
     local MOTD_BLOCK_START="# === LYNX MOTD START ==="
     local MOTD_BLOCK_END="# === LYNX MOTD END ==="
+    local ROOT_DIR_BLOCK_START="# === ROOT DIRECTORY SETUP START ==="
+    local ROOT_DIR_BLOCK_END="# === ROOT DIRECTORY SETUP END ==="
     
     # Remove any existing alias block to avoid duplicates
     if [ -f "$BASHRC" ] && grep -q "$ALIAS_BLOCK_START" "$BASHRC"; then
@@ -317,6 +319,11 @@ add_aliases_to_bashrc() {
     # Remove any existing MOTD block to avoid duplicates
     if [ -f "$BASHRC" ] && grep -q "$MOTD_BLOCK_START" "$BASHRC"; then
         sed -i "/$MOTD_BLOCK_START/,/$MOTD_BLOCK_END/d" "$BASHRC"
+    fi
+
+    # Remove any existing root directory setup block to avoid duplicates
+    if [ -f "$BASHRC" ] && grep -q "$ROOT_DIR_BLOCK_START" "$BASHRC"; then
+        sed -i "/$ROOT_DIR_BLOCK_START/,/$ROOT_DIR_BLOCK_END/d" "$BASHRC"
     fi
     
     # Append the new alias block
@@ -342,6 +349,15 @@ $MOTD_BLOCK_START
 $(create_motd_function)
 show_lynx_motd
 $MOTD_BLOCK_END
+
+$ROOT_DIR_BLOCK_START
+# Change to root directory when switching to root user
+# This ensures that when 'sudo su' is used from lynx account, 
+# the working directory is set to / instead of /home/lynx/
+if [ "$PWD" = "/home/lynx" ] || [ "$PWD" = "/home/lynx/" ]; then
+    cd /
+fi
+$ROOT_DIR_BLOCK_END
 EOF
 }
 
