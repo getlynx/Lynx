@@ -136,25 +136,25 @@ set -euo pipefail
 #   a symbolic link for backward compatibility with legacy configurations.
 #
 # OPERATIONS:
-#   - Creates /var/lib/lynx directory if it doesn't exist
+#   - Creates $WorkingDirectory directory if it doesn't exist
 #   - Sets proper ownership (root:root) and permissions (755)
-#   - Creates symlink /root/.lynx -> /var/lib/lynx for compatibility
+#   - Creates symlink /root/.lynx -> $WorkingDirectory for compatibility
 #
 ################################################################################
 
+# Set the working directory variable for use throughout the script
+WorkingDirectory=/var/lib/lynx
+
 # Create the Lynx data directory with proper permissions
-mkdir -p /var/lib/lynx
-chown root:root /var/lib/lynx
-chmod 755 /var/lib/lynx
+mkdir -p $WorkingDirectory
+chown root:root $WorkingDirectory
+chmod 755 $WorkingDirectory
 
 # Create symbolic link for backward compatibility with legacy configurations
 # This ensures that any scripts or tools expecting ~/.lynx will still work
 if [ ! -e /root/.lynx ]; then
-    ln -sf /var/lib/lynx /root/.lynx
+    ln -sf $WorkingDirectory /root/.lynx
 fi
-
-# Set the working directory variable for use throughout the script
-WorkingDirectory=/var/lib/lynx
 
 # Get system uptime in seconds for conditional logging
 uptime_seconds=$(cat /proc/uptime | cut -d' ' -f1 | cut -d'.' -f1)
@@ -167,12 +167,13 @@ create_motd_function() {
 # Function to display Lynx aliases in a nicely formatted MOTD
 show_lynx_motd() {
     echo ""
+    WorkingDirectory=/var/lib/lynx
     # Count stakes won in the last 24 hours
     stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '24 hours ago' '+%Y-%m-%d')" | wc -l)
     if [ -z "$stakes_won" ] || [ "$stakes_won" = "0" ]; then
         stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date '+%Y-%m-%d')" | wc -l)
     fi
-    
+
     # Calculate dynamic spacing based on number of digits
     stakes_digits=${#stakes_won}
     if [ "$stakes_digits" -eq 1 ]; then
@@ -190,25 +191,30 @@ show_lynx_motd() {
     if [ -z "$total_blocks" ] || [ "$total_blocks" = "0" ]; then
         total_blocks=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date '+%Y-%m-%d')" | wc -l)
     fi
-    
+
     # Calculate percent yield (stakes won / total blocks * 100)
     if [ "$total_blocks" -gt 0 ]; then
-        # Use bc for floating point arithmetic with 2 decimal places
-        percent_yield=$(echo "scale=2; $stakes_won * 100 / $total_blocks" | bc 2>/dev/null || echo "0.00")
+        # Use awk for floating point arithmetic with 3 decimal places
+        percent_yield=$(awk "BEGIN {printf \"%.3f\", $stakes_won * 100 / $total_blocks}" 2>/dev/null || echo "0.000")
     else
-        percent_yield="0.00"
+        percent_yield="0.000"
     fi
-    
+
     # Calculate dynamic spacing for percent yield display
-    yield_digits=${#percent_yield}
-    if [ "$yield_digits" -le 6 ]; then
-        yield_spacing="                                      "
-    elif [ "$yield_digits" -eq 7 ]; then
+    # Extract numeric part (remove % symbol) for accurate digit counting
+    yield_numeric=$(echo "$percent_yield" | sed 's/%//')
+    yield_digits=${#yield_numeric}
+    if [ "$yield_digits" -eq 5 ]; then
+        # Format: "0.123" (1 digit left of decimal)
         yield_spacing="                                     "
-    else
+    elif [ "$yield_digits" -eq 6 ]; then
+        # Format: "12.345" (2 digits left of decimal)
         yield_spacing="                                    "
+    else
+        # Fallback for any other length
+        yield_spacing="                                   "
     fi
-    
+
     # Count stakes won in the last 7 days
     stakes_won_7d=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '7 days ago' '+%Y-%m-%d')" | wc -l)
     if [ -z "$stakes_won_7d" ] || [ "$stakes_won_7d" = "0" ]; then
@@ -219,7 +225,7 @@ show_lynx_motd() {
             stakes_won_7d=$((stakes_won_7d + daily_stakes))
         done
     fi
-    
+
     # Calculate dynamic spacing for 7-day stakes display
     stakes_7d_digits=${#stakes_won_7d}
     if [ "$stakes_7d_digits" -eq 1 ]; then
@@ -231,7 +237,7 @@ show_lynx_motd() {
     else
         spacing_7d="                                        "
     fi
-    
+
     # Count total blocks (UpdateTip) in the last 7 days for yield calculation
     total_blocks_7d=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '7 days ago' '+%Y-%m-%d')" | wc -l)
     if [ -z "$total_blocks_7d" ] || [ "$total_blocks_7d" = "0" ]; then
@@ -242,25 +248,31 @@ show_lynx_motd() {
             total_blocks_7d=$((total_blocks_7d + daily_blocks))
         done
     fi
-    
+
     # Calculate percent yield for 7 days (stakes won / total blocks * 100)
     if [ "$total_blocks_7d" -gt 0 ]; then
-        # Use bc for floating point arithmetic with 2 decimal places
-        percent_yield_7d=$(echo "scale=2; $stakes_won_7d * 100 / $total_blocks_7d" | bc 2>/dev/null || echo "0.00")
+        # Use awk for floating point arithmetic with 3 decimal places
+        percent_yield_7d=$(awk "BEGIN {printf \"%.3f\", $stakes_won_7d * 100 / $total_blocks_7d}" 2>/dev/null || echo "0.000")
     else
-        percent_yield_7d="0.00"
+        percent_yield_7d="0.000"
     fi
-    
+
+    # Test insertion of a new line
     # Calculate dynamic spacing for 7-day percent yield display
-    yield_7d_digits=${#percent_yield_7d}
-    if [ "$yield_7d_digits" -le 6 ]; then
-        yield_7d_spacing="                                "
-    elif [ "$yield_7d_digits" -eq 7 ]; then
+    # Extract numeric part (remove % symbol) for accurate digit counting
+    yield_7d_numeric=$(echo "$percent_yield_7d" | sed 's/%//')
+    yield_7d_digits=${#yield_7d_numeric}
+    if [ "$yield_7d_digits" -eq 5 ]; then
+        # Format: "0.123" (1 digit left of decimal)
         yield_7d_spacing="                               "
-    else
+    elif [ "$yield_7d_digits" -eq 6 ]; then
+        # Format: "12.345" (2 digits left of decimal)
         yield_7d_spacing="                              "
+    else
+        # Fallback for any other length
+        yield_7d_spacing="                             "
     fi
-    
+
     echo "╔══════════════════════════════════════════════════════════════════════════════╗"
     echo "║                           🦊 LYNX NODE COMMANDS 🦊                           ║"
     echo "╠══════════════════════════════════════════════════════════════════════════════╣"
@@ -279,8 +291,8 @@ show_lynx_motd() {
     echo "║                                                                              ║"
     echo "║  SYSTEM COMMANDS:                                                            ║"
     echo "║    lv    - Show Lynx version (lynx-cli -version)                             ║"
-    echo "║    lyc   - Edit Lynx config (nano /var/lib/lynx/lynx.conf)                   ║"
-    echo "║    lyl   - View Lynx debug log (tail -f /var/lib/lynx/debug.log)             ║"
+    echo "║    lyc   - Edit Lynx config (nano $WorkingDirectory/lynx.conf)                   ║"
+    echo "║    lyl   - View Lynx debug log (tail -f $WorkingDirectory/debug.log)             ║"
     echo "║    lynx  - Restart Lynx daemon (systemctl restart lynx)                      ║"
     echo "║    jou   - View builder logs (journalctl -t builder.sh -n 100 -f)            ║"
     echo "║    gbi   - Get blockchain info (lynx-cli getblockchaininfo)                  ║"
@@ -293,7 +305,7 @@ show_lynx_motd() {
     echo "║                                                                              ║"
     echo "║  📚 Complete project documentation: https://docs.getlynx.io/                 ║"
     echo "║  💾 Store files permanently: https://clevver.org/                            ║"
-    echo "║  🔍 Blockchain explorer: https://chainz.cryptoid.info/lynx/                  ║"
+    echo "║  🔍 Blockchain explorer: https://explorer.getlynx.io/                        ║"
     echo "║  📈 Trade Lynx (LYNX/LTC): https://freixlite.com/market/LYNX/LTC             ║"
     echo "╚══════════════════════════════════════════════════════════════════════════════╝"
     echo ""
@@ -341,11 +353,27 @@ $ALIAS_BLOCK_END
 $MOTD_BLOCK_START
 $(create_motd_function)
 show_lynx_motd
-$MOTD_BLOCK_END
 
 # Automatically change to root directory when switching to root user
 cd /root
+$MOTD_BLOCK_END
 EOF
+}
+
+# Function to clean up multiple consecutive empty lines in bashrc
+cleanup_bashrc_empty_lines() {
+    local BASHRC="/root/.bashrc"
+    
+    # Only proceed if the file exists
+    if [ ! -f "$BASHRC" ]; then
+        return
+    fi
+    
+    # Use sed to replace multiple consecutive empty lines with single empty lines
+    # This pattern matches 2 or more consecutive empty lines and replaces them with 1
+    sed -i '/^$/N;/^\n$/D' "$BASHRC"
+    
+    logger -t builder.sh "Cleaned up multiple empty lines in $BASHRC"
 }
 
 # Function to create builder.service and builder.timer if not present
@@ -622,11 +650,11 @@ check_blockchain_sync() {
     fi
 }
 
-# Only log if system has been running for 6 hours or less
-if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-    # Add aliases to bashrc
-    add_aliases_to_bashrc
-fi
+# Add aliases to bashrc
+add_aliases_to_bashrc
+
+# Clean up any multiple empty lines that may have been created
+cleanup_bashrc_empty_lines
 
 # Call the builder timer creation function
 create_builder_timer
