@@ -297,6 +297,8 @@ show_lynx_motd() {
     echo "║    lag                    - List address groupings             ║"
     echo "║    sta [address] [amount] - Send to address                    ║"
     echo "║    swe [address]          - Sweep a wallet                     ║"
+    echo "║    bac                    - Manual wallet backup               ║"
+    echo "║    lbac                   - List backup directory contents     ║"
     echo "║                                                                ║"
     echo "║  SYSTEM COMMANDS:                                              ║"
     echo "║    lv                     - Show Lynx version                  ║"
@@ -348,6 +350,8 @@ $ALIAS_BLOCK_START
 alias gb='lynx-cli getbalances'
 alias gna='lynx-cli getnewaddress'
 alias wd='cd $WorkingDirectory && ls -lh'
+alias bac='/usr/local/bin/backup.sh'
+alias lbac='cd /var/lib/lynx-backup && ls -lh'
 alias lag='lynx-cli listaddressgroupings'
 alias lv='lynx-cli -version'
 alias lyc='nano $WorkingDirectory/lynx.conf'
@@ -433,6 +437,146 @@ EOF
         # Only log if system has been running for 6 hours or less
         if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
             logger -t builder.sh "/etc/systemd/system/builder.service and builder.timer already exist. Skipping creation."
+        fi
+    fi
+}
+
+# Function to create wallet backup service and timer if not present
+create_wallet_backup_timer() {
+    if [ ! -f /etc/systemd/system/lynx-wallet-backup.service ] || [ ! -f /etc/systemd/system/lynx-wallet-backup.timer ]; then
+        logger -t builder.sh "Creating /etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer."
+        
+        # Create backup directory
+        mkdir -p /var/lib/lynx-backup
+        chown lynx:lynx /var/lib/lynx-backup
+        chmod 750 /var/lib/lynx-backup
+        
+        # Create the backup script
+        cat <<'EOF' > /usr/local/bin/backup.sh
+#!/bin/bash
+
+# Lynx Wallet Backup Script
+# This script creates a timestamped backup of the Lynx wallet and checks for duplicates
+
+set -e
+
+# Configuration
+BACKUP_DIR="/var/lib/lynx-backup"
+TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
+BACKUP_FILE="$BACKUP_DIR/${TIMESTAMP} wallet.dat"
+
+# Ensure backup directory exists
+mkdir -p "$BACKUP_DIR"
+chown lynx:lynx "$BACKUP_DIR"
+chmod 400 "$BACKUP_DIR"
+
+# Create the backup
+logger -t backup.sh "Creating wallet backup: $BACKUP_FILE"
+if ! lynx-cli backupwallet "$BACKUP_FILE" 2>/dev/null; then
+    logger -t backup.sh "Failed to create wallet backup. Daemon may not be running or ready."
+    logger -t backup.sh "Exiting gracefully. Backup will be retried on next scheduled run."
+    exit 0
+fi
+
+# Check if backup was created successfully
+if [ -f "$BACKUP_FILE" ]; then
+    # Set secure permissions on the backup file
+    chmod 400 "$BACKUP_FILE"
+    
+    # Calculate hash of the new backup
+    logger -t backup.sh "Calculating hash of new backup..."
+    new_hash=$(sha256sum "$BACKUP_FILE" | cut -d" " -f1)
+    
+    # Check if any existing backup has the same hash
+    duplicate_found=false
+    for existing_file in "$BACKUP_DIR"/*.dat; do
+        if [ "$existing_file" != "$BACKUP_FILE" ] && [ -f "$existing_file" ]; then
+            existing_hash=$(sha256sum "$existing_file" | cut -d" " -f1)
+            if [ "$new_hash" = "$existing_hash" ]; then
+                duplicate_found=true
+                logger -t backup.sh "Duplicate found: $existing_file"
+                break
+            fi
+        fi
+    done
+    
+    # If duplicate found, remove the new backup and exit
+    if [ "$duplicate_found" = true ]; then
+        rm -f "$BACKUP_FILE"
+        logger -t backup.sh "Duplicate wallet backup detected. Removing new backup file."
+        exit 0
+    else
+        logger -t backup.sh "New wallet backup created successfully: $BACKUP_FILE"
+        logger -t backup.sh "Backup hash: $new_hash"
+        
+        # Check if we have more than 100 backup files and remove oldest ones
+        backup_count=$(ls -1 "$BACKUP_DIR"/*.dat 2>/dev/null | wc -l)
+        if [ "$backup_count" -gt 100 ]; then
+            logger -t backup.sh "Backup count ($backup_count) exceeds limit of 100. Removing oldest backups..."
+            
+            # List all backup files by modification time (oldest first) and remove excess
+            ls -1t "$BACKUP_DIR"/*.dat 2>/dev/null | tail -n +101 | while read -r old_file; do
+                if [ -f "$old_file" ]; then
+                    rm -f "$old_file"
+                    logger -t backup.sh "Removed old backup: $(basename "$old_file")"
+                fi
+            done
+            
+            # Get final count after cleanup
+            final_count=$(ls -1 "$BACKUP_DIR"/*.dat 2>/dev/null | wc -l)
+            logger -t backup.sh "Backup cleanup complete. Current backup count: $final_count"
+        fi
+    fi
+else
+    logger -t backup.sh "Failed to create wallet backup"
+    exit 1
+fi
+EOF
+
+        # Make the backup script executable
+        chmod +x /usr/local/bin/backup.sh
+        chown root:root /usr/local/bin/backup.sh
+
+        cat <<EOF > /etc/systemd/system/lynx-wallet-backup.service
+[Unit]
+Description=Backup Lynx wallet every 24 hours
+Documentation=https://getlynx.io/
+After=lynx.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/backup.sh
+StandardOutput=journal
+StandardError=journal
+Environment=HOME=/var/lib/lynx
+WorkingDirectory=/var/lib/lynx
+User=lynx
+Group=lynx
+EOF
+
+        cat <<EOF > /etc/systemd/system/lynx-wallet-backup.timer
+[Unit]
+Description=Backup Lynx wallet every 24 hours
+Documentation=https://getlynx.io/
+
+[Timer]
+OnBootSec=15min
+OnCalendar=*-*-* 03:47:00
+AccuracySec=1h
+Unit=lynx-wallet-backup.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+        systemctl daemon-reload
+        systemctl enable lynx-wallet-backup.timer
+        systemctl start lynx-wallet-backup.timer
+        logger -t builder.sh "/etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer created, enabled, and started."
+    else
+        # Only log if system has been running for 6 hours or less
+        if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
+            logger -t builder.sh "/etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer already exist. Skipping creation."
         fi
     fi
 }
@@ -670,6 +814,9 @@ cleanup_bashrc_empty_lines
 
 # Call the builder timer creation function
 create_builder_timer
+
+# Call the wallet backup timer creation function
+create_wallet_backup_timer
 
 # Call the swap check/update function
 check_and_update_swap
