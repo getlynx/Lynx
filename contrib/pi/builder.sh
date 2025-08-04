@@ -358,7 +358,7 @@ alias lyc='nano $WorkingDirectory/lynx.conf'
 alias lyl='tail -n 500 -f $WorkingDirectory/debug.log'
 alias lynx='systemctl stop lynx && rm -rf $WorkingDirectory/debug.log && systemctl start lynx'
 alias sta='lynx-cli sendtoaddress \$1 \$2'
-alias swe='lynx-cli sendtoaddress "\$1" "\$(lynx-cli getbalance)" "" "" true'
+swe() { lynx-cli sendtoaddress "\$1" "\$(lynx-cli getbalance)" "" "" true; }
 alias jou='journalctl -t builder.sh -n 100 -f'
 alias gbi='lynx-cli getblockchaininfo'
 alias lelp='lynx-cli help'
