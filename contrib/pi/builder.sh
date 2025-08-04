@@ -174,17 +174,11 @@ show_lynx_motd() {
         stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date '+%Y-%m-%d')" | wc -l)
     fi
 
-    # Calculate dynamic spacing based on number of digits
+    # Calculate dynamic spacing for "Stakes won in last 24 hours" display
+    # Formula: 28 - stakes_digits = spaces needed (28 is the base spacing for 1 digit)
     stakes_digits=${#stakes_won}
-    if [ "$stakes_digits" -eq 1 ]; then
-        spacing="                                         "
-    elif [ "$stakes_digits" -eq 2 ]; then
-        spacing="                                        "
-    elif [ "$stakes_digits" -eq 3 ]; then
-        spacing="                                       "
-    else
-        spacing="                                      "
-    fi
+    spaces_needed=$((28 - stakes_digits))
+    spacing=$(printf '%*s' "$spaces_needed" '')
 
     # Count total blocks (UpdateTip) in the last 24 hours for yield calculation
     total_blocks=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '24 hours ago' '+%Y-%m-%d')" | wc -l)
@@ -200,20 +194,12 @@ show_lynx_motd() {
         percent_yield="0.000"
     fi
 
-    # Calculate dynamic spacing for percent yield display
-    # Extract numeric part (remove % symbol) for accurate digit counting
+    # Calculate dynamic spacing for "Yield rate" display
+    # Formula: 28 - yield_digits = spaces needed (28 is the base spacing for 6 digits: "0.000")
     yield_numeric=$(echo "$percent_yield" | sed 's/%//')
     yield_digits=${#yield_numeric}
-    if [ "$yield_digits" -eq 5 ]; then
-        # Format: "0.123" (1 digit left of decimal)
-        yield_spacing="                                     "
-    elif [ "$yield_digits" -eq 6 ]; then
-        # Format: "12.345" (2 digits left of decimal)
-        yield_spacing="                                    "
-    else
-        # Fallback for any other length
-        yield_spacing="                                   "
-    fi
+    spaces_needed=$((28 - yield_digits))
+    yield_spacing=$(printf '%*s' "$spaces_needed" '')
 
     # Count stakes won in the last 7 days
     stakes_won_7d=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '7 days ago' '+%Y-%m-%d')" | wc -l)
@@ -226,17 +212,11 @@ show_lynx_motd() {
         done
     fi
 
-    # Calculate dynamic spacing for 7-day stakes display
+    # Calculate dynamic spacing for "Stakes won in last 7 days" display
+    # Formula: 30 - stakes_7d_digits = spaces needed (30 is the base spacing for 1 digit)
     stakes_7d_digits=${#stakes_won_7d}
-    if [ "$stakes_7d_digits" -eq 1 ]; then
-        spacing_7d="                                           "
-    elif [ "$stakes_7d_digits" -eq 2 ]; then
-        spacing_7d="                                          "
-    elif [ "$stakes_7d_digits" -eq 3 ]; then
-        spacing_7d="                                         "
-    else
-        spacing_7d="                                        "
-    fi
+    spaces_needed=$((30 - stakes_7d_digits))
+    spacing_7d=$(printf '%*s' "$spaces_needed" '')
 
     # Count total blocks (UpdateTip) in the last 7 days for yield calculation
     total_blocks_7d=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '7 days ago' '+%Y-%m-%d')" | wc -l)
@@ -257,57 +237,88 @@ show_lynx_motd() {
         percent_yield_7d="0.000"
     fi
 
-    # Test insertion of a new line
-    # Calculate dynamic spacing for 7-day percent yield display
-    # Extract numeric part (remove % symbol) for accurate digit counting
+    # Calculate dynamic spacing for "7-day yield rate" display
+    # Formula: 22 - yield_7d_digits = spaces needed (22 is the base spacing for 5 digits)
     yield_7d_numeric=$(echo "$percent_yield_7d" | sed 's/%//')
     yield_7d_digits=${#yield_7d_numeric}
-    if [ "$yield_7d_digits" -eq 5 ]; then
-        # Format: "0.123" (1 digit left of decimal)
-        yield_7d_spacing="                               "
-    elif [ "$yield_7d_digits" -eq 6 ]; then
-        # Format: "12.345" (2 digits left of decimal)
-        yield_7d_spacing="                              "
-    else
-        # Fallback for any other length
-        yield_7d_spacing="                             "
+    spaces_needed=$((22 - yield_7d_digits))
+    yield_7d_spacing=$(printf '%*s' "$spaces_needed" '')
+
+    # Count immature UTXOs (confirmations < 31)
+    immature_utxos=$(lynx-cli listunspent 2>/dev/null | grep confirmations | sed 's/.*"confirmations": \([0-9]*\).*/\1/' | awk '$1 < 31' | wc -l)
+    if [ -z "$immature_utxos" ]; then
+        immature_utxos="0"
     fi
 
-    echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-    echo "║                           🦊 LYNX NODE COMMANDS 🦊                           ║"
-    echo "╠══════════════════════════════════════════════════════════════════════════════╣"
-    echo "║  NODE STATUS:                                                                ║"
+    # Calculate dynamic spacing for "Immature UTXOs" display
+    # Formula: 20 - immature_digits = spaces needed (20 is the base spacing for 1 digit)
+    immature_digits=${#immature_utxos}
+    spaces_needed=$((20 - immature_digits))
+    immature_spacing=$(printf '%*s' "$spaces_needed" '')
+
+    # Get current wallet balance
+    wallet_balance=$(lynx-cli getbalance 2>/dev/null || echo "0")
+    if [ -z "$wallet_balance" ]; then
+        wallet_balance="0"
+    fi
+
+    # Calculate dynamic spacing for "Current wallet balance" display
+    # Formula: 33 - balance_digits = spaces needed (33 is the base spacing for 10 digits)
+    balance_digits=${#wallet_balance}
+    spaces_needed=$((33 - balance_digits))
+    balance_spacing=$(printf '%*s' "$spaces_needed" '')
+
+    # Get Lynx version for display
+    lynx_version=$(lynx-cli -version 2>/dev/null | head -1 || echo "Unknown")
+    if [ -z "$lynx_version" ]; then
+        lynx_version="Unknown"
+    fi
+
+    # Calculate dynamic spacing for "Lynx Version" display
+    # Formula: 45 - version_digits = spaces needed (45 is the base spacing for short versions)
+    version_digits=${#lynx_version}
+    spaces_needed=$((45 - version_digits))
+    version_spacing=$(printf '%*s' "$spaces_needed" '')
+
+    echo "╔════════════════════════════════════════════════════════════════╗"
+    echo "║                    🦊 LYNX NODE COMMANDS 🦊                    ║"
+    echo "╠════════════════════════════════════════════════════════════════╣"
+    echo "║  NODE STATUS:                                                  ║"
     echo "║    🎯 Stakes won in last 24 hours: $stakes_won$spacing║"
     echo "║    📊 Yield rate (stakes/blocks): ${percent_yield}%$yield_spacing║"
     echo "║    🎯 Stakes won in last 7 days: $stakes_won_7d$spacing_7d║"
     echo "║    📊 7-day yield rate (stakes/blocks): ${percent_yield_7d}%$yield_7d_spacing║"
-    echo "║                                                                              ║"
-    echo "║  WALLET COMMANDS:                                                            ║"
-    echo "║    gb    - Get wallet balances (lynx-cli getbalances)                        ║"
-    echo "║    gna   - Generate new address (lynx-cli getnewaddress)                     ║"
-    echo "║    lag   - List address groupings (lynx-cli listaddressgroupings)            ║"
-    echo "║    sta   - Send to address (lynx-cli sendtoaddress)                          ║"
-    echo "║    swe   - Sweep a wallet (lynx-cli sendtoaddress)                           ║"
-    echo "║                                                                              ║"
-    echo "║  SYSTEM COMMANDS:                                                            ║"
-    echo "║    lv    - Show Lynx version (lynx-cli -version)                             ║"
-    echo "║    lyc   - Edit Lynx config (nano $WorkingDirectory/lynx.conf)                   ║"
-    echo "║    lyl   - View Lynx debug log (tail -f $WorkingDirectory/debug.log)             ║"
-    echo "║    lynx  - Restart Lynx daemon (systemctl restart lynx)                      ║"
-    echo "║    jou   - View builder logs (journalctl -t builder.sh -n 100 -f)            ║"
-    echo "║    gbi   - Get blockchain info (lynx-cli getblockchaininfo)                  ║"
-    echo "║    lelp  - Show Lynx help (lynx-cli help)                                    ║"
-    echo "║    stat  - Check Lynx service status (systemctl status lynx)                 ║"
-    echo "║                                                                              ║"
-    echo "║  USEFUL COMMANDS:                                                            ║"
-    echo "║    htop  - Monitor system resources                                          ║"
-    echo "║    motd  - Show this help message again                                      ║"
-    echo "║                                                                              ║"
-    echo "║  📚 Complete project documentation: https://docs.getlynx.io/                 ║"
-    echo "║  💾 Store files permanently: https://clevver.org/                            ║"
-    echo "║  🔍 Blockchain explorer: https://explorer.getlynx.io/                        ║"
-    echo "║  📈 Trade Lynx (LYNX/LTC): https://freixlite.com/market/LYNX/LTC             ║"
-    echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+    echo "║    🔄 Immature UTXOs (< 31 confirmations): $immature_utxos$immature_spacing║"
+    echo "║    💰 Current wallet balance: $wallet_balance$balance_spacing║"
+    echo "║                                                                ║"
+    echo "║  WALLET COMMANDS:                                              ║"
+    echo "║    gb                     - Get wallet balances                ║"
+    echo "║    gna                    - Generate new address               ║"
+    echo "║    lag                    - List address groupings             ║"
+    echo "║    sta [address] [amount] - Send to address                    ║"
+    echo "║    swe [address]          - Sweep a wallet                     ║"
+    echo "║                                                                ║"
+    echo "║  SYSTEM COMMANDS:                                              ║"
+    echo "║    lv                     - Show Lynx version                  ║"
+    echo "║    lyc                    - Edit Lynx config                   ║"
+    echo "║    lyl                    - View Lynx debug log                ║"
+    echo "║    lynx                   - Restart Lynx daemon                ║"
+    echo "║    jou                    - View builder logs                  ║"
+    echo "║    gbi                    - Get blockchain info                ║"
+    echo "║    lelp                   - Show Lynx help                     ║"
+    echo "║    stat                   - Check Lynx service status          ║"
+    echo "║    wd                     - Change to Lynx working directory   ║"
+    echo "║                                                                ║"
+    echo "║  USEFUL COMMANDS:                                              ║"
+    echo "║    htop                   - Monitor system resources           ║"
+    echo "║    motd                   - Show this help message again       ║"
+    echo "║                                                                ║"
+    echo "║  📚 Complete project documentation: https://docs.getlynx.io/   ║"
+    echo "║  💾 Store files permanently: https://clevver.org/              ║"
+    echo "║  🔍 Blockchain explorer: https://explorer.getlynx.io/          ║"
+    echo "║  📈 Trade Lynx: https://freixlite.com/market/LYNX/LTC          ║"
+    echo "║  🔢 Lynx Version: $lynx_version$version_spacing║"
+    echo "╚════════════════════════════════════════════════════════════════╝"
     echo ""
 }
 EOF
@@ -336,18 +347,19 @@ add_aliases_to_bashrc() {
 $ALIAS_BLOCK_START
 alias gb='lynx-cli getbalances'
 alias gna='lynx-cli getnewaddress'
+alias wd='cd $WorkingDirectory && ls -lh'
 alias lag='lynx-cli listaddressgroupings'
 alias lv='lynx-cli -version'
 alias lyc='nano $WorkingDirectory/lynx.conf'
 alias lyl='tail -n 500 -f $WorkingDirectory/debug.log'
 alias lynx='systemctl stop lynx && rm -rf $WorkingDirectory/debug.log && systemctl start lynx'
 alias sta='lynx-cli sendtoaddress \$1 \$2'
+alias swe='lynx-cli sendtoaddress "\$1" "\$(lynx-cli getbalance)" "" "" true'
 alias jou='journalctl -t builder.sh -n 100 -f'
 alias gbi='lynx-cli getblockchaininfo'
 alias lelp='lynx-cli help'
 alias motd='show_lynx_motd'
 alias stat='systemctl status lynx'
-swe() { lynx-cli sendtoaddress "\$1" "\$2" "" "" true; }
 $ALIAS_BLOCK_END
 
 $MOTD_BLOCK_START
