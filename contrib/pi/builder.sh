@@ -441,22 +441,26 @@ EOF
     fi
 }
 
-# Function to create wallet backup service and timer if not present
+# Function to create wallet backup service and timer
 create_wallet_backup_timer() {
-    if [ ! -f /etc/systemd/system/lynx-wallet-backup.service ] || [ ! -f /etc/systemd/system/lynx-wallet-backup.timer ]; then
-        logger -t builder.sh "Creating /etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer."
-        
-        # Create backup directory
-        mkdir -p /var/lib/lynx-backup
-        chown lynx:lynx /var/lib/lynx-backup
-        chmod 750 /var/lib/lynx-backup
-        
-        # Create the backup script
-        cat <<'EOF' > /usr/local/bin/backup.sh
+    logger -t builder.sh "Creating /etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer."
+    
+    # Stop and disable the timer before recreating it to avoid conflicts
+    systemctl stop lynx-wallet-backup.timer 2>/dev/null || true
+    systemctl disable lynx-wallet-backup.timer 2>/dev/null || true
+    
+    # Create backup directory
+    mkdir -p /var/lib/lynx-backup
+    chown root:root /var/lib/lynx-backup
+    chmod 700 /var/lib/lynx-backup
+    
+    # Create the backup script
+    cat <<'EOF' > /usr/local/bin/backup.sh
 #!/bin/bash
 
 # Lynx Wallet Backup Script
 # This script creates a timestamped backup of the Lynx wallet and checks for duplicates
+# Runs every 60 minutes
 
 set -e
 
@@ -464,15 +468,22 @@ set -e
 BACKUP_DIR="/var/lib/lynx-backup"
 TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
 BACKUP_FILE="$BACKUP_DIR/${TIMESTAMP} wallet.dat"
+WorkingDirectory=/var/lib/lynx
 
 # Ensure backup directory exists
 mkdir -p "$BACKUP_DIR"
-chown lynx:lynx "$BACKUP_DIR"
-chmod 400 "$BACKUP_DIR"
+chown root:root "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
+
+# Check if Lynx daemon is running before attempting backup
+if ! systemctl is-active --quiet lynx; then
+    logger -t backup.sh "Lynx daemon is not running. Skipping backup."
+    exit 0
+fi
 
 # Create the backup
 logger -t backup.sh "Creating wallet backup: $BACKUP_FILE"
-if ! lynx-cli backupwallet "$BACKUP_FILE" 2>/dev/null; then
+if ! lynx-cli -conf=$WorkingDirectory/lynx.conf backupwallet "$BACKUP_FILE" 2>/dev/null; then
     logger -t backup.sh "Failed to create wallet backup. Daemon may not be running or ready."
     logger -t backup.sh "Exiting gracefully. Backup will be retried on next scheduled run."
     exit 0
@@ -533,13 +544,13 @@ else
 fi
 EOF
 
-        # Make the backup script executable
-        chmod +x /usr/local/bin/backup.sh
-        chown root:root /usr/local/bin/backup.sh
+    # Make the backup script executable
+    chmod +x /usr/local/bin/backup.sh
+    chown root:root /usr/local/bin/backup.sh
 
-        cat <<EOF > /etc/systemd/system/lynx-wallet-backup.service
+            cat <<EOF > /etc/systemd/system/lynx-wallet-backup.service
 [Unit]
-Description=Backup Lynx wallet every 24 hours
+Description=Backup Lynx wallet every 60 minutes
 Documentation=https://getlynx.io/
 After=lynx.service
 
@@ -548,37 +559,33 @@ Type=oneshot
 ExecStart=/usr/local/bin/backup.sh
 StandardOutput=journal
 StandardError=journal
-Environment=HOME=/var/lib/lynx
-WorkingDirectory=/var/lib/lynx
-User=lynx
-Group=lynx
+Environment=HOME=$WorkingDirectory
+WorkingDirectory=$WorkingDirectory
+User=root
+Group=root
+# Ensure the service can access lynx-cli and the wallet
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 EOF
 
-        cat <<EOF > /etc/systemd/system/lynx-wallet-backup.timer
+         cat <<EOF > /etc/systemd/system/lynx-wallet-backup.timer
 [Unit]
-Description=Backup Lynx wallet every 24 hours
+Description=Backup Lynx wallet every 60 minutes
 Documentation=https://getlynx.io/
 
 [Timer]
 OnBootSec=15min
-OnCalendar=*-*-* 03:47:00
-AccuracySec=1h
+OnUnitActiveSec=60min
+AccuracySec=5m
 Unit=lynx-wallet-backup.service
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 EOF
-        systemctl daemon-reload
-        systemctl enable lynx-wallet-backup.timer
-        systemctl start lynx-wallet-backup.timer
-        logger -t builder.sh "/etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer created, enabled, and started."
-    else
-        # Only log if system has been running for 6 hours or less
-        if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-            logger -t builder.sh "/etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer already exist. Skipping creation."
-        fi
-    fi
+     systemctl daemon-reload
+     systemctl enable lynx-wallet-backup.timer
+     systemctl start lynx-wallet-backup.timer
+     logger -t builder.sh "/etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer created, enabled, and started."
 }
 
 # Function to check and update swap to at least 4GB if less than 3GB
