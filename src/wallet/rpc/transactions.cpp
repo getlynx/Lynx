@@ -380,6 +380,10 @@ static void ListTransactions(const CWallet& wallet, const CWalletTx& wtx, int nM
                 else
                     entry.pushKV("category", "generate");
             }
+            else if (wtx.IsCoinStake())
+            {
+                entry.pushKV("category", "stake");
+            }
             else
             {
                 entry.pushKV("category", "receive");
@@ -452,7 +456,8 @@ RPCHelpMan listtransactions()
                                 "\"receive\"               Non-coinbase transactions received.\n"
                                 "\"generate\"              Coinbase transactions received with more than 100 confirmations.\n"
                                 "\"immature\"              Coinbase transactions received with 100 or fewer confirmations.\n"
-                                "\"orphan\"                Orphaned coinbase transactions received."},
+                                "\"orphan\"                Orphaned coinbase transactions received.\n"
+                                "\"stake\"                 Proof-of-stake reward transactions."},
                             {RPCResult::Type::STR_AMOUNT, "amount", "The amount in " + CURRENCY_UNIT + ". This is negative for the 'send' category, and is positive\n"
                                 "for all other categories"},
                             {RPCResult::Type::STR, "label", /*optional=*/true, "A comment for the address/transaction, if any"},
@@ -567,7 +572,8 @@ RPCHelpMan listsinceblock()
                                     "\"receive\"               Non-coinbase transactions received.\n"
                                     "\"generate\"              Coinbase transactions received with more than 100 confirmations.\n"
                                     "\"immature\"              Coinbase transactions received with 100 or fewer confirmations.\n"
-                                    "\"orphan\"                Orphaned coinbase transactions received."},
+                                    "\"orphan\"                Orphaned coinbase transactions received.\n"
+                                    "\"stake\"                 Proof-of-stake reward transactions."},
                                 {RPCResult::Type::STR_AMOUNT, "amount", "The amount in " + CURRENCY_UNIT + ". This is negative for the 'send' category, and is positive\n"
                                     "for all other categories"},
                                 {RPCResult::Type::NUM, "vout", "the vout value"},
@@ -715,7 +721,8 @@ RPCHelpMan gettransaction()
                                     "\"receive\"               Non-coinbase transactions received.\n"
                                     "\"generate\"              Coinbase transactions received with more than 100 confirmations.\n"
                                     "\"immature\"              Coinbase transactions received with 100 or fewer confirmations.\n"
-                                    "\"orphan\"                Orphaned coinbase transactions received."},
+                                    "\"orphan\"                Orphaned coinbase transactions received.\n"
+                                    "\"stake\"                 Proof-of-stake reward transactions."},
                                 {RPCResult::Type::STR_AMOUNT, "amount", "The amount in " + CURRENCY_UNIT},
                                 {RPCResult::Type::STR, "label", /*optional=*/true, "A comment for the address/transaction, if any"},
                                 {RPCResult::Type::NUM, "vout", "the vout value"},

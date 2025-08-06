@@ -237,13 +237,20 @@ void CachedTxGetAmounts(const CWallet& wallet, const CWalletTx& wtx,
 
         COutputEntry output = {address, txout.nValue, (int)i};
 
-        // If we are debited by the transaction, add the output as a "sent" entry
-        if (nDebit > 0)
-            listSent.push_back(output);
+        // Special handling for coinstake transactions - outputs are rewards, not sends
+        if (wtx.IsCoinStake()) {
+            // For coinstake, only add outputs as received (rewards/splits)
+            if (fIsMine & filter)
+                listReceived.push_back(output);
+        } else {
+            // Standard transaction logic
+            if (nDebit > 0)
+                listSent.push_back(output);
 
-        // If we are receiving the output, add it as a "received" entry
-        if (fIsMine & filter)
-            listReceived.push_back(output);
+            if (fIsMine & filter)
+                listReceived.push_back(output);
+        }
+
     }
 
 }
