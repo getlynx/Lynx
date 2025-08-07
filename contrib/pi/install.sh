@@ -2,14 +2,14 @@
 set -euo pipefail
 
 ################################################################################
-# LYNX NODE BUILDER SCRIPT
+# LYNX NODE INSTALLER SCRIPT
 ################################################################################
 #
 # PURPOSE:
 #   Automates the complete setup, configuration, and maintenance of a Lynx 
-#   cryptocurrency node on ARM-based systems. Handles initial installation,
-#   ongoing maintenance, wallet backup automation, and provides a rich user
-#   experience with staking statistics and convenient command aliases.
+#   cryptocurrency node on AMD64 and ARM64 architectures. Handles initial 
+#   installation, ongoing maintenance, wallet backup automation, and provides 
+#   a rich user experience with staking statistics and convenient command aliases.
 #
 # AUTHOR: Lynx Development Team
 # VERSION: 2.0
@@ -21,10 +21,12 @@ set -euo pipefail
 # CORE FUNCTIONALITY:
 #
 #   1. SYSTEM INITIALIZATION:
+#      - Detects system architecture (AMD64 or ARM64)
+#      - Validates architecture support and exits gracefully if unsupported
 #      - Creates data directory at /var/lib/lynx with proper permissions
 #      - Establishes backward compatibility symlink (/root/.lynx)
-#      - Sets up 4GB swap file if current swap is insufficient (<3GB)
-#      - Downloads and installs latest Lynx ARM binaries from GitHub releases
+#      - Sets up 4GB swap file if current swap is insufficient (<3GB) - Raspberry Pi only
+#      - Downloads and installs architecture-appropriate Lynx binaries from GitHub releases
 #      - Creates systemd services for Lynx daemon and maintenance timer
 #
 #   2. AUTOMATED MAINTENANCE:
@@ -72,19 +74,20 @@ set -euo pipefail
 #     wd      - Change to working directory (/var/lib/lynx)
 #
 #   SYSTEM UTILITIES:
-#     jou     - View builder script logs (journalctl)
+#     jou     - View install script logs (journalctl)
 #     motd    - Display help message and statistics
+#     update  - Update node (checks version, updates if newer available)
 #     htop    - System resource monitor
 #
 ################################################################################
 #
 # SYSTEM REQUIREMENTS:
-#   - ARM architecture (aarch64 or arm*) - automatically detected
+#   - Supported architectures: AMD64 (x86_64) or ARM64 (aarch64) - automatically detected
 #   - Linux system with systemd
 #   - Root privileges (required for system-level operations)
 #   - Internet connectivity for downloads and updates
 #   - Minimum 4GB RAM recommended for optimal performance
-#   - Sufficient disk space (blockchain data + swap file)
+#   - Sufficient disk space (blockchain data + swap file for Raspberry Pi)
 #
 # REQUIRED DEPENDENCIES:
 #   - bash, systemd, coreutils
@@ -102,21 +105,22 @@ set -euo pipefail
 #      - Integrated into rc.local for seamless setup
 #
 #   2. MANUAL INSTALLATION:
-#      wget -O /usr/local/bin/builder.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/pi/builder.sh
-#      chmod +x /usr/local/bin/builder.sh
-#      /usr/local/bin/builder.sh
+#      wget -O /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/pi/install.sh
+#      chmod +x /usr/local/bin/install.sh
+#      /usr/local/bin/install.sh
 #
 #   3. RE-RUN (if needed):
-#      /usr/local/bin/builder.sh
+#      /usr/local/bin/install.sh
 #
 ################################################################################
 #
 # OPERATIONAL PHASES:
 #
 #   1. INITIAL SETUP PHASE:
+#      - Detects system architecture (AMD64/ARM64) and validates support
 #      - Creates all systemd services and timers
-#      - Downloads and installs Lynx binaries
-#      - Configures system resources (swap, directories)
+#      - Downloads and installs architecture-specific Lynx binaries
+#      - Configures system resources (swap for Pi only, directories)
 #      - Sets up user environment (aliases, MOTD)
 #      - Initiates system reboot if major changes made
 #
@@ -135,8 +139,8 @@ set -euo pipefail
 ################################################################################
 #
 # LOGGING AND MONITORING:
-#   - All operations logged to systemd journal with 'builder.sh' identifier
-#   - View logs: journalctl -t builder.sh -f
+#   - All operations logged to systemd journal with 'install.sh' identifier
+#   - View logs: journalctl -t install.sh -f
 #   - Smart logging: verbose during first 6 hours, reduced thereafter
 #   - Backup operations logged with 'backup.sh' identifier
 #   - Debug information available in /var/lib/lynx/debug.log
@@ -145,16 +149,17 @@ set -euo pipefail
 #   - Systemd services run with security restrictions (NoNewPrivileges, PrivateTmp)
 #   - Backup files have strict permissions (400)
 #   - Backup directory restricted to root access (700)
-#   - Swap file secured with 600 permissions
+#   - Swap file secured with 600 permissions (Raspberry Pi only)
+#   - VPS/server systems skip swap management to avoid permission issues
 #   - All downloads verified for integrity
 #
 ################################################################################
 #
 # TROUBLESHOOTING COMMANDS:
 #   systemctl status lynx              # Check daemon status
-#   systemctl status builder.timer    # Check maintenance timer
+#   systemctl status install.timer    # Check maintenance timer
 #   systemctl status lynx-wallet-backup.timer  # Check backup timer
-#   journalctl -t builder.sh -f       # View setup/maintenance logs
+#   journalctl -t install.sh -f       # View setup/maintenance logs
 #   journalctl -t backup.sh -f        # View backup logs
 #   tail -f /var/lib/lynx/debug.log   # View Lynx daemon logs
 #   lynx-cli getblockchaininfo         # Check sync status
@@ -168,14 +173,14 @@ set -euo pipefail
 # FILES AND DIRECTORIES CREATED:
 #   /var/lib/lynx/                     # Main data directory
 #   /var/lib/lynx-backup/             # Wallet backup storage
-#   /usr/local/bin/builder.sh         # This script
+#   /usr/local/bin/install.sh         # This script
 #   /usr/local/bin/backup.sh          # Wallet backup script
-#   /etc/systemd/system/builder.service       # Maintenance service
-#   /etc/systemd/system/builder.timer         # Maintenance timer
+#   /etc/systemd/system/install.service       # Maintenance service
+#   /etc/systemd/system/install.timer         # Maintenance timer
 #   /etc/systemd/system/lynx.service          # Lynx daemon service
 #   /etc/systemd/system/lynx-wallet-backup.service  # Backup service
 #   /etc/systemd/system/lynx-wallet-backup.timer    # Backup timer
-#   /swapfile                         # 4GB swap file (if created)
+#   /swapfile                         # 4GB swap file (if created on Raspberry Pi)
 #   /root/.bashrc                     # Modified with aliases and MOTD
 #   /root/.lynx -> /var/lib/lynx      # Compatibility symlink
 #
@@ -357,7 +362,7 @@ show_lynx_motd() {
     echo "║    lyc                    - Edit Lynx config                   ║"
     echo "║    lyl                    - View Lynx debug log                ║"
     echo "║    lynx                   - Restart Lynx daemon                ║"
-    echo "║    jou                    - View builder logs                  ║"
+    echo "║    jou                    - View install logs                  ║"
     echo "║    gbi                    - Get blockchain info                ║"
     echo "║    lelp                   - Show Lynx help                     ║"
     echo "║    stat                   - Check Lynx service status          ║"
@@ -366,6 +371,7 @@ show_lynx_motd() {
     echo "║  USEFUL COMMANDS:                                              ║"
     echo "║    htop                   - Monitor system resources           ║"
     echo "║    motd                   - Show this help message again       ║"
+    echo "║    update                 - 🚀 Update node                     ║"
     echo "║                                                                ║"
     echo "║  📚 Complete project documentation: https://docs.getlynx.io/   ║"
     echo "║  💾 Store files permanently: https://clevver.org/              ║"
@@ -411,11 +417,12 @@ alias lyl='tail -n 500 -f $WorkingDirectory/debug.log'
 alias lynx='systemctl stop lynx && rm -rf $WorkingDirectory/debug.log && systemctl start lynx'
 alias sta='lynx-cli sendtoaddress \$1 \$2'
 swe() { lynx-cli sendtoaddress "\$1" "\$(lynx-cli getbalance)" "" "" true; }
-alias jou='journalctl -t builder.sh -n 100 -f'
+alias jou='journalctl -t install.sh -n 100 -f'
 alias gbi='lynx-cli getblockchaininfo'
 alias lelp='lynx-cli help'
 alias motd='show_lynx_motd'
 alias stat='systemctl status lynx'
+alias update='wget -qO- https://update.getlynx.io/ | bash'
 $ALIAS_BLOCK_END
 
 $MOTD_BLOCK_START
@@ -441,46 +448,63 @@ cleanup_bashrc_empty_lines() {
     # This pattern matches 2 or more consecutive empty lines and replaces them with 1
     sed -i '/^$/N;/^\n$/D' "$BASHRC"
     
-    logger -t builder.sh "Cleaned up multiple empty lines in $BASHRC"
+    logger -t install.sh "Cleaned up multiple empty lines in $BASHRC"
 }
 
-# Function to create builder.service and builder.timer if not present
-create_builder_timer() {
-    if [ ! -f /etc/systemd/system/builder.service ] || [ ! -f /etc/systemd/system/builder.timer ]; then
-        logger -t builder.sh "Creating /etc/systemd/system/builder.service and builder.timer."
-        cat <<EOF > /etc/systemd/system/builder.service
+# Function to create install.service and install.timer if not present
+create_install_timer() {
+    # Ensure the install.sh script is available in /usr/local/bin for systemd service
+    local script_path="$0"
+    local target_path="/usr/local/bin/install.sh"
+    
+    # Copy the script to /usr/local/bin if it's not already there or if it's different
+    if [ ! -f "$target_path" ] || ! cmp -s "$script_path" "$target_path" 2>/dev/null; then
+        logger -t install.sh "Copying install.sh script to $target_path for systemd service access."
+        cp "$script_path" "$target_path"
+        chmod +x "$target_path"
+        chown root:root "$target_path"
+        logger -t install.sh "Install script successfully copied to $target_path"
+    else
+        logger -t install.sh "Install script already present at $target_path"
+    fi
+    
+    if [ ! -f /etc/systemd/system/install.service ] || [ ! -f /etc/systemd/system/install.timer ]; then
+        logger -t install.sh "Creating /etc/systemd/system/install.service and install.timer."
+        cat <<EOF > /etc/systemd/system/install.service
 [Unit]
-Description=Run builder.sh every 12 minutes
+Description=Run install.sh every 12 minutes
 Documentation=https://getlynx.io/
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/builder.sh
+ExecStart=/usr/local/bin/install.sh
 StandardOutput=journal
 StandardError=journal
 Environment=HOME=/root
 WorkingDirectory=/root
 EOF
 
-        cat <<EOF > /etc/systemd/system/builder.timer
+        cat <<EOF > /etc/systemd/system/install.timer
 [Unit]
-Description=Run builder.sh every 12 minutes
+Description=Run install.sh every 12 minutes
 Documentation=https://getlynx.io/
 
 [Timer]
 OnBootSec=1min
 OnUnitActiveSec=12min
 AccuracySec=30sec
-Unit=builder.service
+Unit=install.service
 Persistent=false
 
 [Install]
 WantedBy=timers.target
 EOF
         systemctl daemon-reload
-        systemctl enable builder.timer
-        systemctl start builder.timer
-        logger -t builder.sh "/etc/systemd/system/builder.service and builder.timer created, enabled, and started. Gracefully exiting script."
+        systemctl enable install.timer
+        systemctl start install.timer
+        logger -t install.sh "/etc/systemd/system/install.service and install.timer created, enabled, and started."
+        logger -t install.sh "Install script is now available at $target_path for system service execution."
+        logger -t install.sh "Gracefully exiting script. The device will reboot in 2 seconds."
         echo "The device will reboot in 2 seconds. Please wait..."
         sleep 2
         reboot
@@ -488,14 +512,14 @@ EOF
     else
         # Only log if system has been running for 6 hours or less
         if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-            logger -t builder.sh "/etc/systemd/system/builder.service and builder.timer already exist. Skipping creation."
+            logger -t install.sh "/etc/systemd/system/install.service and install.timer already exist. Skipping creation."
         fi
     fi
 }
 
 # Function to create wallet backup service and timer
 create_wallet_backup_timer() {
-    logger -t builder.sh "Creating /etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer."
+    logger -t install.sh "Creating /etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer."
     
     # Stop and disable the timer before recreating it to avoid conflicts
     systemctl stop lynx-wallet-backup.timer 2>/dev/null || true
@@ -637,131 +661,433 @@ EOF
      systemctl daemon-reload
      systemctl enable lynx-wallet-backup.timer
      systemctl start lynx-wallet-backup.timer
-     logger -t builder.sh "/etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer created, enabled, and started."
+     logger -t install.sh "/etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer created, enabled, and started."
 }
 
-# Function to check and update swap to at least 4GB if less than 3GB
+# Function to check and update swap to at least 4GB if less than 3GB (Raspberry Pi only)
 check_and_update_swap() {
-    logger -t builder.sh "Checking swap size."
+    # Only manage swap on Raspberry Pi devices
+    if ! is_raspberry_pi; then
+        logger -t install.sh "Non-Raspberry Pi system detected. Skipping swap management for VPS/server compatibility."
+        logger -t install.sh "Current system will use existing swap configuration."
+        return 0
+    fi
+    
+    logger -t install.sh "Raspberry Pi detected. Checking swap size for optimization."
     # Get current swap size in MB (divided by 1024)
     current_swap=$(free -m | awk '/^Swap:/ {print $2}')
-    logger -t builder.sh "Current swap size: ${current_swap}MB"
+    logger -t install.sh "Current swap size: ${current_swap}MB"
 
     # Check if swap is less than 3GB (3072MB) or doesn't exist
     if [ "$current_swap" -lt 3072 ]; then
-        logger -t builder.sh "Current swap is less than 3GB. Setting up 4GB swap file."
+        logger -t install.sh "Current swap is less than 3GB. Setting up 4GB swap file for Raspberry Pi."
 
         # If there's existing swap, turn it off and remove from fstab
         if [ "$current_swap" -gt 0 ]; then
             swap_file=$(cat /proc/swaps | tail -n1 | awk '{print $1}')
-            logger -t builder.sh "Disabling existing swap: $swap_file"
-            swapoff "$swap_file" && logger -t builder.sh "Swapoff succeeded for $swap_file" || logger -t builder.sh "Swapoff failed for $swap_file"
-            sed -i '/swap/d' /etc/fstab && logger -t builder.sh "Removed old swap entry from /etc/fstab" || logger -t builder.sh "Failed to remove old swap entry from /etc/fstab"
+            logger -t install.sh "Disabling existing swap: $swap_file"
+            swapoff "$swap_file" && logger -t install.sh "Swapoff succeeded for $swap_file" || logger -t install.sh "Swapoff failed for $swap_file"
+            sed -i '/swap/d' /etc/fstab && logger -t install.sh "Removed old swap entry from /etc/fstab" || logger -t install.sh "Failed to remove old swap entry from /etc/fstab"
         fi
 
-        logger -t builder.sh "Creating new 4GB swapfile at /swapfile"
-        fallocate -l 4G /swapfile && logger -t builder.sh "fallocate succeeded" || logger -t builder.sh "fallocate failed"
-        chmod 600 /swapfile && logger -t builder.sh "chmod 600 succeeded" || logger -t builder.sh "chmod 600 failed"
-        mkswap /swapfile && logger -t builder.sh "mkswap succeeded" || logger -t builder.sh "mkswap failed"
-        swapon /swapfile && logger -t builder.sh "swapon succeeded" || logger -t builder.sh "swapon failed"
-        echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab && logger -t builder.sh "Added swap entry to /etc/fstab" || logger -t builder.sh "Failed to add swap entry to /etc/fstab"
-        logger -t builder.sh "Swap updated. Rebooting system to apply changes. Gracefully exiting script."
+        logger -t install.sh "Creating new 4GB swapfile at /swapfile"
+        fallocate -l 4G /swapfile && logger -t install.sh "fallocate succeeded" || logger -t install.sh "fallocate failed"
+        chmod 600 /swapfile && logger -t install.sh "chmod 600 succeeded" || logger -t install.sh "chmod 600 failed"
+        mkswap /swapfile && logger -t install.sh "mkswap succeeded" || logger -t install.sh "mkswap failed"
+        swapon /swapfile && logger -t install.sh "swapon succeeded" || logger -t install.sh "swapon failed"
+        echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab && logger -t install.sh "Added swap entry to /etc/fstab" || logger -t install.sh "Failed to add swap entry to /etc/fstab"
+        logger -t install.sh "Swap updated on Raspberry Pi. Rebooting system to apply changes. Gracefully exiting script."
         sleep 2
         reboot
         exit 0
     else
         # Only log if system has been running for 6 hours or less
         if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-            logger -t builder.sh "Swap is sufficient (>=3GB). No changes made."
+            logger -t install.sh "Raspberry Pi swap is sufficient (>=3GB). No changes made."
         fi
     fi
     # Only log if system has been running for 6 hours or less
     if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-        logger -t builder.sh "Swap check complete."
+        logger -t install.sh "Swap check complete."
     fi
 }
 
-# Function to check if ARM Debian Lynx binary is installed, else download and install
-check_and_install_lynx_arm() {
-    ARCH="$(uname -m)"
-    if [ "$ARCH" != "aarch64" ] && [[ "$ARCH" != arm* ]]; then
-        logger -t builder.sh "Not an ARM architecture. Skipping Lynx ARM binary check."
-        return
-    fi
-    if command -v lynxd >/dev/null 2>&1; then
-        # Only log if system has been running for 6 hours or less
-        if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-            logger -t builder.sh "Lynx daemon already installed. Skipping download."
+# Function to detect if running on a Raspberry Pi
+is_raspberry_pi() {
+    # Check multiple indicators for Raspberry Pi detection
+    if [ -f /sys/firmware/devicetree/base/model ]; then
+        if grep -qi "raspberry pi" /sys/firmware/devicetree/base/model 2>/dev/null; then
+            return 0  # True - is Raspberry Pi
         fi
-        return
     fi
-    logger -t builder.sh "Lynx daemon not found. Downloading and installing latest ARM release."
-    # Download and install Lynx binary (Debian ARM)
+    
+    # Check /proc/cpuinfo for Raspberry Pi hardware
+    if [ -f /proc/cpuinfo ]; then
+        if grep -qi "raspberry pi\|bcm2835\|bcm2708\|bcm2709\|bcm2711\|bcm2712" /proc/cpuinfo 2>/dev/null; then
+            return 0  # True - is Raspberry Pi
+        fi
+    fi
+    
+    # Check /proc/device-tree/model if available
+    if [ -f /proc/device-tree/model ]; then
+        if grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
+            return 0  # True - is Raspberry Pi
+        fi
+    fi
+    
+    return 1  # False - not a Raspberry Pi
+}
+
+# Function to detect system architecture and return appropriate binary identifier
+detect_system_architecture() {
+    local arch="$(uname -m)"
+    case "$arch" in
+        x86_64|amd64)
+            echo "amd64"
+            ;;
+        aarch64|arm64)
+            echo "arm64"
+            ;;
+        *)
+            echo ""
+            echo "═══════════════════════════════════════════════════════════════"
+            echo "                    UNSUPPORTED ARCHITECTURE                    "
+            echo "═══════════════════════════════════════════════════════════════"
+            echo ""
+            echo "Your system architecture '$arch' is not currently supported."
+            echo ""
+            echo "Lynx binaries are available for:"
+            echo "  • AMD64 (x86_64) - Intel/AMD 64-bit processors"
+            echo "  • ARM64 (aarch64) - ARM 64-bit processors (Raspberry Pi 4+, Apple Silicon, etc.)"
+            echo ""
+            echo "If you believe this is an error, please check:"
+            echo "  • System architecture: uname -m"
+            echo "  • Available releases: https://github.com/getlynx/Lynx/releases"
+            echo ""
+            echo "For support, visit: https://docs.getlynx.io/"
+            echo ""
+            echo "═══════════════════════════════════════════════════════════════"
+            logger -t install.sh "Unsupported architecture: $arch. Installation aborted."
+            exit 1
+            ;;
+    esac
+}
+
+# Function to extract version number from version string (e.g., "v26.2.35" -> "26.2.35")
+extract_version_number() {
+    echo "$1" | sed 's/^v//' | sed 's/[^0-9.].*//'
+}
+
+# Function to compare version numbers (returns 0 if v1 == v2, 1 if v1 > v2, 2 if v1 < v2)
+compare_versions() {
+    local v1="$1"
+    local v2="$2"
+    
+    if [ "$v1" = "$v2" ]; then
+        return 0  # Equal
+    fi
+    
+    # Use sort -V for version comparison
+    local higher=$(printf '%s\n%s\n' "$v1" "$v2" | sort -V | tail -n1)
+    
+    if [ "$higher" = "$v1" ]; then
+        return 1  # v1 > v2
+    else
+        return 2  # v1 < v2
+    fi
+}
+
+# Function to get current running Lynx version
+get_current_lynx_version() {
+    # Only check version if daemon is running (safety check)
+    if ! pgrep -x "lynxd" >/dev/null; then
+        echo ""
+        return 1
+    fi
+    
+    # Try to get version from running daemon
+    local version=$(lynx-cli -version 2>/dev/null | head -1 | grep -o 'v[0-9][0-9.]*' | head -1)
+    if [ -n "$version" ]; then
+        extract_version_number "$version"
+        return 0
+    fi
+    
+    # Fallback: try binary version if cli fails
+    local binary_version=$(/usr/local/bin/lynxd -version 2>/dev/null | head -1 | grep -o 'v[0-9][0-9.]*' | head -1)
+    if [ -n "$binary_version" ]; then
+        extract_version_number "$binary_version"
+        return 0
+    fi
+    
+    echo ""
+    return 1
+}
+
+# Function to get latest GitHub release version
+get_latest_github_version() {
+    local release_info=$(curl -s https://api.github.com/repos/getlynx/Lynx/releases/latest)
+    if [ $? -ne 0 ] || [ -z "$release_info" ]; then
+        echo ""
+        return 1
+    fi
+    
+    local tag_name=$(echo "$release_info" | grep '"tag_name":' | cut -d '"' -f 4)
+    if [ -n "$tag_name" ]; then
+        extract_version_number "$tag_name"
+        return 0
+    fi
+    
+    echo ""
+    return 1
+}
+
+# Function to check if Lynx binary needs update or installation
+check_and_install_lynx_binary() {
+    # Detect the system architecture
+    local detected_arch
+    detected_arch=$(detect_system_architecture)
+    if [ $? -ne 0 ]; then
+        logger -t install.sh "Failed to detect supported architecture. Exiting."
+        return 1
+    fi
+    
+    logger -t install.sh "Detected architecture: $detected_arch"
+    
+    # Check if binaries exist
+    if ! command -v lynxd >/dev/null 2>&1; then
+        logger -t install.sh "Lynx daemon not found. Downloading and installing latest $detected_arch release."
+        install_lynx_binaries "$detected_arch"
+        return $?
+    fi
+    
+    # Binaries exist - check if daemon is running (safety requirement for updates)
+    if ! pgrep -x "lynxd" >/dev/null; then
+        logger -t install.sh "Lynx binaries found but daemon not running. Skipping version check for safety."
+        logger -t install.sh "To update Lynx version, start the daemon first: systemctl start lynx"
+        return 0
+    fi
+    
+    # Get current and latest versions
+    local current_version
+    local latest_version
+    
+    current_version=$(get_current_lynx_version)
+    if [ $? -ne 0 ] || [ -z "$current_version" ]; then
+        logger -t install.sh "Could not determine current Lynx version. Skipping update check."
+        return 0
+    fi
+    
+    latest_version=$(get_latest_github_version)
+    if [ $? -ne 0 ] || [ -z "$latest_version" ]; then
+        logger -t install.sh "Could not fetch latest Lynx version from GitHub. Skipping update check."
+        return 0
+    fi
+    
+    logger -t install.sh "Current Lynx version: $current_version"
+    logger -t install.sh "Latest Lynx version: $latest_version"
+    
+    # Compare versions
+    compare_versions "$current_version" "$latest_version"
+    local comparison=$?
+    
+    case $comparison in
+        0)
+            logger -t install.sh "Lynx is up to date. No update needed."
+            return 0
+            ;;
+        1)
+            logger -t install.sh "Current version ($current_version) is newer than GitHub release ($latest_version). No update needed."
+            return 0
+            ;;
+        2)
+            logger -t install.sh "New Lynx version available: $latest_version (current: $current_version)"
+            logger -t install.sh "Performing graceful update..."
+            perform_lynx_update "$detected_arch"
+            return $?
+            ;;
+    esac
+}
+
+# Function to perform graceful Lynx binary update
+perform_lynx_update() {
+    local arch="$1"
+    
+    logger -t install.sh "Starting graceful Lynx update process..."
+    
+    # Step 1: Gracefully stop the daemon
+    logger -t install.sh "Stopping Lynx daemon gracefully..."
+    systemctl stop lynx.service
+    
+    # Wait for graceful shutdown (max 30 seconds)
+    local countdown=30
+    while pgrep -x "lynxd" >/dev/null && [ $countdown -gt 0 ]; do
+        sleep 1
+        countdown=$((countdown - 1))
+    done
+    
+    if pgrep -x "lynxd" >/dev/null; then
+        logger -t install.sh "WARNING: Lynx daemon did not stop gracefully within 30 seconds"
+        return 1
+    fi
+    
+    logger -t install.sh "Lynx daemon stopped successfully"
+    
+    # Step 2: Backup current binaries (just in case)
+    logger -t install.sh "Backing up current Lynx binaries..."
+    mkdir -p /tmp/lynx-backup-$(date +%Y%m%d-%H%M%S)
+    local backup_dir="/tmp/lynx-backup-$(date +%Y%m%d-%H%M%S)"
+    cp /usr/local/bin/lynx* "$backup_dir/" 2>/dev/null
+    
+    # Step 3: Remove old binaries
+    logger -t install.sh "Removing old Lynx binaries..."
+    rm -f /usr/local/bin/lynxd /usr/local/bin/lynx-cli /usr/local/bin/lynx-tx
+    
+    # Step 4: Install new binaries
+    logger -t install.sh "Installing new Lynx binaries..."
+    if install_lynx_binaries "$arch"; then
+        logger -t install.sh "New Lynx binaries installed successfully"
+    else
+        logger -t install.sh "ERROR: Failed to install new binaries. Attempting to restore backup..."
+        cp "$backup_dir"/* /usr/local/bin/ 2>/dev/null
+        chmod +x /usr/local/bin/lynx* 2>/dev/null
+        logger -t install.sh "Backup restored. Starting original daemon..."
+        systemctl start lynx.service
+        return 1
+    fi
+    
+    # Step 5: Start the daemon with new binaries
+    logger -t install.sh "Starting Lynx daemon with new version..."
+    systemctl start lynx.service
+    
+    # Step 6: Verify successful start
+    sleep 5
+    if pgrep -x "lynxd" >/dev/null; then
+        logger -t install.sh "Lynx update completed successfully!"
+        # Clean up backup after successful update
+        rm -rf "$backup_dir"
+        return 0
+    else
+        logger -t install.sh "ERROR: New daemon failed to start. Attempting to restore backup..."
+        systemctl stop lynx.service
+        rm -f /usr/local/bin/lynx*
+        cp "$backup_dir"/* /usr/local/bin/
+        chmod +x /usr/local/bin/lynx*
+        systemctl start lynx.service
+        logger -t install.sh "Backup restored and daemon restarted"
+        return 1
+    fi
+}
+
+# Function to install Lynx binaries (separated for reuse)
+install_lynx_binaries() {
+    local detected_arch="$1"
+    
+    # Download and install Lynx binary for detected architecture
     release_info=$(curl -s https://api.github.com/repos/getlynx/Lynx/releases/latest)
     if [ $? -ne 0 ] || [ -z "$release_info" ]; then
-        logger -t builder.sh "Failed to fetch release information from GitHub API"
+        logger -t install.sh "Failed to fetch release information from GitHub API"
         return 1
     fi
+    
+    # Determine architecture-specific grep pattern based on your release naming convention
+    local arch_pattern
+    case "$detected_arch" in
+        amd64)
+            arch_pattern="\.AMD\.zip$"
+            ;;
+        arm64)
+            arch_pattern="\.ARM\.zip$"
+            ;;
+    esac
+    
+    # First try to get a Debian binary (preferred), then fall back to Ubuntu
     download_url=$(echo "$release_info" | \
         grep "browser_download_url" | \
-        grep -iE "debian|ubuntu|ol" | \
-        grep -iE "\.zip" | \
-        grep -iE "arm" | \
+        grep -E "$arch_pattern" | \
+        grep -i "debian" | \
         head -n 1 | \
         cut -d '"' -f 4)
+    
+    # If no Debian binary found, try Ubuntu
     if [ -z "$download_url" ]; then
-        logger -t builder.sh "No suitable ARM Debian Lynx binary found."
+        download_url=$(echo "$release_info" | \
+            grep "browser_download_url" | \
+            grep -E "$arch_pattern" | \
+            grep -i "ubuntu" | \
+            head -n 1 | \
+            cut -d '"' -f 4)
+    fi
+    
+    # If still no binary found, try any Linux distribution
+    if [ -z "$download_url" ]; then
+        download_url=$(echo "$release_info" | \
+            grep "browser_download_url" | \
+            grep -E "$arch_pattern" | \
+            head -n 1 | \
+            cut -d '"' -f 4)
+    fi
+    
+    if [ -z "$download_url" ]; then
+        logger -t install.sh "No suitable $detected_arch Lynx binary found in GitHub releases."
+        logger -t install.sh "Expected filename pattern: *.${detected_arch^^}.zip"
         return 1
     fi
+    
     filename=$(basename "$download_url")
-    logger -t builder.sh "Downloading $filename to $WorkingDirectory..."
+    logger -t install.sh "Downloading $filename to $WorkingDirectory..."
     
     # Download with progress and verification
     wget --progress=bar:force -O "$WorkingDirectory/$filename" "$download_url"
     if [ $? -ne 0 ]; then
-        logger -t builder.sh "ERROR: Failed to download $filename"
+        logger -t install.sh "ERROR: Failed to download $filename"
         return 1
     fi
     
     # Verify download was successful
     if [ ! -f "$WorkingDirectory/$filename" ]; then
-        logger -t builder.sh "ERROR: Downloaded file $filename not found"
+        logger -t install.sh "ERROR: Downloaded file $filename not found"
         return 1
     fi
     
     # Check file size (should be reasonable for a binary)
     file_size=$(stat -c %s "$WorkingDirectory/$filename")
     if [ "$file_size" -lt 1000000 ]; then  # Less than 1MB is suspicious
-        logger -t builder.sh "ERROR: Downloaded file $filename is too small ($file_size bytes) - likely corrupted"
-        logger -t builder.sh "File contents (first 200 chars):"
-        head -c 200 "$WorkingDirectory/$filename" | logger -t builder.sh
+        logger -t install.sh "ERROR: Downloaded file $filename is too small ($file_size bytes) - likely corrupted"
+        logger -t install.sh "File contents (first 200 chars):"
+        head -c 200 "$WorkingDirectory/$filename" | logger -t install.sh
         return 1
     fi
     
-    logger -t builder.sh "Download successful. File size: $file_size bytes"
-    logger -t builder.sh "Extracting $filename..."
+    logger -t install.sh "Download successful. File size: $file_size bytes"
+    logger -t install.sh "Extracting $filename..."
     
     # Extract with verification
     unzip -o "$WorkingDirectory/$filename" -d /usr/local/bin/
     if [ $? -ne 0 ]; then
-        logger -t builder.sh "ERROR: Failed to extract $filename"
+        logger -t install.sh "ERROR: Failed to extract $filename"
         return 1
     fi
     
     # Verify extraction was successful
     if [ ! -f "/usr/local/bin/lynxd" ]; then
-        logger -t builder.sh "ERROR: lynxd not found after extraction"
-        logger -t builder.sh "Contents of /usr/local/bin/:"
-        ls -la /usr/local/bin/ | logger -t builder.sh
+        logger -t install.sh "ERROR: lynxd not found after extraction"
+        logger -t install.sh "Contents of /usr/local/bin/:"
+        ls -la /usr/local/bin/ | logger -t install.sh
         return 1
     fi
-    chmod +x /usr/local/bin/lynx* || logger -t builder.sh "Failed to chmod Lynx binaries"
+    
+    # Set proper permissions
+    chmod +x /usr/local/bin/lynx* || logger -t install.sh "Failed to chmod Lynx binaries"
+    
+    # Clean up downloaded zip file
+    rm -f "$WorkingDirectory/$filename"
     
     # Verify the binary was actually installed
     if [ -f "/usr/local/bin/lynxd" ]; then
-        logger -t builder.sh "Lynx ARM binary installed successfully."
+        logger -t install.sh "Lynx $detected_arch binary installed successfully."
+        return 0
     else
-        logger -t builder.sh "ERROR: Lynx binary installation failed - lynxd not found at /usr/local/bin/lynxd"
+        logger -t install.sh "ERROR: Lynx binary installation failed - lynxd not found at /usr/local/bin/lynxd"
         return 1
     fi
 }
@@ -769,7 +1095,7 @@ check_and_install_lynx_arm() {
 # Function to create lynx.service systemd unit file if not present
 create_lynx_service() {
     if [ ! -f /etc/systemd/system/lynx.service ]; then
-        logger -t builder.sh "Creating /etc/systemd/system/lynx.service systemd unit file."
+        logger -t install.sh "Creating /etc/systemd/system/lynx.service systemd unit file."
         cat <<EOF > /etc/systemd/system/lynx.service
 [Unit]
 Description=Lynx Cryptocurrency Daemon
@@ -800,11 +1126,11 @@ ProtectHome=true
 WantedBy=multi-user.target
 EOF
         systemctl daemon-reload
-        logger -t builder.sh "/etc/systemd/system/lynx.service created and systemd reloaded."
+        logger -t install.sh "/etc/systemd/system/lynx.service created and systemd reloaded."
     else
         # Only log if system has been running for 6 hours or less
         if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-            logger -t builder.sh "/etc/systemd/system/lynx.service already exists. Skipping creation."
+            logger -t install.sh "/etc/systemd/system/lynx.service already exists. Skipping creation."
         fi
     fi
 }
@@ -813,11 +1139,11 @@ EOF
 ensure_lynx_service_running() {
     # First verify the binary exists
     if [ ! -f "/usr/local/bin/lynxd" ]; then
-        logger -t builder.sh "ERROR: Cannot start Lynx service - lynxd binary not found at /usr/local/bin/lynxd"
-        logger -t builder.sh "Attempting to reinstall Lynx binary..."
-        check_and_install_lynx_arm
+        logger -t install.sh "ERROR: Cannot start Lynx service - lynxd binary not found at /usr/local/bin/lynxd"
+        logger -t install.sh "Attempting to reinstall Lynx binary..."
+        check_and_install_lynx_binary
         if [ ! -f "/usr/local/bin/lynxd" ]; then
-            logger -t builder.sh "ERROR: Lynx binary installation failed. Cannot start service."
+            logger -t install.sh "ERROR: Lynx binary installation failed. Cannot start service."
             return 1
         fi
     fi
@@ -825,16 +1151,16 @@ ensure_lynx_service_running() {
     if pgrep -x "lynxd" >/dev/null; then
         # Only log if system has been running for 6 hours or less
         if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-            logger -t builder.sh "Lynx daemon is already running."
+            logger -t install.sh "Lynx daemon is already running."
         fi
         return
     else
-        logger -t builder.sh "Lynx daemon is not running. Attempting to start."
+        logger -t install.sh "Lynx daemon is not running. Attempting to start."
         systemctl enable lynx.service
         sleep 5
         systemctl start lynx.service
-        logger -t builder.sh "Lynx daemon started."
-        logger -t builder.sh "Disabling rc.local to prevent future builder.sh downloads"
+        logger -t install.sh "Lynx daemon started."
+        logger -t install.sh "Disabling rc.local to prevent future install.sh downloads"
         chmod -x /etc/rc.local
         exit 0
     fi
@@ -848,19 +1174,19 @@ check_blockchain_sync() {
     # Check if the command succeeded and returned valid data
     if [ $? -eq 0 ] && [ -n "$SYNC_STATUS" ] && [ "$SYNC_STATUS" != "null" ]; then
         if [ "$SYNC_STATUS" = "false" ]; then
-            logger -t builder.sh "Blockchain sync complete. Stopping and disabling builder.timer."
-            systemctl stop builder.timer
-            systemctl disable builder.timer
-            logger -t builder.sh "Disabling rc.local to prevent future builder.sh downloads"
+            logger -t install.sh "Blockchain sync complete. Stopping and disabling install.timer."
+            systemctl stop install.timer
+            systemctl disable install.timer
+            logger -t install.sh "Disabling rc.local to prevent future install.sh downloads"
             chmod -x /etc/rc.local
             return
         else
-            #logger -t builder.sh "Blockchain still syncing or status unknown (got:$SYNC_STATUS). Restarting Lynx daemon."
-            logger -t builder.sh "Blockchain still syncing or status unknown. Expected behaviour. Restarting Lynx daemon. "
+            #logger -t install.sh "Blockchain still syncing or status unknown (got:$SYNC_STATUS). Restarting Lynx daemon."
+            logger -t install.sh "Blockchain still syncing or status unknown. Expected behaviour. Restarting Lynx daemon. "
             systemctl restart lynx.service
         fi
     else
-        logger -t builder.sh "Daemon not ready or RPC call failed. Will try again next time."
+        logger -t install.sh "Daemon not ready or RPC call failed. Will try again next time."
         return 0
     fi
 }
@@ -871,8 +1197,8 @@ add_aliases_to_bashrc
 # Clean up any multiple empty lines that may have been created
 cleanup_bashrc_empty_lines
 
-# Call the builder timer creation function
-create_builder_timer
+# Call the install timer creation function
+create_install_timer
 
 # Call the wallet backup timer creation function
 create_wallet_backup_timer
@@ -880,8 +1206,8 @@ create_wallet_backup_timer
 # Call the swap check/update function
 check_and_update_swap
 
-# Call the ARM Lynx check/install function
-check_and_install_lynx_arm
+# Call the Lynx binary check/install function
+check_and_install_lynx_binary
 
 # Call the lynx service creation function
 create_lynx_service

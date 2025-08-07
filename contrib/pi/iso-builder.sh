@@ -2,14 +2,14 @@
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 ################################################################################
-# LYNX ISO BUILDER SCRIPT
+# LYNX RASPBERRY PI IMAGE BUILDER
 ################################################################################
 #
 # PURPOSE:
-#   This script creates a customized Raspberry Pi OS 64-bit ARM image with Lynx cryptocurrency
-#   node software pre-installed and configured. It downloads a base Raspberry Pi
-#   OS 64-bit ARM image, modifies it to include Lynx node setup, and creates a ready-to-use
-#   image file for distribution.
+#   Creates customized Raspberry Pi OS ARM64 images with embedded Lynx cryptocurrency
+#   node software. Downloads base Raspberry Pi OS Lite images, injects automatic
+#   Lynx setup capability, and produces ready-to-flash distribution files for
+#   instant node deployment.
 #
 # AUTHOR: Lynx Development Team
 # VERSION: 2.0
@@ -18,126 +18,174 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 #
 ################################################################################
 #
-# FUNCTIONALITY OVERVIEW:
-#   This script performs the following operations in sequence:
+# WORKFLOW PROCESS:
 #
 #   1. IMAGE ACQUISITION:
-#      - Downloads latest Raspberry Pi OS Lite 64-bit ARM image (if no URL provided)
-#      - Or downloads a specific image from provided URL
-#      - Extracts the compressed .xz image file
-#      - Validates the image file integrity
+#      - Auto-detects latest Raspberry Pi OS Lite ARM64 release (if no URL provided)
+#      - Scrapes Raspberry Pi Foundation download site for newest version
+#      - Downloads specific image from provided URL (alternative mode)
+#      - Extracts compressed .xz image files safely
+#      - Validates image integrity and format before processing
+#      - Reuses existing extracted images to save bandwidth
 #
 #   2. IMAGE MODIFICATION:
-#      - Detects partition offsets (boot and root partitions)
-#      - Mounts partitions safely with proper error handling
-#      - Creates rc.local script for automatic Lynx node setup
-#      - Configures the image to download and run builder.sh on first boot
+#      - Calculates precise partition offsets using fdisk analysis
+#      - Validates partition boundaries against image file size
+#      - Mounts boot and root partitions with comprehensive error handling
+#      - Injects custom rc.local script for first-boot automation
+#      - Configures automatic Lynx node deployment on startup
+#      - Implements proper cleanup and loop device management
 #
-#   3. OUTPUT GENERATION:
-#      - Creates final image with date-stamped filename
-#      - Compresses the image using high-compression xz
-#      - Produces ready-to-distribute .img.xz file
+#   3. DISTRIBUTION PACKAGE CREATION:
+#      - Renames image with date-stamped filename for versioning
+#      - Applies maximum compression (xz -9) for distribution efficiency
+#      - Produces final .img.xz file ready for SD card flashing
+#      - Maintains original image integrity throughout process
 #
 ################################################################################
 #
-# USAGE:
-#   ./iso-builder.sh                    # Download and use latest Raspberry Pi OS 64-bit ARM
-#   ./iso-builder.sh "URL_TO_IMAGE.XZ"  # Use specific image URL
+# USAGE MODES:
 #
-# EXAMPLES:
+#   AUTOMATIC MODE (Latest Release):
+#     ./iso-builder.sh
+#     # Downloads and processes the newest Raspberry Pi OS Lite ARM64 release
+#
+#   MANUAL MODE (Specific Image):
+#     ./iso-builder.sh "https://downloads.raspberrypi.org/path/to/image.img.xz"
+#     # Uses provided URL for specific version targeting
+#
+# PRACTICAL EXAMPLES:
 #   ./iso-builder.sh
-#   ./iso-builder.sh "https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2023-05-03/2023-05-03-raspios-bullseye-arm64-lite.img.xz"
+#   ./iso-builder.sh "https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2024-03-15/2024-03-15-raspios-bookworm-arm64-lite.img.xz"
 #
 ################################################################################
 #
 # SYSTEM REQUIREMENTS:
-#   - Linux system (tested on Debian/Ubuntu)
-#   - Root privileges (required for mounting operations)
-#   - Internet connection (for downloading images)
-#   - Sufficient disk space (at least 8GB free space recommended)
-#   - 64-bit ARM-compatible system (for 64-bit ARM image processing)
+#   - Linux host system (tested on Debian/Ubuntu)
+#   - Root/sudo privileges (required for mount operations)
+#   - Stable internet connection (for image downloads)
+#   - Minimum 8GB free disk space (12GB+ recommended)
+#   - x86_64 or ARM64 host architecture (cross-platform support)
 #
-# DEPENDENCIES:
-#   - bash, wget, curl, unxz, xz
-#   - mount, umount, losetup
-#   - fdisk, stat, file
-#   - mkdir, mv, chmod
-#
-################################################################################
-#
-# SECURITY FEATURES:
-#   - Validates downloaded files before processing
-#   - Checks partition offsets to prevent mounting errors
-#   - Uses safe file operations (no wildcards)
-#   - Proper error handling and cleanup
-#   - Loop device management to prevent conflicts
+# REQUIRED DEPENDENCIES:
+#   Core utilities: bash, coreutils, util-linux
+#   Network tools: wget, curl
+#   Compression: xz-utils (unxz, xz)
+#   Disk tools: fdisk, losetup, mount, umount
+#   File tools: file, stat, mkdir, mv, chmod
+#   Text processing: awk, sed, grep
 #
 ################################################################################
 #
-# OUTPUT FILES:
-#   - YYYY-MM-DD-Lynx-RPI-ISO.img (extracted and modified 64-bit ARM image)
-#   - YYYY-MM-DD-Lynx-RPI-ISO.img.xz (final compressed distribution file)
-#
-# TEMPORARY FILES:
-#   - Downloaded .xz file (deleted after extraction)
-#   - Mount points: /mnt/lynx1, /mnt/lynx2 (cleaned up after use)
-#   - Loop devices (detached after processing)
-#
-################################################################################
-#
-# FIRST BOOT BEHAVIOR:
-#   When the created image boots for the first time:
-#   1. Displays IP address information
-#   2. Waits 60 seconds for network initialization
-#   3. Tests network connectivity (ping 8.8.8.8)
-#   4. Downloads and executes builder.sh from GitHub
-#   5. Sets up Lynx node automatically
-#   6. Reboots if network is unavailable (retries every 60 seconds)
+# SECURITY AND VALIDATION:
+#   - Comprehensive file integrity checking before processing
+#   - Partition boundary validation to prevent corruption
+#   - Safe loop device management with cleanup procedures  
+#   - Proper file permissions throughout modification process
+#   - Error handling prevents partial or corrupted outputs
+#   - No dangerous operations without validation
 #
 ################################################################################
 #
-# TROUBLESHOOTING:
-#   - "No .img file found": Check if download/extraction succeeded
-#   - "Failed to mount": Check loop device conflicts (use losetup -D)
-#   - "Invalid disk image": Verify downloaded file integrity
-#   - "Partition offset exceeds image size": Corrupted or wrong image file
-#   - "Overlapping loop device": Clean up with losetup -D and umount -f
+# OUTPUT ARTIFACTS:
 #
-# COMMON COMMANDS:
-#   losetup -a                    # Check attached loop devices
-#   losetup -D                    # Detach all loop devices
-#   umount -f /mnt/lynx1 /mnt/lynx2  # Force unmount
-#   file *.img                    # Check image file type
-#   fdisk -l *.img               # View partition information
+#   PRIMARY OUTPUT:
+#     YYYY-MM-DD-Lynx-RPI-ISO.img.xz  # Final compressed distribution image
 #
-################################################################################
+#   INTERMEDIATE FILES:
+#     YYYY-MM-DD-Lynx-RPI-ISO.img     # Modified raw image (deleted after compression)
+#     original-name.img                # Extracted source image (temporary)
 #
-# NETWORK REQUIREMENTS:
-#   - Outbound HTTPS access to GitHub (for builder.sh download)
-#   - Outbound HTTP/HTTPS to Raspberry Pi Foundation (for OS downloads)
-#   - ICMP access for network connectivity testing (ping 8.8.8.8)
-#
-# REMOTE RESOURCES:
-#   - GitHub: https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/pi/builder.sh
-#   - Raspberry Pi Foundation: https://downloads.raspberrypi.org/
+#   WORKING DIRECTORIES:
+#     /mnt/lynx1/                      # Boot partition mount point
+#     /mnt/lynx2/                      # Root partition mount point
 #
 ################################################################################
 #
-# EXIT CODES:
-#   0 - Success
-#   1 - Error (various conditions with descriptive messages)
+# FIRST BOOT AUTOMATION SEQUENCE:
+#   The generated image implements the following startup automation:
 #
-# LOGGING:
-#   - All operations output to stdout/stderr
-#   - Progress indicators for downloads
-#   - Detailed error messages for troubleshooting
+#   1. NETWORK READINESS:
+#      - Displays system IP address information
+#      - Implements 60-second network initialization delay
+#      - Tests internet connectivity using ping to 8.8.8.8
+#
+#   2. LYNX DEPLOYMENT:
+#      - Downloads builder.sh from GitHub repository
+#      - Executes automatic Lynx node installation and configuration
+#      - Initiates blockchain synchronization process
+#
+#   3. CONNECTIVITY RESILIENCE:
+#      - Handles network failures gracefully with informative messages
+#      - Implements automatic retry mechanism (60-second intervals)
+#      - Provides user guidance for network troubleshooting
+#      - References documentation for additional help
 #
 ################################################################################
 #
-# WARNING:
-#   This script requires root privileges and performs system-level operations.
-#   Ensure you have sufficient disk space and are running on a compatible system.
-#   The script will modify mounted filesystems and create loop devices.
+# TROUBLESHOOTING GUIDE:
+#
+#   COMMON ISSUES AND SOLUTIONS:
+#     "No .img file found after extraction"
+#       → Check download integrity, verify internet connection
+#       → Ensure sufficient disk space for extraction
+#
+#     "Failed to mount partition"  
+#       → Clean up existing loop devices: losetup -D
+#       → Force unmount: umount -f /mnt/lynx1 /mnt/lynx2
+#       → Check if running with root privileges
+#
+#     "Invalid disk image format"
+#       → Verify downloaded file completeness
+#       → Check file type: file *.img
+#       → Re-download if corrupted
+#
+#     "Partition offset calculation failed"
+#       → Image may be corrupted or non-standard format
+#       → Try different source image
+#       → Check available disk space
+#
+#   DIAGNOSTIC COMMANDS:
+#     losetup -a                       # Show active loop devices
+#     mount | grep lynx                # Show mounted Lynx filesystems
+#     fdisk -l *.img                   # Analyze image partition structure
+#     file *.img                       # Verify image file type
+#     df -h                           # Check available disk space
+#
+################################################################################
+#
+# NETWORK DEPENDENCIES:
+#   - HTTPS access to github.com (builder.sh download during first boot)
+#   - HTTP/HTTPS access to downloads.raspberrypi.org (OS image downloads)
+#   - DNS resolution capability
+#   - ICMP connectivity for network testing (ping functionality)
+#
+# EXTERNAL RESOURCES:
+#   Primary: https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/pi/builder.sh
+#   Images: https://downloads.raspberrypi.org/raspios_lite_arm64/images/
+#   Docs: https://docs.getlynx.io/lynx-core/lynxci/iso-for-raspberry-pi
+#
+################################################################################
+#
+# EXIT CODES AND LOGGING:
+#   0 = Successful completion
+#   1 = Error condition (with descriptive error messages)
+#
+#   All operations provide detailed stdout/stderr output including:
+#   - Download progress indicators
+#   - Partition detection details  
+#   - Mount/unmount confirmations
+#   - Error context for troubleshooting
+#   - Final output file locations
+#
+################################################################################
+#
+# OPERATIONAL WARNINGS:
+#   ⚠️  This script requires root privileges for mounting operations
+#   ⚠️  Ensure adequate free disk space before running
+#   ⚠️  Loop devices will be created and managed automatically
+#   ⚠️  Existing files may be overwritten in working directory
+#   ⚠️  Internet connection required for image downloads
 #
 ################################################################################
 

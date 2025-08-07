@@ -360,9 +360,18 @@ std::map<CTxDestination, CAmount> GetAddressBalances(const CWallet& wallet)
                     continue;
                 if(!ExtractDestination(output.scriptPubKey, addr))
                     continue;
-
-                CAmount n = wallet.IsSpent(COutPoint(walletEntry.first, i)) ? 0 : output.nValue;
-                balances[addr] += n;
+            
+                // Special handling for coinstake transactions - same logic as CachedTxGetAmounts
+                if (wtx.IsCoinStake()) {
+                    // For coinstake, only add outputs as received (rewards/splits), not as sent
+                    if (!wallet.IsSpent(COutPoint(walletEntry.first, i))) {
+                        balances[addr] += output.nValue;
+                    }
+                } else {
+                    // Standard transaction logic
+                    CAmount n = wallet.IsSpent(COutPoint(walletEntry.first, i)) ? 0 : output.nValue;
+                    balances[addr] += n;
+                }
             }
         }
     }
