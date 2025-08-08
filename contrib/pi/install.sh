@@ -226,7 +226,7 @@ show_lynx_motd() {
     echo ""
     WorkingDirectory=/var/lib/lynx
     # Count stakes won in the last 24 hours
-    stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '24 hours ago' '+%Y-%m-%d')" | wc -l)
+    stakes_won=$(lynx-cli listtransactions "*" 1000 0 true | jq --argjson since $(date -d '24 hours ago' +%s) '[.[] | select(.category == "stake" and .time >= $since)] | group_by(.txid) | length')
     if [ -z "$stakes_won" ] || [ "$stakes_won" = "0" ]; then
         stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date '+%Y-%m-%d')" | wc -l)
     fi
@@ -259,7 +259,7 @@ show_lynx_motd() {
     yield_spacing=$(printf '%*s' "$spaces_needed" '')
 
     # Count stakes won in the last 7 days
-    stakes_won_7d=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '7 days ago' '+%Y-%m-%d')" | wc -l)
+    stakes_won_7d=$(lynx-cli listtransactions "*" 2000 0 true | jq --argjson since $(date -d '7 days ago' +%s) '[.[] | select(.category == "stake" and .time >= $since)] | group_by(.txid) | length')
     if [ -z "$stakes_won_7d" ] || [ "$stakes_won_7d" = "0" ]; then
         # Try to get stakes from the last 7 days by checking each day
         stakes_won_7d=0

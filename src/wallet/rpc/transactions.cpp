@@ -324,7 +324,31 @@ static void ListTransactions(const CWallet& wallet, const CWalletTx& wtx, int nM
     std::list<COutputEntry> listReceived;
     std::list<COutputEntry> listSent;
 
-    CachedTxGetAmounts(wallet, wtx, listReceived, listSent, nFee, filter_ismine, include_change);
+    // Special handling for coinstake transactions to avoid "Unknown transaction type" warnings
+    if (wtx.IsCoinStake()) {
+        // For coinstake transactions, manually build received list to avoid ExtractDestination() issues
+        nFee = 0; // Coinstake transactions don't have traditional fees
+        // Only populate listReceived for coinstake - no "sent" entries needed
+        for (unsigned int i = 1; i < wtx.tx->vout.size(); ++i) { // Skip vout[0] (empty marker)
+            const CTxOut& txout = wtx.tx->vout[i];
+            isminetype fIsMine = wallet.IsMine(txout);
+            if (fIsMine & filter_ismine) {
+                CTxDestination address;
+                if (ExtractDestination(txout.scriptPubKey, address) || txout.scriptPubKey.IsUnspendable()) {
+                    // Only add to listReceived if we can extract destination or it's unspendable
+                    if (!txout.scriptPubKey.IsUnspendable()) {
+                        listReceived.push_back({address, txout.nValue, (int)i});
+                    }
+                } else {
+                    // Handle problematic scriptPubKey by using CNoDestination
+                    listReceived.push_back({CNoDestination(), txout.nValue, (int)i});
+                }
+            }
+        }
+    } else {
+        // Standard transaction processing
+        CachedTxGetAmounts(wallet, wtx, listReceived, listSent, nFee, filter_ismine, include_change);
+    }
 
     bool involvesWatchonly = CachedTxIsFromMe(wallet, wtx, ISMINE_WATCH_ONLY);
 
