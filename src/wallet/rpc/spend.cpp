@@ -23,6 +23,61 @@
 
 
 namespace wallet {
+
+void get_number_of_immature_coins (CWallet* wallet, int& pintNumberOfImmatureUTXOs)
+{
+
+    int suitable_inputs = 0;
+    
+    pintNumberOfImmatureUTXOs = 0;
+
+    std::vector<COutput> vCoins;
+    {
+        LOCK(wallet->cs_wallet);
+        auto res = AvailableCoins(*wallet);
+        for (auto entry : res.All()) {
+            vCoins.push_back(entry);
+        }
+    }
+
+    for (const auto& output : vCoins) {
+        const auto& txout = output.txout;
+        {
+
+            LogPrint (BCLog::ALL, "Satoshis: %d\n", output.txout.nValue);
+
+            LOCK(wallet->cs_wallet);
+
+            COutPoint kernel(output.outpoint);
+            if (wallet->IsLockedCoin(kernel)) {
+                continue;
+            }
+
+            isminetype mine = wallet->IsMine(txout);
+            if (!(mine & ISMINE_SPENDABLE)) {
+                continue;
+            }
+
+            const CWalletTx* wtx = wallet->GetWalletTx(output.outpoint.hash);
+            int depth = wallet->GetTxDepthInMainChain(*wtx);
+            if (depth < COINBASE_MATURITY) {
+
+pintNumberOfImmatureUTXOs++;
+
+                continue;
+            }
+
+            if (output.txout.nValue < 1 * COIN) {
+                continue;
+            }
+            ++suitable_inputs;
+        }
+    }
+
+}
+
+
+
 static void ParseRecipients(const UniValue& address_amounts, const UniValue& subtract_fee_outputs, std::vector<CRecipient>& recipients)
 {
     std::set<CTxDestination> destinations;
@@ -305,6 +360,16 @@ RPCHelpMan sendtoaddress()
     std::vector<CRecipient> recipients;
     ParseRecipients(address_amounts, subtractFeeFromAmount, recipients);
     const bool verbose{request.params[10].isNull() ? false : request.params[10].get_bool()};
+
+
+
+int intNumberOfImatureUTXOs;
+get_number_of_immature_coins(pwallet.get(), intNumberOfImatureUTXOs);
+if (intNumberOfImatureUTXOs > 0) {
+    return "Failure: immature UTXOs exist.";
+}
+
+
 
     return SendMoney(*pwallet, coin_control, recipients, mapValue, verbose);
 },
