@@ -24,13 +24,12 @@
 
 namespace wallet {
 
-void get_number_of_immature_coins (CWallet* wallet, int& pintNumberOfImmatureUTXOs)
+/*
+void get_min_depth (CWallet* wallet, int& pintMinDepth)
 {
 
     int suitable_inputs = 0;
     
-    pintNumberOfImmatureUTXOs = 0;
-
     std::vector<COutput> vCoins;
     {
         LOCK(wallet->cs_wallet);
@@ -39,6 +38,8 @@ void get_number_of_immature_coins (CWallet* wallet, int& pintNumberOfImmatureUTX
             vCoins.push_back(entry);
         }
     }
+
+    pintMinDepth = 30;
 
     for (const auto& output : vCoins) {
         const auto& txout = output.txout;
@@ -60,9 +61,11 @@ void get_number_of_immature_coins (CWallet* wallet, int& pintNumberOfImmatureUTX
 
             const CWalletTx* wtx = wallet->GetWalletTx(output.outpoint.hash);
             int depth = wallet->GetTxDepthInMainChain(*wtx);
-            if (depth < COINBASE_MATURITY) {
+            if (wtx && wtx->IsCoinStake() && depth < COINBASE_MATURITY) {
 
-pintNumberOfImmatureUTXOs++;
+if (depth < pintMinDepth) {
+    pintMinDepth = depth;
+}
 
                 continue;
             }
@@ -74,6 +77,121 @@ pintNumberOfImmatureUTXOs++;
         }
     }
 
+}
+
+*/
+
+// Get min UTXO depth
+void fncGetMinUTXODeprh (CWallet* iwltWallet, int& ointMinUTXODeoth)
+{
+
+    // Initialize min UTXO depth
+    ointMinUTXODeoth = 30;
+
+    // Coins
+    std::vector<COutput> vctCoins;
+
+    // Lock scope
+    {
+
+        // Lock wallet
+        LOCK(iwltWallet->cs_wallet);
+
+        // Get a available coins
+        auto res = AvailableCoins(*iwltWallet);
+
+        // Traverse available coins
+        for (auto entry : res.All()) {
+
+            // Get coin
+            vctCoins.push_back(entry);
+
+        // End traverse available coins
+        }
+
+    // Unlock wallet
+    }
+
+    // Traverse coins 
+    for (const auto& output : vctCoins) {
+
+        // Get coin output
+        const auto& txout = output.txout;
+
+        // Lock scope
+        {
+
+            // Report coin value
+            LogPrint (BCLog::ALL, "Satoshis: %d\n", output.txout.nValue);
+
+            // Lock wallet
+            LOCK(iwltWallet->cs_wallet);
+
+            // Get outpoint 
+            COutPoint optOutpoint (output.outpoint);
+
+            // If locked
+            if (iwltWallet->IsLockedCoin(optOutpoint)) {
+
+                // Continue
+                continue;
+
+            // End if locked
+            }
+
+            // Get mine
+            isminetype mneMine = iwltWallet->IsMine(txout);
+
+            // If not (mine and spendable)
+            if (!(mneMine & ISMINE_SPENDABLE)) {
+
+                // Continue
+                continue;
+
+            // End if not (mine and spendable)
+            }
+
+            // Get wallet transaction
+            const CWalletTx* wtxWalletTransaction = iwltWallet->GetWalletTx(output.outpoint.hash);
+
+            // Get depth
+            int intDepth = iwltWallet->GetTxDepthInMainChain(*wtxWalletTransaction);
+
+            // If depth < 30
+            if ((intDepth < COINBASE_MATURITY) && (wtxWalletTransaction && wtxWalletTransaction->IsCoinStake())) {
+            // if (intDepth < COINBASE_MATURITY) {
+
+// If depth < min depth
+if (intDepth < ointMinUTXODeoth) {
+
+    // Set min depth
+    ointMinUTXODeoth = intDepth;
+
+// End if depth < min depth
+}
+
+                // Continue
+                continue;
+
+            // End if depth < 30
+            }
+
+            // If coin < 1 lynx
+            if (output.txout.nValue < 1 * COIN) {
+
+                // Continue
+                continue;
+
+            // End if coin < 1 lynx
+            }
+
+        // Unlock wallet
+        }
+
+    // End traverse coins
+    }
+
+// End get min UTXO depth
 }
 
 
@@ -363,10 +481,16 @@ RPCHelpMan sendtoaddress()
 
 
 
-int intNumberOfImatureUTXOs;
-get_number_of_immature_coins(pwallet.get(), intNumberOfImatureUTXOs);
-if (intNumberOfImatureUTXOs > 0) {
-    return "Failure: immature UTXOs exist.";
+int chain_tip_height = pwallet->chain().getHeight().value_or(-1);
+
+
+
+int intMinDepth;
+fncGetMinUTXODeprh (pwallet.get(), intMinDepth);
+if (intMinDepth < 30) {
+    int intBlockNumber = (30 - intMinDepth) + chain_tip_height;
+    std::string strReply = "Staking rewards still maturing - send functions will unlock in " + std::to_string((30 - intMinDepth)) + " block(s) (block " + std::to_string(intBlockNumber) + ") once your staked coins have completed their required cooling period. Tip: Disable staking to avoid earning new coins that extend the cooling period.";
+    return strReply;
 }
 
 
