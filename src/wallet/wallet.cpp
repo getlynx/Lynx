@@ -1270,23 +1270,32 @@ bool CWallet::AbandonTransaction(const uint256& hashTx)
 {
     LOCK(cs_wallet);
 
+    LogPrint(BCLog::WALLETDB, "AbandonTransaction called for tx: %s\n", hashTx.ToString());
+
     // Can't mark abandoned if confirmed or in mempool
     auto it = mapWallet.find(hashTx);
-    assert(it != mapWallet.end());
+    if (it == mapWallet.end()) {
+        LogPrint(BCLog::WALLETDB, "  Transaction not found in wallet\n");
+        assert(false);
+    }
     const CWalletTx& origtx = it->second;
+    LogPrint(BCLog::WALLETDB, "  Found tx in wallet. Confirmed: %s, InMempool: %s\n", origtx.isConfirmed() ? "true" : "false", origtx.InMempool() ? "true" : "false");
     if (GetTxDepthInMainChain(origtx) != 0 || origtx.InMempool()) {
+        LogPrint(BCLog::WALLETDB, "  Transaction is confirmed or in mempool. Cannot abandon.\n");
         return false;
     }
 
     auto try_updating_state = [](CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet) {
-        // If the orig tx was not in block/mempool, none of its spends can be.
+        LogPrint(BCLog::WALLETDB, "    try_updating_state for tx: %s\n", wtx.GetHash().ToString());
         assert(!wtx.isConfirmed());
         assert(!wtx.InMempool());
-        // If already conflicted or abandoned, no need to set abandoned
+        LogPrint(BCLog::WALLETDB, "      Conflicted: %s, Abandoned: %s\n", wtx.isConflicted() ? "true" : "false", wtx.isAbandoned() ? "true" : "false");
         if (!wtx.isConflicted() && !wtx.isAbandoned()) {
+            LogPrint(BCLog::WALLETDB, "      Marking tx as abandoned\n");
             wtx.m_state = TxStateInactive{/*abandoned=*/true};
             return TxUpdate::NOTIFY_CHANGED;
         }
+        LogPrint(BCLog::WALLETDB, "      No state change needed\n");
         return TxUpdate::UNCHANGED;
     };
 
@@ -1298,6 +1307,7 @@ bool CWallet::AbandonTransaction(const uint256& hashTx)
 
     RecursiveUpdateTxState(hashTx, try_updating_state);
 
+    LogPrint(BCLog::WALLETDB, "AbandonTransaction completed for tx: %s\n", hashTx.ToString());
     return true;
 }
 
@@ -1435,9 +1445,13 @@ void CWallet::blockConnected(const interfaces::BlockInfo& block)
 
     m_last_block_processed_height = block.height;
     m_last_block_processed = block.hash;
+
+    LogPrint(BCLog::WALLETDB, "BLOCK CONNECTED: Height %d, Hash %s, Transactions: %zu\n", block.height, block.hash.ToString().substr(0, 16), block.data->vtx.size());
     for (size_t index = 0; index < block.data->vtx.size(); index++) {
-        SyncTransaction(block.data->vtx[index], TxStateConfirmed{block.hash, block.height, static_cast<int>(index)});
-        transactionRemovedFromMempool(block.data->vtx[index], MemPoolRemovalReason::BLOCK);
+        const CTransactionRef& tx = block.data->vtx[index];
+        LogPrint(BCLog::WALLETDB, "  Processing transaction: %s (IsCoinStake: %s)\n", tx->GetHash().ToString().substr(0, 16), tx->IsCoinStake() ? "true" : "false");
+        SyncTransaction(tx, TxStateConfirmed{block.hash, block.height, static_cast<int>(index)});
+        transactionRemovedFromMempool(tx, MemPoolRemovalReason::BLOCK);
     }
 }
 
@@ -1445,6 +1459,10 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
 {
     assert(block.data);
     LOCK(cs_wallet);
+
+    LogPrint(BCLog::WALLETDB, "CWallet::blockDisconnected called. Height %d, Hash %s\n", block.height, block.hash.ToString().substr(0, 16));
+    LogPrint(BCLog::WALLETDB, "BLOCK DISCONNECTED: Height %d, Hash %s, Transactions: %zu\n", 
+             block.height, block.hash.ToString().substr(0, 16), Assert(block.data)->vtx.size());
 
     // At block disconnection, this will change an abandoned transaction to
     // be unconfirmed, whether or not the transaction is added back to the mempool.
@@ -1454,8 +1472,74 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
     m_last_block_processed = *Assert(block.prev_hash);
 
     int disconnect_height = block.height;
+    int wallet_tx_count = 0;
+    int confirmed_tx_count = 0;
+    int coinstake_tx_count = 0;
+    int spend_entries_removed = 0;
 
     for (const CTransactionRef& ptx : Assert(block.data)->vtx) {
+        const uint256 tx_hash = ptx->GetHash();
+        
+        // LogPrint(BCLog::WALLETDB, "  Processing transaction: %s (IsCoinStake: %s)\n", 
+        //         tx_hash.ToString().substr(0, 16), ptx->IsCoinStake() ? "true" : "false");
+        
+        // Check if this transaction is in our wallet
+        auto wallet_it = mapWallet.find(tx_hash);
+        if (wallet_it != mapWallet.end()) {
+            wallet_tx_count++;
+            CWalletTx& wtx = wallet_it->second;
+            
+            // LogPrint(BCLog::WALLETDB, "    Found in wallet - Confirmed: %s, Cached: %s\n", 
+            //         wtx.isConfirmed() ? "true" : "false", wtx.fChangeCached ? "true" : "false");
+            
+            // For orphaned transactions, we need to restore their inputs
+            if (wtx.isConfirmed()) {
+                confirmed_tx_count++;
+                // LogPrint(BCLog::WALLETDB, "    Processing confirmed orphaned transaction: %s\n", 
+                //         tx_hash.ToString().substr(0, 16));
+                
+                // Clear cached credit amounts to force recalculation
+                wtx.fChangeCached = false;
+                // LogPrint(BCLog::WALLETDB, "      Cleared cached credit\n");
+                
+                // Mark transaction as dirty to force balance recalculation
+                wtx.MarkDirty();
+                // LogPrint(BCLog::WALLETDB, "      Marked transaction as dirty\n");
+                
+                // For coinstake transactions, we need to be extra careful
+                if (ptx->IsCoinStake()) {
+                    coinstake_tx_count++;
+                    // LogPrint(BCLog::WALLETDB, "      Processing coinstake transaction - Inputs: %zu\n", ptx->vin.size());
+                    
+                    // Remove from spend tracking to restore inputs
+                    for (const CTxIn& txin : ptx->vin) {
+                        // LogPrint(BCLog::WALLETDB, "        Processing input: %s:%d\n", 
+                        //          txin.prevout.hash.ToString().substr(0, 16), txin.prevout.n);
+                        
+                        // Find and remove this spend entry
+                        auto spend_range = mapTxSpends.equal_range(txin.prevout);
+                        int entries_found = std::distance(spend_range.first, spend_range.second);
+                        // LogPrint(BCLog::WALLETDB, "          Found %d spend entries for this input\n", entries_found);
+                        
+                        for (auto it = spend_range.first; it != spend_range.second;) {
+                            if (it->second == tx_hash) {
+                                // LogPrint(BCLog::WALLETDB, "          Removing spend entry for tx: %s\n", 
+                                //         it->second.ToString().substr(0, 16));
+                                it = mapTxSpends.erase(it);
+                                spend_entries_removed++;
+                            } else {
+                                // LogPrint(BCLog::WALLETDB, "          Keeping spend entry for other tx: %s\n", 
+                                //          it->second.ToString().substr(0, 16));
+                                ++it;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // LogPrint(BCLog::WALLETDB, "    Not found in wallet\n");
+        }
+        
         SyncTransaction(ptx, TxStateInactive{});
 
         for (const CTxIn& tx_in : ptx->vin) {
@@ -1483,6 +1567,9 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
             }
         }
     }
+    
+    //LogPrint(BCLog::WALLETDB, "BLOCK DISCONNECTED SUMMARY: Wallet transactions: %d, Confirmed: %d, Coinstake: %d, Spend entries removed: %d\n", 
+    //         wallet_tx_count, confirmed_tx_count, coinstake_tx_count, spend_entries_removed);
 }
 
 void CWallet::updatedBlockTip()
@@ -1601,6 +1688,21 @@ bool CWallet::CanGetAddresses(bool internal) const
         }
     }
     return false;
+}
+
+void CWallet::AbandonOrphanedCoinstakes()
+{
+    for (std::pair<const uint256, CWalletTx>& item : mapWallet) {
+        const uint256& wtxid = item.first;
+        CWalletTx& wtx = item.second;
+        assert(wtx.GetHash() == wtxid);
+    if (GetTxDepthInMainChain(wtx) == 0 && !wtx.isAbandoned() && wtx.IsCoinStake()) {
+            LogPrint(BCLog::WALLETDB, "Abandoning coinstake wtx %s\n", wtx.GetHash().ToString());
+            if (!AbandonTransaction(wtxid)) {
+                LogPrint(BCLog::WALLETDB, "Failed to abandon coinstake tx %s\n", wtx.GetHash().ToString());
+            }
+        }
+    }
 }
 
 void CWallet::SetWalletFlag(uint64_t flags)
@@ -1805,6 +1907,8 @@ bool CWallet::ImportScriptPubKeys(const std::string& label, const std::set<CScri
     }
     return true;
 }
+
+
 
 /**
  * Scan active chain for relevant transactions after importing keys. This should
@@ -2107,14 +2211,17 @@ void CWallet::ResubmitWalletTransactions(bool relay, bool force)
             if (!force && wtx.nTimeReceived > m_best_block_time - 5 * 60) continue;
             to_submit.insert(&wtx);
         }
+        LogPrint(BCLog::WALLETDB, "ResubmitWalletTransactions: Preparing to resubmit %zu unconfirmed transactions\n", to_submit.size());
         // Now try submitting the transactions to the memory pool and (optionally) relay them.
         for (auto wtx : to_submit) {
+            LogPrint(BCLog::WALLETDB, "  Resubmitting tx: %s (IsCoinStake: %s)\n", wtx->GetHash().ToString().substr(0, 16), wtx->tx->IsCoinStake() ? "true" : "false");
             std::string unused_err_string;
             if (SubmitTxMemoryPoolAndRelay(*wtx, unused_err_string, relay)) ++submitted_tx_count;
         }
     } // cs_wallet
 
     if (submitted_tx_count > 0) {
+        LogPrint(BCLog::WALLETDB, "ResubmitWalletTransactions: submitted_tx_count > 0, resubmitted %u unconfirmed transactions\n", submitted_tx_count);
         WalletLogPrintf("%s: resubmit %u unconfirmed transactions\n", __func__, submitted_tx_count);
     }
 }

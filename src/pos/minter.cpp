@@ -230,6 +230,7 @@ bool SignBlock(CBlock& block, CBlockIndex* pindexPrev, wallet::CWallet* wallet, 
 
     CAmount nFees = 0;
     CMutableTransaction txCoinStake;
+    wallet->AbandonOrphanedCoinstakes();
     if (CreateCoinStake(wallet, pindexPrev, block.nBits, nSearchTime, nHeight, nFees, txCoinStake, key, chain_state)) {
         LogPrint(BCLog::POS, "%s: Kernel found.\n", __func__);
 
