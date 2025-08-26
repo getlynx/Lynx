@@ -2144,7 +2144,7 @@ static RPCHelpMan capacity()
             estimate_coins_for_opreturn(vctWallets.front().get(), intNumberOfSuitableInputs);
 
             // Set capacity in KB
-            uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1000;
+            uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1024;
 
             // capacity
             unvEntry.pushKV("capacity (KB)", u32Capacity);
