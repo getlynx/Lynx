@@ -88,6 +88,10 @@ bool blnfncCheckStakeKernelHash (
     // Log flag
     bool iblnLogFlag) {
     
+    // Verbose logging for function entry
+    LogPrint(BCLog::POS, "blnfncCheckStakeKernelHash: Entered for block height %d, difficulty 0x%x, UTXO time %u, stake amount %lld, outpoint %s:%d, candidate time %u\n", 
+        ibliCurrentBlock ? ibliCurrentBlock->nHeight : -1, icmpDifficulty, icmpUTXOBlockTime, (long long)imntStakeAmount, ioptStakeOutpoint.hash.ToString(), ioptStakeOutpoint.n, icmpCandidateBlockTime);
+    
     // Consensus variables
     const Consensus::Params& cnsConsensusVariables = Params().GetConsensus();
 
@@ -213,27 +217,30 @@ bool blnfncCheckStakeKernelHash (
 // Ckeck kernel
 bool blnfncCheckKernel(Chainstate& chnChainState, const CBlockIndex* ibliCurrentBlock, unsigned int icmpDifficulty, int64_t icmpCandidateBlockTime, const COutPoint& ioptStakeOutpoint, int64_t* ocmpUTXOBlockTime)
 {
+    LogPrint(BCLog::POS, "blnfncCheckKernel: Starting kernel check for block height %d, outpoint %s:%d\n", ibliCurrentBlock ? ibliCurrentBlock->nHeight : -1, ioptStakeOutpoint.hash.ToString(), ioptStakeOutpoint.n);
+
     uint256 u25ProofOfStakeHash, u25WeightedDifficulty;
 
     // Stake coin
     Coin coiStakeCoin;
     {
         LOCK(::cs_main);
-
-        // Get stake coin
+        LogPrint(BCLog::POS, "blnfncCheckKernel: Attempting to fetch stake coin for outpoint %s:%d\n", ioptStakeOutpoint.hash.ToString(), ioptStakeOutpoint.n);
         if (!chnChainState.CoinsTip().GetCoin(ioptStakeOutpoint, coiStakeCoin)) {
+            LogPrint(BCLog::POS, "blnfncCheckKernel: Stake outpoint not found\n");
             return error("%s: stake outpoint not found", __func__);
         }
     }
 
-    // If stake coin spent
     if (coiStakeCoin.IsSpent()) {
+        LogPrint(BCLog::POS, "blnfncCheckKernel: Stake outpoint is spent\n");
         return error("%s: stake outpoint is spent", __func__);
     }
 
     // Get stake block
     CBlockIndex* bliStakeBlock = chnChainState.m_chain[coiStakeCoin.nHeight];
     if (!bliStakeBlock) {
+        LogPrint(BCLog::POS, "blnfncCheckKernel: Stake block not found for coin height %d\n", coiStakeCoin.nHeight);
         return false;
     }
 
@@ -242,19 +249,21 @@ bool blnfncCheckKernel(Chainstate& chnChainState, const CBlockIndex* ibliCurrent
 
     // Set stake depth
     int intStakeDepth = ibliCurrentBlock->nHeight - coiStakeCoin.nHeight;
-
-    // If required depth > stake depth
+    LogPrint(BCLog::POS, "blnfncCheckKernel: Stake depth %d, required depth %d\n", intStakeDepth, intRequiredDepth);
     if (intRequiredDepth > intStakeDepth) {
+        LogPrint(BCLog::POS, "blnfncCheckKernel: Stake depth insufficient\n");
         return false;
     }
 
     // Get UTXO time
     if (ocmpUTXOBlockTime) {
         *ocmpUTXOBlockTime = bliStakeBlock->GetBlockTime();
+        LogPrint(BCLog::POS, "blnfncCheckKernel: UTXO block time set to %lld\n", (long long)*ocmpUTXOBlockTime);
     }
 
     // Set stake amount
     CAmount mntStakeAmount = coiStakeCoin.out.nValue;
+    LogPrint(BCLog::POS, "blnfncCheckKernel: Stake amount is %lld\n", mntStakeAmount);
 
     // Check stake kernel hash
     return blnfncCheckStakeKernelHash(ibliCurrentBlock, icmpDifficulty, *ocmpUTXOBlockTime,
@@ -271,12 +280,12 @@ bool blnfncCheckProofOfStake(
     uint256& ou25ProofOfStakeHash,        
     uint256& ou25WeightedDifficulty)      
 {
-
-    // auto& pblocktree { chain_state.m_blockman.m_block_tree_db };
+    LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Starting PoS validation for block height %d, txid %s\n", ibliCurrentBlock ? ibliCurrentBlock->nHeight : -1, itxnStakeTransaction.GetHash().ToString());
 
     // If coin stake or no inputs
     if (!itxnStakeTransaction.IsCoinStake() || itxnStakeTransaction.vin.size() < 1) {
         LogPrintf("ERROR: %s: malformed-txn %s\n", __func__, itxnStakeTransaction.GetHash().ToString());
+        LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Transaction is not coinstake or has no inputs\n");
         return false;
     }
 
@@ -284,6 +293,7 @@ bool blnfncCheckProofOfStake(
 
     // Stake transaction input
     const CTxIn& txiStakeTransactionInput = itxnStakeTransaction.vin[0];
+    LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Using input prevout %s:%d\n", txiStakeTransactionInput.prevout.hash.ToString(), txiStakeTransactionInput.prevout.n);
 
     // UTXO block time
     uint32_t cmpUTXOBlockTime;    
@@ -300,17 +310,16 @@ bool blnfncCheckProofOfStake(
     // Stake coin 
     Coin coiStakeCoin;
 
-    // If not coin || spent 
     if (!chain_state.CoinsTip().GetCoin(txiStakeTransactionInput.prevout, coiStakeCoin) || coiStakeCoin.IsSpent()) {
-        return false;  
+        LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Coin not found or spent for input\n");
+        return false;
     }
 
     // Set stake block
     CBlockIndex* bliStakeBlock = chain_state.m_chain[coiStakeCoin.nHeight];
-
-    // If No stake block
     if (!bliStakeBlock) {
-        return false; 
+        LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Stake block not found for coin height %d\n", coiStakeCoin.nHeight);
+        return false;
     }
 
     // Set stake depth
@@ -318,20 +327,16 @@ bool blnfncCheckProofOfStake(
 
     // Set required depth
     int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(ibliCurrentBlock->nHeight / 2));
-
-    // If required depth > stake depth
+    LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Stake depth %d, required depth %d\n", intStakeDepth, nRequiredDepth);
     if (nRequiredDepth > intStakeDepth) {
-        return false;  
+        LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Stake depth insufficient\n");
+        return false;
     }
 
-    // Get scriptPubKey
-    scrScriptPubKey = coiStakeCoin.out.scriptPubKey;      
-
-    // Get stake amount
-    mntStakeAmount = coiStakeCoin.out.nValue;                   
-
-    // Get UTXO block time
-    cmpUTXOBlockTime = bliStakeBlock->GetBlockTime();    
+    scrScriptPubKey = coiStakeCoin.out.scriptPubKey;
+    mntStakeAmount = coiStakeCoin.out.nValue;
+    cmpUTXOBlockTime = bliStakeBlock->GetBlockTime();
+    LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Stake amount %lld, UTXO block time %u\n", mntStakeAmount, cmpUTXOBlockTime);
 
     // Get sciptSig
     const CScript& scrScriptSig = txiStakeTransactionInput.scriptSig;
@@ -347,16 +352,20 @@ bool blnfncCheckProofOfStake(
     // If invalid script
     if (!VerifyScript(scrScriptSig, scrScriptPubKey, scwScriptWitness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&itxnStakeTransaction, 0, mntStakeAmount, MissingDataBehavior::FAIL), &sceScriptError)) {
         LogPrintf("ERROR: %s: verify-script-failed, txn %s, reason %s\n", __func__, itxnStakeTransaction.GetHash().ToString(), ScriptErrorString(sceScriptError));
+        LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Script verification failed\n");
         return false;
     }
 
-    // Check stake kernel hash
+    LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Script verified successfully\n");
+
     if (!blnfncCheckStakeKernelHash (ibliCurrentBlock, icmpDifficulty, cmpUTXOBlockTime,
             mntStakeAmount, txiStakeTransactionInput.prevout, icmpCandidateBlockTime, ou25ProofOfStakeHash, ou25WeightedDifficulty, LogAcceptCategory(BCLog::POS, BCLog::Level::Debug))) {
         LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, proof of stake hash=%s\n", __func__, itxnStakeTransaction.GetHash().ToString(), ou25ProofOfStakeHash.ToString());
+        LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Kernel check failed\n");
         return false;
     }
 
+    LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Kernel check passed, PoS validation successful\n");
     return true;
 }
 
@@ -368,25 +377,32 @@ bool blnfncCheckProofOfStake(
 static double GetDifficulty(const CBlockIndex* blockindex)
 {
     CHECK_NONFATAL(blockindex);
+    LogPrint(BCLog::POS, "GetDifficulty: Calculating difficulty for block at height %d, nBits: 0x%x\n", blockindex->nHeight, blockindex->nBits);
 
     int nShift = (blockindex->nBits >> 24) & 0xff;
+    LogPrint(BCLog::POS, "GetDifficulty: Initial nShift value: %d\n", nShift);
     double dDiff = (double)0x0000ffff / (double)(blockindex->nBits & 0x00ffffff);
+    LogPrint(BCLog::POS, "GetDifficulty: Initial dDiff value: %f\n", dDiff);
 
     while (nShift < 29) {
         dDiff *= 256.0;
         nShift++;
+        LogPrint(BCLog::POS, "GetDifficulty: Increasing nShift to %d, dDiff now %f\n", nShift, dDiff);
     }
     while (nShift > 29) {
         dDiff /= 256.0;
         nShift--;
+        LogPrint(BCLog::POS, "GetDifficulty: Decreasing nShift to %d, dDiff now %f\n", nShift, dDiff);
     }
 
+    LogPrint(BCLog::POS, "GetDifficulty: Final difficulty for block at height %d is %f\n", blockindex->nHeight, dDiff);
     return dDiff;
 }
 
 double GetPoSKernelPS(CBlockIndex* pindex)
 {
     LOCK(cs_main);
+    LogPrint(BCLog::POS, "GetPoSKernelPS: Calculating proof-of-stake kernel per second for height %d\n", pindex->nHeight);
 
     CBlockIndex* pindexPrevStake = nullptr;
 
@@ -399,9 +415,11 @@ double GetPoSKernelPS(CBlockIndex* pindex)
     while (pindex && nStakesHandled < nPoSInterval) {
         if (pindex->IsProofOfStake()) {
             if (pindexPrevStake) {
-                dStakeKernelsTriedAvg += GetDifficulty(pindexPrevStake) * 4294967296.0;
+                double difficulty = GetDifficulty(pindexPrevStake);
+                dStakeKernelsTriedAvg += difficulty * 4294967296.0;
                 nStakesTime += pindexPrevStake->nTime - pindex->nTime;
                 nStakesHandled++;
+                LogPrint(BCLog::POS, "GetPoSKernelPS: Processed stake block at height %d, difficulty: %f\n", pindex->nHeight, difficulty);
             }
             pindexPrevStake = pindex;
         }
@@ -412,9 +430,13 @@ double GetPoSKernelPS(CBlockIndex* pindex)
 
     if (nStakesTime) {
         result = dStakeKernelsTriedAvg / nStakesTime;
+        LogPrint(BCLog::POS, "GetPoSKernelPS: Calculated base rate: %f kernels/sec from %d stakes over %d seconds\n", result, nStakesHandled, nStakesTime);
+    } else {
+        LogPrint(BCLog::POS, "GetPoSKernelPS: No stake time available, returning 0\n");
     }
 
     result *= nStakeTimestampMask + 1;
+    LogPrint(BCLog::POS, "GetPoSKernelPS: Final adjusted rate: %f kernels/sec (mask multiplier: %d)\n", result, nStakeTimestampMask + 1);
 
     return result;
 }
@@ -428,29 +450,39 @@ double GetPoSKernelPS(CBlockIndex* pindex)
  */
 uint256 ComputeStakeModifier(const CBlockIndex* pindexPrev, const uint256& kernel)
 {
-    if (!pindexPrev)
+    if (!pindexPrev) {
+        LogPrint(BCLog::POS, "ComputeStakeModifier: Genesis block - returning zero modifier\n");
         return uint256(); // genesis block's modifier is 0
+    }
 
+    LogPrint(BCLog::POS, "ComputeStakeModifier: Computing new stake modifier from kernel %s and previous modifier\n", kernel.ToString());
     CDataStream ss(SER_GETHASH, 0);
     ss << kernel << pindexPrev->nStakeModifier;
-    return Hash(ss);
+    uint256 newModifier = Hash(ss);
+    LogPrint(BCLog::POS, "ComputeStakeModifier: New stake modifier: %s\n", newModifier.ToString());
+    return newModifier;
 }
 
 // Check whether the coinstake timestamp meets protocol
 bool CheckCoinStakeTimestamp(int64_t nTimeBlock)
 {
-    return (nTimeBlock & nStakeTimestampMask) == 0;
+    bool isValid = (nTimeBlock & nStakeTimestampMask) == 0;
+    LogPrint(BCLog::POS, "CheckCoinStakeTimestamp: Time %d mask check: %s (mask: %d)\n", nTimeBlock, isValid ? "VALID" : "INVALID", nStakeTimestampMask);
+    return isValid;
 }
 
 bool AddToMapStakeSeen(const COutPoint& kernel, const uint256& blockHash)
 {
     // Overwrites existing values
+    LogPrint(BCLog::POS, "AddToMapStakeSeen: Recording stake kernel %s:%d for block %s\n", kernel.hash.ToString(), kernel.n, blockHash.ToString());
 
     std::pair<std::map<COutPoint, uint256>::iterator, bool> ret;
     ret = mapStakeSeen.insert(std::pair<COutPoint, uint256>(kernel, blockHash));
     if (ret.second == false) { // existing element
+        LogPrint(BCLog::POS, "AddToMapStakeSeen: Kernel already exists, updating block hash from %s to %s\n", ret.first->second.ToString(), blockHash.ToString());
         ret.first->second = blockHash;
     } else {
+        LogPrint(BCLog::POS, "AddToMapStakeSeen: New kernel added to tracking list (total: %d)\n", listStakeSeen.size() + 1);
         listStakeSeen.push_back(kernel);
     }
 
@@ -460,7 +492,12 @@ bool AddToMapStakeSeen(const COutPoint& kernel, const uint256& blockHash)
 bool CheckStakeUnused(const COutPoint& kernel)
 {
     std::map<COutPoint, uint256>::const_iterator mi = mapStakeSeen.find(kernel);
-    return (mi == mapStakeSeen.end());
+    bool unused = (mi == mapStakeSeen.end());
+    LogPrint(BCLog::POS, "CheckStakeUnused: Kernel %s:%d is %s\n", kernel.hash.ToString(), kernel.n, unused ? "UNUSED (available)" : "USED (already staked)");
+    if (!unused && mi != mapStakeSeen.end()) {
+        LogPrint(BCLog::POS, "CheckStakeUnused: Kernel was used in block %s\n", mi->second.ToString());
+    }
+    return unused;
 }
 
 bool CheckStakeUnique(const CBlock& block, bool fUpdate)
@@ -469,21 +506,28 @@ bool CheckStakeUnique(const CBlock& block, bool fUpdate)
 
     uint256 blockHash = block.GetHash();
     const COutPoint& kernel = block.vtx[0]->vin[0].prevout;
+    LogPrint(BCLog::POS, "CheckStakeUnique: Checking uniqueness of kernel %s:%d for block %s (update: %s)\n", 
+             kernel.hash.ToString(), kernel.n, blockHash.ToString(), fUpdate ? "yes" : "no");
 
     std::map<COutPoint, uint256>::const_iterator mi = mapStakeSeen.find(kernel);
     if (mi != mapStakeSeen.end()) {
         if (mi->second == blockHash) {
+            LogPrint(BCLog::POS, "CheckStakeUnique: Kernel already registered for this same block - OK\n");
             return true;
         }
+        LogPrint(BCLog::POS, "CheckStakeUnique: ERROR - Kernel already used in different block %s\n", mi->second.ToString());
         return error("%s: Stake kernel for %s first seen on %s.", __func__, blockHash.ToString(), mi->second.ToString());
     }
+    LogPrint(BCLog::POS, "CheckStakeUnique: Kernel not previously used - OK\n");
 
     if (!fUpdate) {
+        LogPrint(BCLog::POS, "CheckStakeUnique: Update not requested, returning success\n");
         return true;
     }
 
     while (listStakeSeen.size() > 1024) {
         const COutPoint& oldest = listStakeSeen.front();
+        LogPrint(BCLog::POS, "CheckStakeUnique: Pruning old stake entry %s:%d (maintaining 1024 entry limit)\n", oldest.hash.ToString(), oldest.n);
         if (1 != mapStakeSeen.erase(oldest)) {
             LogPrintf("%s: Warning: mapStakeSeen did not erase %s %n\n", __func__, oldest.hash.ToString(), oldest.n);
         }

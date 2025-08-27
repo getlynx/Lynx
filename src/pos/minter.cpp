@@ -49,46 +49,70 @@ std::atomic<int64_t> nTimeLastStake(0);
 
 bool CheckStake(ChainstateManager& chainman, const CBlock* pblock)
 {
+    LogPrint(BCLog::POS, "CheckStake: Beginning stake validation for new block\n");
     uint256 proofHash, hashTarget;
     uint256 hashBlock = pblock->GetHash();
+    LogPrint(BCLog::POS, "CheckStake: Block hash to validate: %s\n", hashBlock.GetHex());
 
     if (!pblock->IsProofOfStake()) {
+        LogPrint(BCLog::POS, "CheckStake: ERROR - Block is not proof-of-stake (might be PoW or invalid)\n");
         return error("%s: %s is not a proof-of-stake block.", __func__, hashBlock.GetHex());
     }
+    LogPrint(BCLog::POS, "CheckStake: Confirmed block is proof-of-stake\n");
 
+    LogPrint(BCLog::POS, "CheckStake: Verifying stake uniqueness (prevents stake duplication)\n");
     if (!CheckStakeUnique(*pblock, false)) { // Check in SignBlock also
+        LogPrint(BCLog::POS, "CheckStake: ERROR - Stake uniqueness check failed (possible duplicate stake)\n");
         return error("%s: %s CheckStakeUnique failed.", __func__, hashBlock.GetHex());
     }
+    LogPrint(BCLog::POS, "CheckStake: Stake uniqueness verified successfully\n");
 
     // Verify hash target and signature of coinstake tx
     {
         LOCK(cs_main);
 
+        LogPrint(BCLog::POS, "CheckStake: Looking up previous block: %s\n", pblock->hashPrevBlock.GetHex());
         node::BlockMap::const_iterator mi = chainman.BlockIndex().find(pblock->hashPrevBlock);
         if (mi == chainman.BlockIndex().end()) {
+            LogPrint(BCLog::POS, "CheckStake: ERROR - Previous block not found in block index\n");
             return error("%s: %s prev block not found: %s.", __func__, hashBlock.GetHex(), pblock->hashPrevBlock.GetHex());
         }
+        LogPrint(BCLog::POS, "CheckStake: Previous block found in index\n");
 
+        LogPrint(BCLog::POS, "CheckStake: Verifying previous block is in active chain\n");
         if (!chainman.ActiveChain().Contains(&mi->second)) {
+            LogPrint(BCLog::POS, "CheckStake: ERROR - Previous block not in active chain (orphaned or on fork)\n");
             return error("%s: %s prev block in active chain: %s.", __func__, hashBlock.GetHex(), pblock->hashPrevBlock.GetHex());
         }
+        LogPrint(BCLog::POS, "CheckStake: Previous block confirmed in active chain\n");
 
         BlockValidationState state;
+        LogPrint(BCLog::POS, "CheckStake: Running proof-of-stake validation (checking kernel, target, signature)\n");
+        LogPrint(BCLog::POS, "CheckStake: Block time: %d, Bits: %d\n", pblock->nTime, pblock->nBits);
         if (!blnfncCheckProofOfStake(chainman.ActiveChainstate(), state, &mi->second, *pblock->vtx[1], pblock->nTime, pblock->nBits, proofHash, hashTarget)) {
+            LogPrint(BCLog::POS, "CheckStake: ERROR - Proof-of-stake validation failed (invalid kernel or didn't meet target)\n");
             return error("%s: proof-of-stake checking failed.", __func__);
         }
+        LogPrint(BCLog::POS, "CheckStake: Proof-of-stake validation PASSED\n");
+        LogPrint(BCLog::POS, "CheckStake: Checking if block is stale (built on old tip)\n");
         if (pblock->hashPrevBlock != chainman.ActiveChain().Tip()->GetBlockHash()) { // hashbestchain
+            LogPrint(BCLog::POS, "CheckStake: ERROR - Block is stale (chain tip has changed)\n");
             return error("%s: Generated block is stale.", __func__);
         }
+        LogPrint(BCLog::POS, "CheckStake: Block is current (built on chain tip)\n");
     }
 
-    // debug print
-    LogPrintf("CheckStake(): New proof-of-stake block found  \n  hash: %s \nproofhash: %s  \ntarget: %s\n", hashBlock.GetHex(), proofHash.GetHex(), hashTarget.GetHex());
+    // A little too verbose for the uncategorized debug log
+    // LogPrintf("CheckStake(): New proof-of-stake block found  \n  hash: %s \nproofhash: %s  \ntarget: %s\n", hashBlock.GetHex(), proofHash.GetHex(), hashTarget.GetHex());
+    LogPrintf("CheckStake(): New proof-of-stake block found %s\n", hashBlock.GetHex());
 
+    LogPrint(BCLog::POS, "CheckStake: Submitting validated block to chain for acceptance\n");
     std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(*pblock);
     if (!chainman.ProcessNewBlock(shared_pblock, true, /*min_pow_checked=*/true, nullptr)) {
+        LogPrint(BCLog::POS, "CheckStake: ERROR - Block rejected by ProcessNewBlock\n");
         return error("%s: Block not accepted.", __func__);
     }
+    LogPrint(BCLog::POS, "CheckStake: SUCCESS - Block accepted and added to chain!\n");
 
     return true;
 }
@@ -112,19 +136,25 @@ bool is_mining_thread_active() {
 
 void StartThreadStakeMiner(wallet::WalletContext& wallet_context, ChainstateManager& chainman, CConnman* connman)
 {
+    LogPrint(BCLog::POS, "StartThreadStakeMiner: Initializing stake miner threads\n");
     nMinStakeInterval = gArgs.GetIntArg("-minstakeinterval", 0);
     nMinerSleep = gArgs.GetIntArg("-minersleep", 500);
+    LogPrint(BCLog::POS, "StartThreadStakeMiner: Min stake interval: %d seconds, Miner sleep: %d ms\n", nMinStakeInterval, nMinerSleep);
 
     if (!gArgs.GetBoolArg("-staking", true)) {
-        LogPrintf("Staking disabled\n");
+        LogPrintf("Staking disabled by configuration (-staking=false)\n");
+        LogPrint(BCLog::POS, "StartThreadStakeMiner: Staking disabled via command line argument\n");
     } else {
+        LogPrint(BCLog::POS, "StartThreadStakeMiner: Staking enabled, setting up wallet threads\n");
         auto vpwallets = GetWallets(wallet_context);
         size_t nWallets = vpwallets.size();
 
         if (nWallets < 1) {
+            LogPrint(BCLog::POS, "StartThreadStakeMiner: No wallets available for staking - exiting\n");
             return;
         }
         size_t nThreads = std::min(nWallets, (size_t)gArgs.GetIntArg("-stakingthreads", 1));
+        LogPrint(BCLog::POS, "StartThreadStakeMiner: Found %d wallet(s), creating %d staking thread(s)\n", nWallets, nThreads);
 
         size_t nPerThread = nWallets / nThreads;
         for (size_t i = 0; i < nThreads; ++i) {
@@ -145,17 +175,21 @@ void StopThreadStakeMiner()
 {
     if (vStakeThreads.size() < 1 || // no thread created
         fStopMinerProc) {
+        LogPrint(BCLog::POS, "StopThreadStakeMiner: Already stopped or no threads to stop\n");
         return;
     }
-    LogPrint(BCLog::POS, "StopThreadStakeMiner\n");
+    LogPrint(BCLog::POS, "StopThreadStakeMiner: Initiating shutdown of %d staking thread(s)\n", vStakeThreads.size());
     fStopMinerProc = true;
+    LogPrint(BCLog::POS, "StopThreadStakeMiner: Stop flag set, interrupting threads\n");
 
     for (auto t : vStakeThreads) {
+        LogPrint(BCLog::POS, "StopThreadStakeMiner: Interrupting and joining thread %s\n", t->sName);
         t->m_thread_interrupt();
         t->thread.join();
         delete t;
     }
     vStakeThreads.clear();
+    LogPrint(BCLog::POS, "StopThreadStakeMiner: All staking threads stopped and cleaned up\n");
 }
 
 void WakeThreadStakeMiner(wallet::CWallet* pwallet)
@@ -168,7 +202,7 @@ void WakeThreadStakeMiner(wallet::CWallet* pwallet)
             return;
         }
         pwallet->nLastCoinStakeSearchTime = 0;
-        LogPrint(BCLog::POS, "WakeThreadStakeMiner: wallet %s, thread %d\n", pwallet->GetName(), nStakeThread);
+        LogPrint(BCLog::POS, "WakeThreadStakeMiner: wallet [%s], thread %d\n", pwallet->GetName(), nStakeThread);
     }
     StakeThread* t = vStakeThreads[nStakeThread];
     t->m_thread_interrupt();
@@ -261,10 +295,15 @@ bool SignBlock(CBlock& block, CBlockIndex* pindexPrev, wallet::CWallet* wallet, 
 
 void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWallet>>& vpwallets, size_t nStart, size_t nEnd, ChainstateManager* chainman, CConnman* connman)
 {
+    LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Thread started, waiting for node initialization (15 sec)\n", nThreadID);
     while (GetTime() - GetStartupTime() < 15) {
         UninterruptibleSleep(std::chrono::milliseconds { 150 });
-        if (ShutdownRequested()) return;
+        if (ShutdownRequested()) {
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Shutdown requested during initialization\n", nThreadID);
+            return;
+        }
     }
+    LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Initialization period complete\n", nThreadID);
 
     LogPrintf("Starting staking thread %d, %d wallet%s.\n", nThreadID, nEnd - nStart, (nEnd - nStart) > 1 ? "s" : "");
 
@@ -284,12 +323,13 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
     while (!fStopMinerProc) {
         if (node::fReindex) {
             fIsStaking = false;
-            LogPrint(BCLog::POS, "%s: Block import/reindex.\n", __func__);
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Pausing - blockchain reindexing in progress\n", nThreadID);
             condWaitFor(nThreadID, 30000);
             continue;
         }
 
         if (!fStakerRunning) {
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Staker not running, waiting...\n", nThreadID);
             condWaitFor(nThreadID, 5000);
             continue;
         }
@@ -304,31 +344,34 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
 
         if (is_mining_thread_active()) {
             fIsStaking = false;
-            LogPrint(BCLog::POS, "%s: WaitingForMiningThread\n", __func__);
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Mining thread active (PoW), pausing PoS\n", nThreadID);
             condWaitFor(nThreadID, 2000);
             continue;
         }
 
         if (!stake_thread_ignore_peers && fTryToSync) {
             fTryToSync = false;
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Checking sync status (peers: %d)\n", nThreadID, num_nodes);
             if (num_nodes < 3 || chainman->ActiveChainstate().IsInitialBlockDownload()) {
                 fIsStaking = false;
-                LogPrint(BCLog::POS, "%s: TryToSync\n", __func__);
+                LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Not enough peers (<3) or still syncing - waiting\n", nThreadID);
                 condWaitFor(nThreadID, 30000);
                 continue;
             }
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Sync check passed, continuing\n", nThreadID);
         }
 
         if (!stake_thread_ignore_peers && (num_nodes == 0 || chainman->ActiveChainstate().IsInitialBlockDownload())) {
             fIsStaking = false;
             fTryToSync = true;
-            LogPrint(BCLog::POS, "%s: IsInitialBlockDownload\n", __func__);
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: No peers or initial block download - cannot stake\n", nThreadID);
             condWaitFor(nThreadID, 2000);
             continue;
         }
 
         if (nMinStakeInterval > 0 && nTimeLastStake + (int64_t)nMinStakeInterval > GetTime()) {
-            LogPrint(BCLog::POS, "%s: Rate limited to 1 / %d seconds.\n", __func__, nMinStakeInterval);
+            int64_t nWaitTime = (nTimeLastStake + nMinStakeInterval) - GetTime();
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Rate limiting - must wait %d more seconds (min interval: %d)\n", nThreadID, nWaitTime, nMinStakeInterval);
             condWaitFor(nThreadID, nMinStakeInterval * 500); // nMinStakeInterval / 2 seconds
             continue;
         }
@@ -336,14 +379,16 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
         int64_t nTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
         int64_t nMask = nStakeTimestampMask;
         int64_t nSearchTime = nTime & ~nMask;
+        LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Current time: %d, Search time: %d, Best block time: %d\n", nThreadID, nTime, nSearchTime, nBestTime);
         if (nSearchTime <= nBestTime) {
             if (nTime < nBestTime) {
-                LogPrint(BCLog::POS, "%s: Can't stake before last block time.\n", __func__);
+                LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Time regression - waiting (current: %d < best: %d)\n", nThreadID, nTime, nBestTime);
                 condWaitFor(nThreadID, std::min(1000 + (nBestTime - nTime) * 1000, (int64_t)30000));
                 continue;
             }
 
             int64_t nNextSearch = nSearchTime + nMask;
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Waiting for next search window at %d (in %d seconds)\n", nThreadID, nNextSearch, nNextSearch - nTime);
             condWaitFor(nThreadID, std::min(nMinerSleep + (nNextSearch - nTime) * 1000, (int64_t)10000));
             continue;
         }
@@ -353,10 +398,13 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
         size_t nWaitFor = stake_thread_cond_delay_ms;
         CAmount reserve_balance;
 
+        LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Beginning wallet iteration (wallets [%d] to [%d])\n", nThreadID, nStart, nEnd-1);
         for (size_t i = nStart; i < nEnd; ++i) {
             auto pwallet = vpwallets[i];
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Processing wallet [%d]: %s\n", nThreadID, i, pwallet->GetName());
 
             if (!pwallet->fStakingEnabled) {
+                LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Wallet [%s] has staking disabled\n", nThreadID, pwallet->GetName());
                 pwallet->m_is_staking = wallet::CWallet::NOT_STAKING_DISABLED;
                 continue;
             }
@@ -364,17 +412,20 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
             {
                 LOCK(pwallet->cs_wallet);
                 if (nSearchTime <= pwallet->nLastCoinStakeSearchTime) {
+                    LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Wallet [%s] already searched at time %d\n", nThreadID, pwallet->GetName(), nSearchTime);
                     nWaitFor = std::min(nWaitFor, (size_t)nMinerSleep);
                     continue;
                 }
 
                 if (pwallet->nStakeLimitHeight && nBestHeight >= pwallet->nStakeLimitHeight) {
+                    LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Wallet [%s] reached stake limit height (%d >= %d)\n", nThreadID, pwallet->GetName(), nBestHeight, pwallet->nStakeLimitHeight);
                     pwallet->m_is_staking = wallet::CWallet::NOT_STAKING_LIMITED;
                     nWaitFor = std::min(nWaitFor, (size_t)30000);
                     continue;
                 }
 
                 if (pwallet->IsLocked()) {
+                    LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Wallet [%s] is locked - cannot stake\n", nThreadID, pwallet->GetName());
                     pwallet->m_is_staking = wallet::CWallet::NOT_STAKING_LOCKED;
                     nWaitFor = std::min(nWaitFor, (size_t)30000);
                     continue;
@@ -383,39 +434,48 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
             }
 
             CAmount balance = GetSpendableBalance(*pwallet);
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Wallet [%s] balance: %s, reserve: %s\n", nThreadID, pwallet->GetName(), FormatMoney(balance), FormatMoney(reserve_balance));
 
             if (balance <= reserve_balance) {
                 LOCK(pwallet->cs_wallet);
                 pwallet->m_is_staking = wallet::CWallet::NOT_STAKING_BALANCE;
                 nWaitFor = std::min(nWaitFor, (size_t)60000);
                 pwallet->nLastCoinStakeSearchTime = nSearchTime + stake_thread_cond_delay_ms / 1000;
-                LogPrint(BCLog::POS, "%s: %s, low balance.\n", __func__, pwallet->GetName());
+                LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Wallet [%s] has insufficient balance for staking\n", nThreadID, pwallet->GetName());
                 continue;
             }
 
             if (!pblocktemplate.get()) {
+                LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Creating new block template\n", nThreadID);
                 CScript dummyScript;
                 pblocktemplate = node::BlockAssembler { chainman->ActiveChainstate(), chainman->ActiveChainstate().GetMempool() }.CreateNewBlock(dummyScript, true);
                 if (!pblocktemplate.get()) {
                     fIsStaking = false;
                     nWaitFor = std::min(nWaitFor, (size_t)nMinerSleep);
-                    LogPrint(BCLog::POS, "%s: Couldn't create new block.\n", __func__);
+                    LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: ERROR - Failed to create block template\n", nThreadID);
                     continue;
                 }
+                LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Block template created successfully\n", nThreadID);
             }
 
             pwallet->m_is_staking = wallet::CWallet::IS_STAKING;
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Wallet [%s] marked as ACTIVELY STAKING\n", nThreadID, pwallet->GetName());
 
             nWaitFor = nMinerSleep;
             fIsStaking = true;
             CBlock* pblock = &pblocktemplate->block;
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Attempting to sign block at height %d\n", nThreadID, nBestHeight + 1);
 
             if (SignBlock(*pblock, chainman->ActiveChain().Tip(), pwallet.get(), nBestHeight + 1, nSearchTime, chainman->ActiveChainstate())) {
+                LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Block signed successfully, checking stake validity\n", nThreadID);
                 if (CheckStake(*chainman, pblock)) {
                     nTimeLastStake = GetTime();
+                    LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: *** STAKE FOUND AND ACCEPTED! *** New block at height %d\n", nThreadID, nBestHeight + 1);
                     break;
                 }
+                LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Block signed but stake check failed\n", nThreadID);
             } else {
+                LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Failed to sign block (no valid kernel found)\n", nThreadID);
                 int nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(nBestHeight / 2));
 
                 LOCK(pwallet->cs_wallet);
@@ -424,18 +484,21 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
                     size_t nSleep = (nRequiredDepth - pwallet->m_greatest_txn_depth) / 4;
                     nWaitFor = std::min(nWaitFor, (size_t)(nSleep * 1000));
                     pwallet->nLastCoinStakeSearchTime = nSearchTime + nSleep;
-                    LogPrint(BCLog::POS, "%s: %s, no outputs with required depth. Sleeping for %ds.\n", __func__, pwallet->GetName(), nSleep);
+                    LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Wallet [%s] lacks mature coins (depth: %d, need: %d). Sleeping %ds\n", nThreadID, pwallet->GetName(), pwallet->m_greatest_txn_depth, nRequiredDepth, nSleep);
                     continue;
                 }
             }
         }
 
+        LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Round complete, waiting %d ms before next attempt\n", nThreadID, nWaitFor);
         condWaitFor(nThreadID, nWaitFor);
     }
+    LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Thread exiting (stop requested)\n", nThreadID);
 }
 
 bool SelectCoinsForStaking(wallet::CWallet* wallet, CAmount nTargetValue, std::set<std::pair<const wallet::CWalletTx*, unsigned int>>& setCoinsRet, CAmount& nValueRet)
 {
+    LogPrint(BCLog::POS, "SelectCoinsForStaking: Starting coin selection for staking (target: %s)\n", FormatMoney(nTargetValue));
     const Consensus::Params& params = Params().GetConsensus();
 
     // fetch suitable coins
@@ -447,6 +510,7 @@ bool SelectCoinsForStaking(wallet::CWallet* wallet, CAmount nTargetValue, std::s
             vCoins.push_back(entry);
         }
     }
+    LogPrint(BCLog::POS, "SelectCoinsForStaking: Found %d available outputs to evaluate\n", vCoins.size());
 
     setCoinsRet.clear();
     nValueRet = 0;
@@ -455,15 +519,16 @@ bool SelectCoinsForStaking(wallet::CWallet* wallet, CAmount nTargetValue, std::s
         const auto& txout = output.txout;
         int input_age = GetTime() - output.time;
         if (input_age < params.nStakeMinAge || input_age > params.nStakeMaxAge) {
-            LogPrint(BCLog::POS, "not using %s: age params not met\n", txout.ToString());
+            LogPrint(BCLog::POS, "SelectCoinsForStaking: Skipping output - age %d not in range [%d, %d]: %s\n", input_age, params.nStakeMinAge, params.nStakeMaxAge, txout.ToString());
             continue;
-        } 
+        }
+        LogPrint(BCLog::POS, "SelectCoinsForStaking: Output age %d seconds meets requirements\n", input_age); 
 
         {
             LOCK(wallet->cs_wallet);
             COutPoint kernel(output.outpoint);
             if (!CheckStakeUnused(kernel) || wallet->IsLockedCoin(kernel)) {
-                LogPrint(BCLog::POS, "not using %s: already used or coin is locked\n", txout.ToString());
+                LogPrint(BCLog::POS, "SelectCoinsForStaking: Skipping output - already staked or locked: %s\n", txout.ToString());
                 continue;
             }
         }
@@ -472,13 +537,14 @@ bool SelectCoinsForStaking(wallet::CWallet* wallet, CAmount nTargetValue, std::s
             LOCK(wallet->cs_wallet);
             wallet::isminetype mine = wallet->IsMine(txout);
             if (!(mine & wallet::ISMINE_SPENDABLE)) {
-                LogPrint(BCLog::POS, "not using %s: isnt mine/not spendable\n", txout.ToString());
+                LogPrint(BCLog::POS, "SelectCoinsForStaking: Skipping output - not spendable: %s\n", txout.ToString());
                 continue;
             }
         }
 
         // Stop if we've chosen enough inputs
         if (nValueRet >= nTargetValue) {
+            LogPrint(BCLog::POS, "SelectCoinsForStaking: Target value reached (%s >= %s), stopping selection\n", FormatMoney(nValueRet), FormatMoney(nTargetValue));
             break;
         }
 
@@ -493,17 +559,20 @@ bool SelectCoinsForStaking(wallet::CWallet* wallet, CAmount nTargetValue, std::s
         if (n >= nTargetValue) {
             // If input value is greater or equal to target then simply insert
             //    it into the current subset and exit
+            LogPrint(BCLog::POS, "SelectCoinsForStaking: Found single output meeting target: %s\n", FormatMoney(n));
             setCoinsRet.insert(coin.second);
             nValueRet += coin.first;
             break;
         } else {
             if (n < nTargetValue + CENT) {
+                LogPrint(BCLog::POS, "SelectCoinsForStaking: Adding output to set: %s\n", FormatMoney(n));
                 setCoinsRet.insert(coin.second);
                 nValueRet += coin.first;
             }
         }
     }
 
+    LogPrint(BCLog::POS, "SelectCoinsForStaking: Selection complete - %d outputs selected, total value: %s\n", setCoinsRet.size(), FormatMoney(nValueRet));
     return true;
 }
 
@@ -517,10 +586,13 @@ bool CreateCoinStake (  wallet::CWallet* wallet,
                         CKey& key, 
                         Chainstate& chain_state) {
 
+    LogPrint(BCLog::POS, "CreateCoinStake: Starting coinstake creation for height %d at time %d\n", nBlockHeight, nTime);
     arith_uint256 bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
     CAmount nBalance = GetSpendableBalance(*wallet);
+    LogPrint(BCLog::POS, "CreateCoinStake: Wallet balance: %s, Reserve: %s\n", FormatMoney(nBalance), FormatMoney(wallet->nReserveBalance));
     if (nBalance <= wallet->nReserveBalance) {
+        LogPrint(BCLog::POS, "CreateCoinStake: Insufficient balance after reserve\n");
         return false;
     }
 
@@ -537,38 +609,46 @@ bool CreateCoinStake (  wallet::CWallet* wallet,
     CAmount nValueIn = 0;
     std::vector<const wallet::CWalletTx*> vwtxPrev;
     std::set<std::pair<const wallet::CWalletTx*, unsigned int>> setCoins;
+    LogPrint(BCLog::POS, "CreateCoinStake: Selecting coins for staking\n");
     if (!SelectCoinsForStaking(wallet, nBalance - wallet->nReserveBalance, setCoins, nValueIn)) {
+        LogPrint(BCLog::POS, "CreateCoinStake: Failed to select coins for staking\n");
         UninterruptibleSleep(std::chrono::milliseconds { 150 });
         return false;
     }
 
     if (setCoins.empty()) {
+        LogPrint(BCLog::POS, "CreateCoinStake: No suitable coins available for staking\n");
         UninterruptibleSleep(std::chrono::milliseconds { 150 });
         return false;
     }
+    LogPrint(BCLog::POS, "CreateCoinStake: Selected %d coins with total value %s\n", setCoins.size(), FormatMoney(nValueIn));
 
     CAmount nCredit = 0;
     CScript scriptPubKeyKernel;
     std::set<std::pair<const wallet::CWalletTx*, unsigned int>>::iterator it = setCoins.begin();
 
+    LogPrint(BCLog::POS, "CreateCoinStake: Testing coins for valid kernel\n");
     for (; it != setCoins.end(); ++it) {
         auto pcoin = *it;
         if (ThreadStakeMinerStopped()) {
+            LogPrint(BCLog::POS, "CreateCoinStake: Miner stop requested, aborting\n");
             return false;
         }
 
         auto mempool = chain_state.GetMempool();
         if (!mempool->HasNoInputsOf(*pcoin.first->tx)) {
+            LogPrint(BCLog::POS, "CreateCoinStake: Coin already spent in mempool, skipping\n");
             continue;
         }
 
         int64_t nBlockTime;
         COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
+        LogPrint(BCLog::POS, "CreateCoinStake: Testing kernel candidate: %s:%d\n", pcoin.first->GetHash().ToString(), pcoin.second);
         if (blnfncCheckKernel(chain_state, pindexPrev, nBits, nTime, prevoutStake, &nBlockTime)) {
             LOCK(wallet->cs_wallet);
 
             // Found a kernel
-            LogPrint(BCLog::POS, "%s: Kernel found.\n", __func__);
+            LogPrint(BCLog::POS, "CreateCoinStake: *** VALID KERNEL FOUND! *** Hash: %s, Output: %d\n", pcoin.first->GetHash().ToString(), pcoin.second);
 
             CTxOut kernelOut = pcoin.first->tx->vout[pcoin.second];
 
@@ -660,11 +740,14 @@ bool CreateCoinStake (  wallet::CWallet* wallet,
     }
 
     if (nCredit == 0 || nCredit > nBalance - wallet->nReserveBalance) {
+        LogPrint(BCLog::POS, "CreateCoinStake: No valid kernel found or credit exceeds available balance\n");
         return false;
     }
+    LogPrint(BCLog::POS, "CreateCoinStake: Kernel selected with credit: %s\n", FormatMoney(nCredit));
 
     // Attempt to add more inputs
     // Only advantage here is to setup the next stake using this output as a kernel to have a higher chance of staking
+    LogPrint(BCLog::POS, "CreateCoinStake: Attempting to combine additional inputs (max: %d, threshold: %s)\n", wallet->nMaxStakeCombine, FormatMoney(wallet->nStakeCombineThreshold));
     size_t nStakesCombined = 0;
     it = setCoins.begin();
     while (it != setCoins.end()) {
@@ -688,6 +771,7 @@ bool CreateCoinStake (  wallet::CWallet* wallet,
 
         // Only add coins of the same key/address as kernel
         if (prevOut.scriptPubKey != scriptPubKeyKernel) {
+            LogPrint(BCLog::POS, "CreateCoinStake: Skipping input - different address than kernel\n");
             continue;
         }
 
@@ -705,7 +789,7 @@ bool CreateCoinStake (  wallet::CWallet* wallet,
         nCredit += pcoin.first->tx->vout[pcoin.second].nValue;
         vwtxPrev.push_back(pcoin.first);
 
-        LogPrint(BCLog::POS, "%s: Combining kernel %s, %d.\n", __func__, pcoin.first->GetHash().ToString(), pcoin.second);
+        LogPrint(BCLog::POS, "CreateCoinStake: Adding input to combine: %s:%d (value: %s)\n", pcoin.first->GetHash().ToString(), pcoin.second, FormatMoney(prevOut.nValue));
         nStakesCombined++;
         setCoins.erase(itc);
     }
@@ -714,14 +798,18 @@ bool CreateCoinStake (  wallet::CWallet* wallet,
 
     // Get block reward
     CAmount nReward = GetProofOfStakeReward(pindexPrev->nHeight+1, consensusParams);
+    LogPrint(BCLog::POS, "CreateCoinStake: Stake reward for height %d: %s\n", pindexPrev->nHeight+1, FormatMoney(nReward));
     if (nReward < 0) {
+        LogPrint(BCLog::POS, "CreateCoinStake: ERROR - Invalid reward amount\n");
         return false;
     }
 
     nCredit += nReward;
+    LogPrint(BCLog::POS, "CreateCoinStake: Total credit with reward: %s\n", FormatMoney(nCredit));
     {
 
         if (nCredit >= wallet->nStakeSplitThreshold) {
+            LogPrint(BCLog::POS, "CreateCoinStake: Credit exceeds split threshold (%s >= %s), splitting output\n", FormatMoney(nCredit), FormatMoney(wallet->nStakeSplitThreshold));
             txNew.vout.push_back(CTxOut(0, txNew.vout[1].scriptPubKey));
         }
 
@@ -729,10 +817,10 @@ bool CreateCoinStake (  wallet::CWallet* wallet,
         if (txNew.vout.size() == 3) {
             txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
             txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
-
+            LogPrint(BCLog::POS, "CreateCoinStake: Split output - Out1: %s, Out2: %s\n", FormatMoney(txNew.vout[1].nValue), FormatMoney(txNew.vout[2].nValue));
         } else {
             txNew.vout[1].nValue = nCredit;
-
+            LogPrint(BCLog::POS, "CreateCoinStake: Single output: %s\n", FormatMoney(txNew.vout[1].nValue));
         }
     }
 
@@ -760,5 +848,6 @@ bool CreateCoinStake (  wallet::CWallet* wallet,
     }
 
     // Successfully generated coinstake
+    LogPrint(BCLog::POS, "CreateCoinStake: *** COINSTAKE CREATED SUCCESSFULLY *** %d inputs, %d outputs, size: %d bytes\n", txNew.vin.size(), txNew.vout.size(), nBytes);
     return true;
 }
