@@ -239,7 +239,7 @@ bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
                                                 
                             if (!is_valid_authchunk (opdata, error_level, offset)) {
                                                 
-                                LogPrint (BCLog::ALL, "error_level from is_valid_authchunk %d\n", error_level);
+                                LogPrint (BCLog::STORAGE, "error_level from is_valid_authchunk %d\n", error_level);
                                 continue;
                             }
                                                 
@@ -255,14 +255,14 @@ bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
                             get_signature_from_chunk (opdata, signature, offset);
                     
                             /*
-                            LogPrint (BCLog::ALL, "Found valid header chunk for UUID: %s\n", this_uuid);
-                            LogPrint (BCLog::ALL, "\n");
-                            LogPrint (BCLog::ALL, "Header Chunk Magic: %s\n", magic);
-                            LogPrint (BCLog::ALL, "Header Chunk Protocol: %s\n", strProtocol);
-                            LogPrint (BCLog::ALL, "Header Chunk UUID: %s\n", uuid2);
-                            LogPrint (BCLog::ALL, "Header Chunk Length: %s\n", chunklen);
-                            LogPrint (BCLog::ALL, "Header Chunk Signature: %s\n", signature);
-                            LogPrint (BCLog::ALL, "\n");
+                            LogPrint (BCLog::STORAGE, "Found valid header chunk for UUID: %s\n", this_uuid);
+                            LogPrint (BCLog::STORAGE, "\n");
+                            LogPrint (BCLog::STORAGE, "Header Chunk Magic: %s\n", magic);
+                            LogPrint (BCLog::STORAGE, "Header Chunk Protocol: %s\n", strProtocol);
+                            LogPrint (BCLog::STORAGE, "Header Chunk UUID: %s\n", uuid2);
+                            LogPrint (BCLog::STORAGE, "Header Chunk Length: %s\n", chunklen);
+                            LogPrint (BCLog::STORAGE, "Header Chunk Signature: %s\n", signature);
+                            LogPrint (BCLog::STORAGE, "\n");
                             */
                     
                             hasauth = true;
@@ -350,49 +350,49 @@ bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
 
     // If not all data chunks
     if (count != chunktotal2) {
-        LogPrint (BCLog::ALL, "Not all data chunks found for uuid %s\n", uuid);
+        LogPrint (BCLog::STORAGE, "Not all data chunks found for uuid %s\n", uuid);
         // error_level = ERR_NOTALLDATACHUNKS;
         return false;
     }
 
     // If authenticatetenant pubkey not found
     // if (intAuthenticateTenantPubkeyFound == 0) {
-        // LogPrint (BCLog::ALL, "authenticatetenant pubkey not found for uuid %s\n", uuid);
+        // LogPrint (BCLog::STORAGE, "authenticatetenant pubkey not found for uuid %s\n", uuid);
         // error_level = ERR_CHUNKAUTHUNK;
         // return false;
     // }
 
 
 #ifdef TIMING
-    LogPrint (BCLog::ALL, "%d data chunks found.\n", chunktotal2);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "%d data chunks found.\n", chunktotal2);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time ReadBlockFromDisk %ld \n", t_rbfd);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time ReadBlockFromDisk %ld \n", t_rbfd);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time HexStr %ld \n", t_hs);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time HexStr %ld \n", t_hs);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time strip_opreturn_from_chunk %ld \n", t_sofc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time strip_opreturn_from_chunk %ld \n", t_sofc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time check_chunk_contextual %ld \n", t_ccc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time check_chunk_contextual %ld \n", t_ccc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time get_chunklen_from_chunk %ld \n", t_gclfc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time get_chunklen_from_chunk %ld \n", t_gclfc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time get_uuid_from_chunk %ld \n", t_gufc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time get_uuid_from_chunk %ld \n", t_gufc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time is_valid_authchunk %ld \n", t_iva);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time is_valid_authchunk %ld \n", t_iva);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time get_chunktotal_from_chunk %ld \n", t_gctfc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time get_chunktotal_from_chunk %ld \n", t_gctfc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time get_chunknumber_from_chunk %ld \n", t_gcnfc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time get_chunknumber_from_chunk %ld \n", t_gcnfc);
+    LogPrint (BCLog::STORAGE, "\n");
 #endif
 
     return true;
@@ -569,7 +569,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                                     intUUIDCount = intUUIDCount + 1;
 
                                     // Record uuid to log
-                                    LogPrint (BCLog::ALL, "UUID %s\n", strUUID);
+                                    LogPrint (BCLog::STORAGE, "UUID %s\n", strUUID);
 
                                 // End if less uuids found than asked for
                                 }
@@ -594,7 +594,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                                 intUUIDCount = intUUIDCount + 1;
 
                                 // Record uuid to log
-                                LogPrint (BCLog::ALL, "UUID %s\n", strUUID);
+                                LogPrint (BCLog::STORAGE, "UUID %s\n", strUUID);
 
                             // End if not all uuids asked for
                             }
@@ -628,7 +628,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                                         intUUIDCount = intUUIDCount + 1;
 
                                         // Record uuid to log
-                                        LogPrint (BCLog::ALL, "UUID %s\n", strUUID);
+                                        LogPrint (BCLog::STORAGE, "UUID %s\n", strUUID);
 
                                     // End if less uuids found than asked for 
                                     }
@@ -653,7 +653,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                                     intUUIDCount = intUUIDCount + 1;
 
                                     // Record uuid to log
-                                    LogPrint (BCLog::ALL, "UUID %s\n", strUUID);
+                                    LogPrint (BCLog::STORAGE, "UUID %s\n", strUUID);
 
                                 // End if not all uuids asked for 
                                 }
@@ -695,7 +695,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                             // Initialize extension to no extension
                             std::string strExtension = "n/a";
 
-                            // LogPrint (BCLog::ALL, "intExtension intChunkLength %d %d \n", intExtension, intChunkLength);
+                            // LogPrint (BCLog::STORAGE, "intExtension intChunkLength %d %d \n", intExtension, intChunkLength);
 
                             // Chunk data
                             std::string strChunkData;
@@ -703,7 +703,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                             // Get chunk data
                             get_chunkdata_from_chunk (strOpreturnOutput, strChunkData, intChunkLength, intOffset);
 
-                            // LogPrint (BCLog::ALL, "strChunkData %s %d \n", strChunkData, strChunkData.size());
+                            // LogPrint (BCLog::STORAGE, "strChunkData %s %d \n", strChunkData, strChunkData.size());
 
                             // Buffer
                             unsigned char buffer[OPENCODING_CHUNKMAX*2];
@@ -711,7 +711,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                             // Convert chunk data from hex
                             binlify_from_hex(&buffer[0], strChunkData.c_str(), strChunkData.size());
 
-                            // LogPrint (BCLog::ALL, "buffer %s \n", buffer);
+                            // LogPrint (BCLog::STORAGE, "buffer %s \n", buffer);
 
                             // If extension
                             if ((intExtension == 1) || (intExtension == 3)) {
@@ -727,12 +727,12 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
                                     extension += buffer[extwrite];
                                 }
 
-                                // LogPrint (BCLog::ALL, "extension %s \n", extension);
+                                // LogPrint (BCLog::STORAGE, "extension %s \n", extension);
 
                                 // Convert '\x00' to '\0' in 4th extension position, if present
                                 if (extension[3] == '\x00') {
 
-                                    // LogPrint (BCLog::ALL, "true \n");
+                                    // LogPrint (BCLog::STORAGE, "true \n");
 
                                     strExtension = extension.substr(0,3);;
 
@@ -746,7 +746,7 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
 
                             }
 
-                            // LogPrint (BCLog::ALL, "extension %s \n", strExtension);
+                            // LogPrint (BCLog::STORAGE, "extension %s \n", strExtension);
 
                             // Record extension for caller
                             gmapExtension[strUUID] = strExtension;
@@ -1013,7 +1013,7 @@ bool scan_blocks_for_specific_uuid (ChainstateManager& icsmChainStateManager, st
                             // Validate header chunk
                             if (!is_valid_authchunk (strOpreturnData, error_level, intOffset)) {
 
-                                LogPrint (BCLog::ALL, "error_level from is_valid_authchunk %d\n", error_level);
+                                LogPrint (BCLog::STORAGE, "error_level from is_valid_authchunk %d\n", error_level);
                                 continue;
                             }
 
@@ -1030,14 +1030,14 @@ bool scan_blocks_for_specific_uuid (ChainstateManager& icsmChainStateManager, st
                             get_signature_from_chunk (strOpreturnData, strSignature, intOffset);
 
                             // Log header chunk data
-                            LogPrint (BCLog::ALL, "Found valid header chunk for UUID: %s\n", strCurrentUUID);
-                            LogPrint (BCLog::ALL, "\n");
-                            LogPrint (BCLog::ALL, "Header Chunk Magic: %s\n", strMagic);
-                            LogPrint (BCLog::ALL, "Header Chunk Protocol: %s\n", strProtocol);
-                            LogPrint (BCLog::ALL, "Header Chunk UUID: %s\n", strHeaderUUID);
-                            LogPrint (BCLog::ALL, "Header Chunk Length: %s\n", strChunkLength);
-                            LogPrint (BCLog::ALL, "Header Chunk Signature: %s\n", strSignature);
-                            LogPrint (BCLog::ALL, "\n");
+                            LogPrint (BCLog::STORAGE, "Found valid header chunk for UUID: %s\n", strCurrentUUID);
+                            LogPrint (BCLog::STORAGE, "\n");
+                            LogPrint (BCLog::STORAGE, "Header Chunk Magic: %s\n", strMagic);
+                            LogPrint (BCLog::STORAGE, "Header Chunk Protocol: %s\n", strProtocol);
+                            LogPrint (BCLog::STORAGE, "Header Chunk UUID: %s\n", strHeaderUUID);
+                            LogPrint (BCLog::STORAGE, "Header Chunk Length: %s\n", strChunkLength);
+                            LogPrint (BCLog::STORAGE, "Header Chunk Signature: %s\n", strSignature);
+                            LogPrint (BCLog::STORAGE, "\n");
 
                             // Set to header chunk found
                             blnHeaderChunkFound = true;
@@ -1144,48 +1144,48 @@ if (blnHeaderChunkFound) {
 
     // If not all data chunks
     if (intChunkCount != intTotalChunks) {
-        LogPrint (BCLog::ALL, "Not all data chunks found for uuid %s\n", istrUUID);
+        LogPrint (BCLog::STORAGE, "Not all data chunks found for uuid %s\n", istrUUID);
         error_level = ERR_NOTALLDATACHUNKS;
         return false;
     }
 
     // If authenticatetenant pubkey not found
     // if (intAuthenticateTenantPubkeyFound == 0) {
-        // LogPrint (BCLog::ALL, "authenticatetenant pubkey not found for uuid %s\n", uuid);
+        // LogPrint (BCLog::STORAGE, "authenticatetenant pubkey not found for uuid %s\n", uuid);
         // error_level = ERR_CHUNKAUTHUNK;
         // return false;
     // }
 
 #ifdef TIMING
-    LogPrint (BCLog::ALL, "%d data chunks found.\n", intTotalChunks);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "%d data chunks found.\n", intTotalChunks);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time ReadBlockFromDisk %ld \n", t_rbfd);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time ReadBlockFromDisk %ld \n", t_rbfd);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time HexStr %ld \n", t_hs);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time HexStr %ld \n", t_hs);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time strip_opreturn_from_chunk %ld \n", t_sofc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time strip_opreturn_from_chunk %ld \n", t_sofc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time check_chunk_contextual %ld \n", t_ccc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time check_chunk_contextual %ld \n", t_ccc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time get_chunklen_from_chunk %ld \n", t_gclfc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time get_chunklen_from_chunk %ld \n", t_gclfc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time get_uuid_from_chunk %ld \n", t_gufc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time get_uuid_from_chunk %ld \n", t_gufc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time is_valid_authchunk %ld \n", t_iva);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time is_valid_authchunk %ld \n", t_iva);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time get_chunktotal_from_chunk %ld \n", t_gctfc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time get_chunktotal_from_chunk %ld \n", t_gctfc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed time get_chunknumber_from_chunk %ld \n", t_gcnfc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed time get_chunknumber_from_chunk %ld \n", t_gcnfc);
+    LogPrint (BCLog::STORAGE, "\n");
 #endif
 
     return true;
@@ -1204,19 +1204,19 @@ void estimate_coins_for_opreturn(CWallet* wallet, int& suitable_inputs)
         }
     }
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "DETERMINE NUMBER OF TRANSACTIONS IN ACTIVE WALLET SUITABLE FOR PUTFILE TRANSACTIONS (estimate_coins_for_opreturn)\n");
-    LogPrint (BCLog::ALL, "For a given putfile operation, each group of 256 chunks requires a separate transaction from the active wallet.\n");
-    LogPrint (BCLog::ALL, "A given suitable transaction will be associated with lynx coins to be used to pay for the chunk storage.\n");
-    LogPrint (BCLog::ALL, "A count of the transactions in the active wallet follow.\n");
-    LogPrint (BCLog::ALL, "After that, the number of satoshis associated with each transaction are given, regardless of suitability.\n");
-    LogPrint (BCLog::ALL, "Several things can make a transaction unsuitable (for instance, less than 100,000,000 satoshis).\n");
-    LogPrint (BCLog::ALL, "Next, the number of suitable transactions is given.\n");
-    LogPrint (BCLog::ALL, "Because a given transaction may become the input for a putfile transaction, suitable input is used interchangeably with suitable transaction.\n");
-    LogPrint (BCLog::ALL, "Finally, the number of groups of 256 chunks is given\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "DETERMINE NUMBER OF TRANSACTIONS IN ACTIVE WALLET SUITABLE FOR PUTFILE TRANSACTIONS (estimate_coins_for_opreturn)\n");
+    LogPrint (BCLog::STORAGE, "For a given putfile operation, each group of 256 chunks requires a separate transaction from the active wallet.\n");
+    LogPrint (BCLog::STORAGE, "A given suitable transaction will be associated with lynx coins to be used to pay for the chunk storage.\n");
+    LogPrint (BCLog::STORAGE, "A count of the transactions in the active wallet follow.\n");
+    LogPrint (BCLog::STORAGE, "After that, the number of satoshis associated with each transaction are given, regardless of suitability.\n");
+    LogPrint (BCLog::STORAGE, "Several things can make a transaction unsuitable (for instance, less than 100,000,000 satoshis).\n");
+    LogPrint (BCLog::STORAGE, "Next, the number of suitable transactions is given.\n");
+    LogPrint (BCLog::STORAGE, "Because a given transaction may become the input for a putfile transaction, suitable input is used interchangeably with suitable transaction.\n");
+    LogPrint (BCLog::STORAGE, "Finally, the number of groups of 256 chunks is given\n");
     
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "Number of UTXO's (Unspent Transaction Outputs): %d\n", vCoins.size());    
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "Number of UTXO's (Unspent Transaction Outputs): %d\n", vCoins.size());    
 
 int intNumberOfImmatureCoins = 0;    
 
@@ -1224,7 +1224,7 @@ int intNumberOfImmatureCoins = 0;
         const auto& txout = output.txout;
         {
 
-            LogPrint (BCLog::ALL, "Satoshis: %d\n", output.txout.nValue);
+            LogPrint (BCLog::STORAGE, "Satoshis: %d\n", output.txout.nValue);
 
             LOCK(wallet->cs_wallet);
 
@@ -1242,8 +1242,8 @@ int intNumberOfImmatureCoins = 0;
             int depth = wallet->GetTxDepthInMainChain(*wtx);
             if (depth < COINBASE_MATURITY) {
 
-LogPrint (BCLog::ALL, "depth %d COINBASE_MATURITY %d \n", depth, COINBASE_MATURITY);
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "depth %d COINBASE_MATURITY %d \n", depth, COINBASE_MATURITY);
+LogPrint (BCLog::STORAGE, "\n");
 
 intNumberOfImmatureCoins++;
 
@@ -1257,9 +1257,9 @@ intNumberOfImmatureCoins++;
         }
     }
 
-    LogPrint (BCLog::ALL, "Suitable inputs: %d\n", suitable_inputs);    
-    LogPrint (BCLog::ALL, "Number of immature UTXO's: %d\n", intNumberOfImmatureCoins);    
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "Suitable inputs: %d\n", suitable_inputs);    
+    LogPrint (BCLog::STORAGE, "Number of immature UTXO's: %d\n", intNumberOfImmatureCoins);    
+    LogPrint (BCLog::STORAGE, "\n");
 
 }
 
@@ -1317,7 +1317,7 @@ bool select_coins_for_opreturn(CWallet* wallet, std::set<std::pair<const CWallet
 bool generate_selfsend_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::vector<std::string>& opPayload)
 {
 
-    LogPrint (BCLog::ALL, "(generate_selfsend_transaction)\n");
+    LogPrint (BCLog::STORAGE, "(generate_selfsend_transaction)\n");
 
     auto vpwallets = GetWallets(wallet_context);
     size_t nWallets = vpwallets.size();
@@ -1339,7 +1339,7 @@ bool generate_selfsend_transaction(WalletContext& wallet_context, CMutableTransa
     std::set<std::pair<const CWalletTx*, unsigned int>>::iterator it = setCoins.begin();
     COutPoint out{it->first->tx->GetHash(), it->second};
 
-    LogPrint (BCLog::ALL, "Input value in satoshis: %llu\n", setValue);
+    LogPrint (BCLog::STORAGE, "Input value in satoshis: %llu\n", setValue);
 
     CTxIn txIn(out);
 
@@ -1371,13 +1371,13 @@ bool generate_selfsend_transaction(WalletContext& wallet_context, CMutableTransa
         unsigned int nBytes = GetSerializeSize(tx) + 32;
         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
 
-        LogPrint (BCLog::ALL, "Transaction bytes: %d\n", nBytes);
-        LogPrint (BCLog::ALL, "Transaction fee in satoshis: %llu\n", nFee);
+        LogPrint (BCLog::STORAGE, "Transaction bytes: %d\n", nBytes);
+        LogPrint (BCLog::STORAGE, "Transaction fee in satoshis: %llu\n", nFee);
 
         tx.vout[0].nValue -= nFee;
 
-        LogPrint (BCLog::ALL, "Change in satoshis: %llu\n", tx.vout[0].nValue);
-        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::STORAGE, "Change in satoshis: %llu\n", tx.vout[0].nValue);
+        LogPrint (BCLog::STORAGE, "\n");
         
         //! sign tx again with correct fee in place
         if (!vpwallets[0]->SignTransaction(tx)) {
@@ -1388,8 +1388,8 @@ bool generate_selfsend_transaction(WalletContext& wallet_context, CMutableTransa
 // Harness: uncomment the following three lines to bail from 
 // putfile before committing to wallet and blockchain - MH
 //
-// LogPrint (BCLog::ALL, "bail from generate_selfsend_transaction\n");
-// LogPrint (BCLog::ALL, "\n");
+// LogPrint (BCLog::STORAGE, "bail from generate_selfsend_transaction\n");
+// LogPrint (BCLog::STORAGE, "\n");
 // return false;    
 
         //! commit to wallet and relay to network

@@ -758,11 +758,11 @@ int V1TransportDeserializer::readHeader(Span<const uint8_t> msg_bytes)
     // reject messages larger than MAX_SIZE or MAX_PROTOCOL_MESSAGE_LENGTH
     if (hdr.nMessageSize > MAX_SIZE || hdr.nMessageSize > MAX_PROTOCOL_MESSAGE_LENGTH) {
 
-LogPrint (BCLog::ALL, "hdr.nMessageSize %u\n", hdr.nMessageSize);
-LogPrint (BCLog::ALL, "MAX_SIZE %u\n", MAX_SIZE);
-LogPrint (BCLog::ALL, "MAX_PROTOCOL_MESSAGE_LENGTH %u\n", MAX_PROTOCOL_MESSAGE_LENGTH);
-LogPrint (BCLog::ALL, " %s\n", SanitizeString(hdr.GetCommand()));
-LogPrint (BCLog::ALL, " %u\n", m_node_id);
+LogPrint (BCLog::STORAGE, "hdr.nMessageSize %u\n", hdr.nMessageSize);
+LogPrint (BCLog::STORAGE, "MAX_SIZE %u\n", MAX_SIZE);
+LogPrint (BCLog::STORAGE, "MAX_PROTOCOL_MESSAGE_LENGTH %u\n", MAX_PROTOCOL_MESSAGE_LENGTH);
+LogPrint (BCLog::STORAGE, " %s\n", SanitizeString(hdr.GetCommand()));
+LogPrint (BCLog::STORAGE, " %u\n", m_node_id);
 
         LogPrint(BCLog::NET, "Header error: Size too large (%s, %u bytes), peer=%d\n", SanitizeString(hdr.GetCommand()), hdr.nMessageSize, m_node_id);
         return -1;

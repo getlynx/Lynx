@@ -29,8 +29,8 @@ extern std::string gstrJSONAssetStoreCharacters;
 
 bool file_to_hexchunks(std::string filepath, int& protocol, int& error_level, int& total_chunks, std::vector<std::string>& data_chunks, unsigned char* key) {
 
-LogPrint (BCLog::ALL, "encrypt from file_to_hexchunks %d \n", gintStoreAssetEncryptFlag);
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "encrypt from file_to_hexchunks %d \n", gintStoreAssetEncryptFlag);
+LogPrint (BCLog::STORAGE, "\n");
 
 /*
     std::string extension;
@@ -105,18 +105,18 @@ LogPrint (BCLog::ALL, "\n");
 
 /*
 
-    LogPrint (BCLog::ALL, "Asset in decimal \n");
+    LogPrint (BCLog::STORAGE, "Asset in decimal \n");
     for (int i = 0; i < intAssetLength; i++) {
-        LogPrint (BCLog::ALL, "%d ", buffer[i]);
+        LogPrint (BCLog::STORAGE, "%d ", buffer[i]);
     }
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
 */
 
     // Report asset length
-    LogPrint (BCLog::ALL, "Asset length %d \n", intAssetLength);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "Asset length %d \n", intAssetLength);
+    LogPrint (BCLog::STORAGE, "\n");
 
     // Asset plaintext
     std::string strAssetPlaintext;
@@ -137,29 +137,29 @@ if (gintStoreAssetEncryptFlag == 1) {
 
     std::copy(buffer, buffer + intAssetLength, std::back_inserter(strAssetPlaintext));
 
-    LogPrint (BCLog::ALL, "Asset length %d \n", intAssetLength);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "Asset length %d \n", intAssetLength);
+    LogPrint (BCLog::STORAGE, "\n");
 
 /*
 
 
     // Report asset plaintext
-    LogPrint (BCLog::ALL, "Asset plaintext %s \n", strAssetPlaintext);
+    LogPrint (BCLog::STORAGE, "Asset plaintext %s \n", strAssetPlaintext);
 
     // Report asset plaintext position 5 in decimal
-    LogPrint (BCLog::ALL, "Asset plaintext position 5 in decimal %d \n", strAssetPlaintext[4]);
+    LogPrint (BCLog::STORAGE, "Asset plaintext position 5 in decimal %d \n", strAssetPlaintext[4]);
 
     // Report asset plaintext size
-    LogPrint (BCLog::ALL, "Asset plaintext size %d \n", strAssetPlaintext.size());
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "Asset plaintext size %d \n", strAssetPlaintext.size());
+    LogPrint (BCLog::STORAGE, "\n");
 
 */
 
     // Vectorize asset plaintext
     std::vector<unsigned char> vctAssetPlaintext(strAssetPlaintext.begin(), strAssetPlaintext.end());
 
-    LogPrint (BCLog::ALL, "Asset length %d \n", intAssetLength);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "Asset length %d \n", intAssetLength);
+    LogPrint (BCLog::STORAGE, "\n");
 
 
 
@@ -198,12 +198,12 @@ if (gintStoreAssetEncryptFlag == 1) {
 /*
 
 // Report encrypted asset in decimal
-LogPrint (BCLog::ALL, "Encrypted asset in decimal \n");
+LogPrint (BCLog::STORAGE, "Encrypted asset in decimal \n");
 for (int i = 0; i < vctEncryptedAsset.size(); i++) {
-    LogPrint (BCLog::ALL, "%d ", vctEncryptedAsset[i]);
+    LogPrint (BCLog::STORAGE, "%d ", vctEncryptedAsset[i]);
 }
-LogPrint (BCLog::ALL, "\n");
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "\n");
+LogPrint (BCLog::STORAGE, "\n");
 
 */
 
@@ -211,8 +211,8 @@ LogPrint (BCLog::ALL, "\n");
 filelenext = vctEncryptedAsset.size();
 
 // Report encrypted asset size
-LogPrint (BCLog::ALL, "Encrypted asset size %d \n", vctEncryptedAsset.size());
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "Encrypted asset size %d \n", vctEncryptedAsset.size());
+LogPrint (BCLog::STORAGE, "\n");
 
 // Extensiom
 filelenext += (protocol == 1 ? OPENCODING_EXTENSION : 0);
@@ -229,18 +229,18 @@ for (int i = 0; i < vctEncryptedAsset.size(); i++) {
     buffer2[i] = vctEncryptedAsset[i];
 }
 
-LogPrint (BCLog::ALL, "Encrypted asset size %d \n", vctEncryptedAsset.size());
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "Encrypted asset size %d \n", vctEncryptedAsset.size());
+LogPrint (BCLog::STORAGE, "\n");
 
 /*
 
 // Report snatched encrypted asset in decimal
-LogPrint (BCLog::ALL, "Snatched encrypted asset in decimal \n");
+LogPrint (BCLog::STORAGE, "Snatched encrypted asset in decimal \n");
 for (int i = 0; i < vctEncryptedAsset.size(); i++) {
-    LogPrint (BCLog::ALL, "%d ", buffer2[i]);
+    LogPrint (BCLog::STORAGE, "%d ", buffer2[i]);
 }
-LogPrint (BCLog::ALL, "\n");
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "\n");
+LogPrint (BCLog::STORAGE, "\n");
 
 */
 
@@ -259,23 +259,23 @@ if (protocol == 1) {
 /*
 
 // Report snatched encrypted asset
-LogPrint (BCLog::ALL, "Snatched encrypted asset \n");
+LogPrint (BCLog::STORAGE, "Snatched encrypted asset \n");
 for (int i = 0; i < filelenext; i++) {
-    LogPrint (BCLog::ALL, "%02x", buffer2[i]);
+    LogPrint (BCLog::STORAGE, "%02x", buffer2[i]);
 }
-LogPrint (BCLog::ALL, "\n");
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "\n");
+LogPrint (BCLog::STORAGE, "\n");
 
 */
 
 // Report snatched extension in decimal
 if (protocol == 1) {
-    LogPrint (BCLog::ALL, "Snatched extension in decimal \n");
+    LogPrint (BCLog::STORAGE, "Snatched extension in decimal \n");
     for (int i = 0; i < 4; i++) {
-        LogPrint (BCLog::ALL, "%d ", buffer2[vctEncryptedAsset.size()+i]);
+        LogPrint (BCLog::STORAGE, "%d ", buffer2[vctEncryptedAsset.size()+i]);
     }
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 }
 
 
@@ -285,12 +285,12 @@ if (protocol == 1) {
 /*
 
     // Report encrypted asset
-    LogPrint (BCLog::ALL, "Encrypted asset \n");
+    LogPrint (BCLog::STORAGE, "Encrypted asset \n");
     for (unsigned char c : vctEncryptedAsset) {
-        LogPrint (BCLog::ALL, "%02x", c);
+        LogPrint (BCLog::STORAGE, "%02x", c);
     }
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
 */
 
@@ -305,8 +305,8 @@ if (protocol == 1) {
         aes_decrypt.Decrypt(&vctDecyptedAsset[i], &vctEncryptedAsset[i]);
     }
 
-    LogPrint (BCLog::ALL, "Encrypted asset size %d \n", vctEncryptedAsset.size());
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "Encrypted asset size %d \n", vctEncryptedAsset.size());
+    LogPrint (BCLog::STORAGE, "\n");
     
     // Remove padding 
     unsigned char chrPadValue = vctDecyptedAsset.back();
@@ -315,14 +315,14 @@ if (protocol == 1) {
 /*
 
     // Report decrypted asset
-    LogPrint (BCLog::ALL, "Decrypted asset in decumal \n");
+    LogPrint (BCLog::STORAGE, "Decrypted asset in decumal \n");
     for (size_t i = 0; i < vctDecyptedAsset.size(); ++i) {
-        LogPrint (BCLog::ALL, "%d ",vctDecyptedAsset[i]);
+        LogPrint (BCLog::STORAGE, "%d ",vctDecyptedAsset[i]);
     }
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "Decrypted asset length %d \n", vctDecyptedAsset.size());
-    LogPrint (BCLog::ALL, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "Decrypted asset length %d \n", vctDecyptedAsset.size());
+    LogPrint (BCLog::STORAGE, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
+    LogPrint (BCLog::STORAGE, "\n");
 
 */
 
@@ -350,33 +350,33 @@ if (gintStoreAssetEncryptFlag == 0) {
 /*
 
 // Report asset in decimal
-LogPrint (BCLog::ALL, "Asset in decimal \n");
+LogPrint (BCLog::STORAGE, "Asset in decimal \n");
 if (gintStoreAssetEncryptFlag == 0) {
     for (int i = 0; i < filelen; i++) {
-        LogPrint (BCLog::ALL, "%d ", buffer[i]);
+        LogPrint (BCLog::STORAGE, "%d ", buffer[i]);
     }
 } else {
     for (int i = 0; i <  intEncryptedAssetSize; i++) {
-        LogPrint (BCLog::ALL, "%d ", buffer2[i]);
+        LogPrint (BCLog::STORAGE, "%d ", buffer2[i]);
     }
 }
-LogPrint (BCLog::ALL, "\n");
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "\n");
+LogPrint (BCLog::STORAGE, "\n");
 
 */
 
 // Report extension in decimal
 if (protocol == 1) {
-    LogPrint (BCLog::ALL, "Extension in decimal \n");
+    LogPrint (BCLog::STORAGE, "Extension in decimal \n");
     for (int i = 0; i < 4; i++) {
         if (gintStoreAssetEncryptFlag == 0) {
-            LogPrint (BCLog::ALL, "%d ", buffer[filelen+i]);
+            LogPrint (BCLog::STORAGE, "%d ", buffer[filelen+i]);
         } else {
-            LogPrint (BCLog::ALL, "%d ", buffer2[intEncryptedAssetSize+i]);
+            LogPrint (BCLog::STORAGE, "%d ", buffer2[intEncryptedAssetSize+i]);
         }
     }
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 }
 
 
@@ -450,9 +450,9 @@ bool build_chunks_auth_header(std::string header, std::vector<std::string>& enco
 
     authheader += HexStr(signature);
 
-    LogPrint (BCLog::ALL, "HEADER CHUNK\n");
-    LogPrint (BCLog::ALL, "magic protocol uuid chunk_length magic-protocol-uuid-chunk_length-hashed-signed\n");
-    LogPrint (BCLog::ALL, "%s %s %s %s %s\n",
+    LogPrint (BCLog::STORAGE, "HEADER CHUNK\n");
+    LogPrint (BCLog::STORAGE, "magic protocol uuid chunk_length magic-protocol-uuid-chunk_length-hashed-signed\n");
+    LogPrint (BCLog::STORAGE, "%s %s %s %s %s\n",
       authheader.substr( 0, OPENCODING_MAGICLEN*2),
       authheader.substr( OPENCODING_MAGICLEN*2, OPENCODING_VERSIONLEN*2),
       authheader.substr(OPENCODING_MAGICLEN*2+OPENCODING_VERSIONLEN*2, OPENCODING_UUID*2),
@@ -481,8 +481,8 @@ bool build_chunks_with_headers(std::pair<std::string, std::string>& putinfo, int
 
     std::string uuid = validcustom ? customuuid : generate_uuid(OPENCODING_UUID);
 
-    LogPrint (BCLog::ALL, "uuid %s \n", uuid);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "uuid %s \n", uuid);
+    LogPrint (BCLog::STORAGE, "\n");
 
     unsigned char key[32];
 
@@ -492,19 +492,19 @@ bool build_chunks_with_headers(std::pair<std::string, std::string>& putinfo, int
         key[i] = static_cast<unsigned char>(byteValue);
     }
 
-    LogPrint (BCLog::ALL, "key \n");
+    LogPrint (BCLog::STORAGE, "key \n");
     for (int i = 0; i < 32; i++) {
-        LogPrint (BCLog::ALL, "%d ", key[i]);
+        LogPrint (BCLog::STORAGE, "%d ", key[i]);
     }
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
 
 
     //! start off using protocol 00, unless we detect an extension
     protocol = 0;
 
-LogPrint (BCLog::ALL, "json 5.1 \n");
+LogPrint (BCLog::STORAGE, "json 5.1 \n");
 
     if (!file_to_hexchunks(filepath, protocol, error_level, total_chunks, data_chunks, key)) {
 
@@ -512,7 +512,7 @@ LogPrint (BCLog::ALL, "json 5.1 \n");
         return false;
     }
 
-LogPrint (BCLog::ALL, "json 5.2 \n");
+LogPrint (BCLog::STORAGE, "json 5.2 \n");
 
     std::string strProtocol = "00";
     if ((protocol == 1) && (gintStoreAssetEncryptFlag == 0)) {
@@ -555,28 +555,28 @@ LogPrint (BCLog::ALL, "json 5.2 \n");
 
         header2 += get_len_as_hex(total_chunks, OPENCODING_CHUNKTOTAL);
 
-        LogPrint (BCLog::ALL, "\n");
-        LogPrint (BCLog::ALL, "DATA CHUNK %d\n", chunknum);
-        LogPrint (BCLog::ALL, "magic protocol uuid\n");
-        LogPrint (BCLog::ALL, "%s %s %s\n",
+        LogPrint (BCLog::STORAGE, "\n");
+        LogPrint (BCLog::STORAGE, "DATA CHUNK %d\n", chunknum);
+        LogPrint (BCLog::STORAGE, "magic protocol uuid\n");
+        LogPrint (BCLog::STORAGE, "%s %s %s\n",
           header.substr( 0, OPENCODING_MAGICLEN*2),
           header.substr( OPENCODING_MAGICLEN*2, OPENCODING_VERSIONLEN*2),
           header.substr( OPENCODING_MAGICLEN*2+OPENCODING_VERSIONLEN*2, OPENCODING_UUID*2));
 
-        LogPrint (BCLog::ALL, "\n");
-        LogPrint (BCLog::ALL, "length data_hash chunk_number total_chunks\n");
-        LogPrint (BCLog::ALL, "%s %s %s %s\n",
+        LogPrint (BCLog::STORAGE, "\n");
+        LogPrint (BCLog::STORAGE, "length data_hash chunk_number total_chunks\n");
+        LogPrint (BCLog::STORAGE, "%s %s %s %s\n",
           header2.substr( 0, OPENCODING_CHUNKLEN*2),
           header2.substr( OPENCODING_CHUNKLEN*2, OPENCODING_CHECKSUM*2),
           header2.substr( OPENCODING_CHUNKLEN*2+OPENCODING_CHECKSUM*2, OPENCODING_CHUNKNUM*2),
           header2.substr( OPENCODING_CHUNKLEN*2+OPENCODING_CHECKSUM*2+OPENCODING_CHUNKNUM*2, OPENCODING_CHUNKTOTAL*2));
 
-        LogPrint (BCLog::ALL, "\n");
-        LogPrint (BCLog::ALL, "data\n");
+        LogPrint (BCLog::STORAGE, "\n");
+        LogPrint (BCLog::STORAGE, "data\n");
 
 /*
 
-        LogPrint (BCLog::ALL, "%s\n", data_chunk);
+        LogPrint (BCLog::STORAGE, "%s\n", data_chunk);
 
 */
 

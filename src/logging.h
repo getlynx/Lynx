@@ -69,7 +69,7 @@ namespace BCLog {
         TXRECONCILIATION = (1 << 27),
         SCAN        = (1 << 28),
         POS         = (1 << 29),
-        //DATASTORE   = (1 << 30),
+        STORAGE   = (1 << 30),
         ALL         = ~(uint32_t)0,
     };
     enum class Level {

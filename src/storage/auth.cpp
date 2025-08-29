@@ -123,8 +123,8 @@ bool is_blockuuid_member(std::string uuid)
     LOCK(blockuuidListLock);
     for (auto& l : blockuuidList) {
 
-        LogPrint (BCLog::ALL, "l uuid %s %s \n", l, uuid);
-        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::STORAGE, "l uuid %s %s \n", l, uuid);
+        LogPrint (BCLog::STORAGE, "\n");
 
     if (l.substr(0,8) == uuid.substr(0,8)) {
             return true;
@@ -139,8 +139,8 @@ bool is_blocktenant_member(std::string tenant)
     LOCK(blocktenantListLock);
     for (auto& l : blocktenantList) {
 
-        LogPrint (BCLog::ALL, "l tenant %s %s \n", l, tenant);
-        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::STORAGE, "l tenant %s %s \n", l, tenant);
+        LogPrint (BCLog::STORAGE, "\n");
 
     if (l == tenant) {
             return true;
@@ -153,10 +153,10 @@ bool set_auth_user(std::string& privatewif)
 {
     CKey key = DecodeSecret(privatewif);
     if (!key.IsValid()) {
-        LogPrint (BCLog::ALL, "\n");
-        LogPrint (BCLog::ALL, "The private key provided via 'lynx-cli setauth' has NOT passed validation.\n");        
-        LogPrint (BCLog::ALL, "setauth set_auth_user privkey privatewif %s \n", privatewif);
-        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::STORAGE, "\n");
+        LogPrint (BCLog::STORAGE, "The private key provided via 'lynx-cli setauth' has NOT passed validation.\n");        
+        LogPrint (BCLog::STORAGE, "setauth set_auth_user privkey privatewif %s \n", privatewif);
+        LogPrint (BCLog::STORAGE, "\n");
       return false;
     }
 
@@ -165,29 +165,29 @@ bool set_auth_user(std::string& privatewif)
     authUser = hash160;
 
     // Dump authUser to log
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "The private key provided via 'lynx-cli setauth' has passed validation.\n");        
-    LogPrint (BCLog::ALL, "setauth set_auth_user privkey privatewif %s \n", privatewif);
-    LogPrint (BCLog::ALL, "setauth set_auth_user pubkey authUser %s\n", authUser.ToString());
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "The private key provided via 'lynx-cli setauth' has passed validation.\n");        
+    LogPrint (BCLog::STORAGE, "setauth set_auth_user privkey privatewif %s \n", privatewif);
+    LogPrint (BCLog::STORAGE, "setauth set_auth_user pubkey authUser %s\n", authUser.ToString());
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "NOTE THE FOLLOWING PROJECT PROTOCOL FOR ENABLING USER PUTFILE FUNCTIONALITY (set_auth_user)\n");
-    LogPrint (BCLog::ALL, "1) The super-user will lynx-cli setauth with the private motherkey.\n");
-    LogPrint (BCLog::ALL, "The above will succeed because the public motherkey is added to global variable authList at daemon startup.\n");
-    LogPrint (BCLog::ALL, "2) The super-user will lynx-cli setauth with the user privatekey.\n");
-    LogPrint (BCLog::ALL, "The above will fail because the user publickey does not exist in authList.\n");
-    LogPrint (BCLog::ALL, "However, the user publickey associated with the user privatekey will be sent to the log.\n");
-    LogPrint (BCLog::ALL, "3) The super-user will lynx-cli addauth with the user publickey from the log.\n");
-    LogPrint (BCLog::ALL, "Now the user publickey exists in authList\n");
-    LogPrint (BCLog::ALL, "4) The user will lynx-cli setauth with the user privatekey.\n");
-    LogPrint (BCLog::ALL, "The above will succeed because the user publickey exists in authList\n");
-    LogPrint (BCLog::ALL, "Now, the user is authenticated and putfile functionality is enabled for that user.\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "NOTE THE FOLLOWING PROJECT PROTOCOL FOR ENABLING USER PUTFILE FUNCTIONALITY (set_auth_user)\n");
+    LogPrint (BCLog::STORAGE, "1) The super-user will lynx-cli setauth with the private motherkey.\n");
+    LogPrint (BCLog::STORAGE, "The above will succeed because the public motherkey is added to global variable authList at daemon startup.\n");
+    LogPrint (BCLog::STORAGE, "2) The super-user will lynx-cli setauth with the user privatekey.\n");
+    LogPrint (BCLog::STORAGE, "The above will fail because the user publickey does not exist in authList.\n");
+    LogPrint (BCLog::STORAGE, "However, the user publickey associated with the user privatekey will be sent to the log.\n");
+    LogPrint (BCLog::STORAGE, "3) The super-user will lynx-cli addauth with the user publickey from the log.\n");
+    LogPrint (BCLog::STORAGE, "Now the user publickey exists in authList\n");
+    LogPrint (BCLog::STORAGE, "4) The user will lynx-cli setauth with the user privatekey.\n");
+    LogPrint (BCLog::STORAGE, "The above will succeed because the user publickey exists in authList\n");
+    LogPrint (BCLog::STORAGE, "Now, the user is authenticated and putfile functionality is enabled for that user.\n");
+    LogPrint (BCLog::STORAGE, "\n");
     
     authUserKey = privatewif;
 
-    LogPrint (BCLog::ALL, "setauth set_auth_user privkey authUserKey %s \n", authUserKey);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "setauth set_auth_user privkey authUserKey %s \n", authUserKey);
+    LogPrint (BCLog::STORAGE, "\n");
 
 
 
@@ -394,7 +394,7 @@ bool check_contextual_auth (std::string& chunk, int& error_level, int pintOffset
     uint32_t unixtime = hexstring_to_unixtime(time);
     if (unixtime < authTime) {
 
-LogPrint (BCLog::ALL, " unixtime authTime %d %d \n", unixtime, authTime);
+LogPrint (BCLog::STORAGE, " unixtime authTime %d %d \n", unixtime, authTime);
 
         // each auth message timestamp must be greater
         // than that of the previous timestamp
@@ -433,7 +433,7 @@ bool check_contextual_blockuuid (std::string& chunk, int& error_level, int pintO
     uint32_t unixtime = hexstring_to_unixtime(time);
     if (unixtime < blockuuidTime) {
 
-LogPrint (BCLog::ALL, " unixtime authTime %d %d \n", unixtime, blockuuidTime);
+LogPrint (BCLog::STORAGE, " unixtime authTime %d %d \n", unixtime, blockuuidTime);
 
         // each auth message timestamp must be greater
         // than that of the previous timestamp
@@ -472,7 +472,7 @@ bool check_contextual_blocktenant (std::string& chunk, int& error_level, int pin
     uint32_t unixtime = hexstring_to_unixtime(time);
     if (unixtime < blocktenantTime) {
 
-LogPrint (BCLog::ALL, " unixtime blocktenantTime %d %d \n", unixtime, blocktenantTime);
+LogPrint (BCLog::STORAGE, " unixtime blocktenantTime %d %d \n", unixtime, blocktenantTime);
 
         // each auth message timestamp must be greater
         // than that of the previous timestamp
@@ -588,12 +588,12 @@ bool process_auth_chunk (std::string& chunk, int& , int pintOffset)
     get_hash_from_auth (chunk, pubkey, pintOffset);
     get_signature_from_auth (chunk, signature, pintOffset);
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "AUTHORIZE TENANT DATA STRUCTURE (%s)\n", __func__);
-    LogPrint (BCLog::ALL, "magic type time pubkey signature\n");
-    LogPrint (BCLog::ALL, "%s %s %s %s %s\n", magic, type, time, pubkey, signature);
-    LogPrint (BCLog::ALL, "Block height: %d \n", gu32BlockHeight);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "AUTHORIZE TENANT DATA STRUCTURE (%s)\n", __func__);
+    LogPrint (BCLog::STORAGE, "magic type time pubkey signature\n");
+    LogPrint (BCLog::STORAGE, "%s %s %s %s %s\n", magic, type, time, pubkey, signature);
+    LogPrint (BCLog::STORAGE, "Block height: %d \n", gu32BlockHeight);
+    LogPrint (BCLog::STORAGE, "\n");
 
     // addauth or delauth
     if (operation == OPAUTH_ADDUSER) {
@@ -653,12 +653,12 @@ bool process_blockuuid_chunk (std::string& chunk, int& , int pintOffset)
     get_uuid_from_blockuuid (chunk, uuid, pintOffset);
     get_signature_from_blockuuid (chunk, signature, pintOffset);
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "BLOCKUUID DATA STRUCTURE (%s)\n", __func__);
-    LogPrint (BCLog::ALL, "magic type time uuid signature\n");
-    LogPrint (BCLog::ALL, "%s %s %s %s %s\n", magic, type, time, uuid, signature);
-    LogPrint (BCLog::ALL, "Block height: %d \n", gu32BlockHeight);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "BLOCKUUID DATA STRUCTURE (%s)\n", __func__);
+    LogPrint (BCLog::STORAGE, "magic type time uuid signature\n");
+    LogPrint (BCLog::STORAGE, "%s %s %s %s %s\n", magic, type, time, uuid, signature);
+    LogPrint (BCLog::STORAGE, "Block height: %d \n", gu32BlockHeight);
+    LogPrint (BCLog::STORAGE, "\n");
 
     // blockuuid or unblockuuid
     if (operation == OPBLOCKUUID_BLOCKUUID) {
@@ -710,12 +710,12 @@ bool process_blocktenant_chunk (std::string& chunk, int& , int pintOffset)
     get_tenant_from_blocktenant (chunk, tenant, pintOffset);
     get_signature_from_blocktenant (chunk, signature, pintOffset);
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "BLOCKTENANT DATA STRUCTURE (%s)\n", __func__);
-    LogPrint (BCLog::ALL, "magic type time tenant signature\n");
-    LogPrint (BCLog::ALL, "%s %s %s %s %s\n", magic, type, time, tenant, signature);
-    LogPrint (BCLog::ALL, "Block height: %d \n", gu32BlockHeight);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "BLOCKTENANT DATA STRUCTURE (%s)\n", __func__);
+    LogPrint (BCLog::STORAGE, "magic type time tenant signature\n");
+    LogPrint (BCLog::STORAGE, "%s %s %s %s %s\n", magic, type, time, tenant, signature);
+    LogPrint (BCLog::STORAGE, "Block height: %d \n", gu32BlockHeight);
+    LogPrint (BCLog::STORAGE, "\n");
 
     // blocktenant or unblocktenant
     if (operation == OPBLOCKTENANT_BLOCKTENANT) {
@@ -897,7 +897,7 @@ bool found_opreturn_in_authdata (const CScript& script_data, int& error_level, b
 
     // Return offset rather than strip non-payload data
     if (!strip_opreturndata_from_chunk (opdata, chunk, intOffset)) {
-        // LogPrint (BCLog::ALL, "%s - failed at strip_opreturndata_from_chunk\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - failed at strip_opreturndata_from_chunk\n", __func__);
         return false;
     }
 
@@ -906,7 +906,7 @@ bool found_opreturn_in_authdata (const CScript& script_data, int& error_level, b
     // Validate magic
     is_valid_chunk (opdata, type, intOffset);
     if (type != 2) {
-        // LogPrint (BCLog::ALL, "%s - unknown chunk type\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - unknown chunk type\n", __func__);
         return false;
     }
 
@@ -919,7 +919,7 @@ bool found_opreturn_in_authdata (const CScript& script_data, int& error_level, b
 
     // Check magic and time
     if (!check_contextual_auth (opdata, error_level, intOffset)) {
-        // LogPrint (BCLog::ALL, "%s - failed at check_contextual_auth\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - failed at check_contextual_auth\n", __func__);
         return false;
     }
 
@@ -927,7 +927,7 @@ bool found_opreturn_in_authdata (const CScript& script_data, int& error_level, b
 
     // Authorize tenant or de-authorize tenant
     if (!process_auth_chunk (opdata, error_level, intOffset)) {
-        // LogPrint (BCLog::ALL, "%s - failed at process_auth_chunk\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - failed at process_auth_chunk\n", __func__);
         return false;
     }
 
@@ -946,7 +946,7 @@ bool found_opreturn_in_blockuuiddata (const CScript& script_data, int& error_lev
 
     // Return offset rather than strip non-payload data
     if (!strip_opreturndata_from_chunk (opdata, chunk, intOffset)) {
-        // LogPrint (BCLog::ALL, "%s - failed at strip_opreturndata_from_chunk\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - failed at strip_opreturndata_from_chunk\n", __func__);
         return false;
     }
 
@@ -955,7 +955,7 @@ bool found_opreturn_in_blockuuiddata (const CScript& script_data, int& error_lev
     // Validate magic
     is_valid_chunk (opdata, type, intOffset);
     if (type != 3) {
-        // LogPrint (BCLog::ALL, "%s - unknown chunk type\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - unknown chunk type\n", __func__);
         return false;
     }
 
@@ -968,7 +968,7 @@ bool found_opreturn_in_blockuuiddata (const CScript& script_data, int& error_lev
 
     // Check magic and time
     if (!check_contextual_blockuuid (opdata, error_level, intOffset)) {
-        // LogPrint (BCLog::ALL, "%s - failed at check_contextual_auth\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - failed at check_contextual_auth\n", __func__);
         return false;
     }
 
@@ -976,7 +976,7 @@ bool found_opreturn_in_blockuuiddata (const CScript& script_data, int& error_lev
 
     // blockuuid or unblockuuid
     if (!process_blockuuid_chunk (opdata, error_level, intOffset)) {
-        // LogPrint (BCLog::ALL, "%s - failed at process_auth_chunk\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - failed at process_auth_chunk\n", __func__);
         return false;
     }
 
@@ -995,7 +995,7 @@ bool found_opreturn_in_blocktenantdata (const CScript& script_data, int& error_l
 
     // Return offset rather than strip non-payload data
     if (!strip_opreturndata_from_chunk (opdata, chunk, intOffset)) {
-        // LogPrint (BCLog::ALL, "%s - failed at strip_opreturndata_from_chunk\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - failed at strip_opreturndata_from_chunk\n", __func__);
         return false;
     }
 
@@ -1004,7 +1004,7 @@ bool found_opreturn_in_blocktenantdata (const CScript& script_data, int& error_l
     // Validate magic
     is_valid_chunk (opdata, type, intOffset);
     if (type != 4) {
-        // LogPrint (BCLog::ALL, "%s - unknown chunk type\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - unknown chunk type\n", __func__);
         return false;
     }
 
@@ -1017,7 +1017,7 @@ bool found_opreturn_in_blocktenantdata (const CScript& script_data, int& error_l
 
     // Check magic and time
     if (!check_contextual_blocktenant (opdata, error_level, intOffset)) {
-        // LogPrint (BCLog::ALL, "%s - failed at check_contextual_blocktenant\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - failed at check_contextual_blocktenant\n", __func__);
         return false;
     }
 
@@ -1025,7 +1025,7 @@ bool found_opreturn_in_blocktenantdata (const CScript& script_data, int& error_l
 
     // blocktennant or unblocktenant
     if (!process_blocktenant_chunk (opdata, error_level, intOffset)) {
-        // LogPrint (BCLog::ALL, "%s - failed at process_blocktenant_chunk\n", __func__);
+        // LogPrint (BCLog::STORAGE, "%s - failed at process_blocktenant_chunk\n", __func__);
         return false;
     }
 
@@ -1205,11 +1205,11 @@ if (is_opreturn_an_authdata (scrOpreturnData, error_level)) {
 
     // Validate authdata, and popoulate authList
     if (!found_opreturn_in_authdata (scrOpreturnData, error_level)) {
-        LogPrint (BCLog::ALL, "\n");
-        LogPrint (BCLog::ALL, "An invalid tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+        LogPrint (BCLog::STORAGE, "\n");
+        LogPrint (BCLog::STORAGE, "An invalid tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
     } else {
-        //LogPrint (BCLog::ALL, "\n");
-        //LogPrint (BCLog::ALL, "A valid tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+        //LogPrint (BCLog::STORAGE, "\n");
+        //LogPrint (BCLog::STORAGE, "A valid tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
     }
 
 }
@@ -1220,11 +1220,11 @@ if (is_opreturn_a_blockuuiddata (scrOpreturnData, error_level)) {
 
     // Validate blockuuiddata, and popoulate blockuuidList
     if (!found_opreturn_in_blockuuiddata (scrOpreturnData, error_level)) {
-        LogPrint (BCLog::ALL, "\n");
-        LogPrint (BCLog::ALL, "An invalid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+        LogPrint (BCLog::STORAGE, "\n");
+        LogPrint (BCLog::STORAGE, "An invalid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
     } else {
-        //LogPrint (BCLog::ALL, "\n");
-        //LogPrint (BCLog::ALL, "A valid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+        //LogPrint (BCLog::STORAGE, "\n");
+        //LogPrint (BCLog::STORAGE, "A valid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
     }
 
 }
@@ -1235,11 +1235,11 @@ if (is_opreturn_a_blocktenantdata (scrOpreturnData, error_level)) {
 
     // Validate blocktenantdata, and popoulate blocktenantList
     if (!found_opreturn_in_blocktenantdata (scrOpreturnData, error_level)) {
-        LogPrint (BCLog::ALL, "\n");
-        LogPrint (BCLog::ALL, "An invalid tenant was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+        LogPrint (BCLog::STORAGE, "\n");
+        LogPrint (BCLog::STORAGE, "An invalid tenant was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
     } else {
-        //LogPrint (BCLog::ALL, "\n");
-        //LogPrint (BCLog::ALL, "A valid tenant was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+        //LogPrint (BCLog::STORAGE, "\n");
+        //LogPrint (BCLog::STORAGE, "A valid tenant was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
     }
 
 }
@@ -1281,18 +1281,18 @@ if (is_opreturn_a_blocktenantdata (scrOpreturnData, error_level)) {
     dblComprehensiveFunctionTime = (double) (end_t - start_t) / CLOCKS_PER_SEC;
 
 #ifdef TIMING
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "elapsed ReadBlockFromDisk %ld \n", t_rbfd);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed ReadBlockFromDisk %ld \n", t_rbfd);
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "elapsed is_opreturn_an_authdata %ld \n", t_ioaa);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed is_opreturn_an_authdata %ld \n", t_ioaa);
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "elapsed found_opreturn_in_authdata %ld \n", t_foia);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed found_opreturn_in_authdata %ld \n", t_foia);
 #endif
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "The elapsed time to complete the scan_blocks_for_authdata() function was %ld seconds.\n", dblComprehensiveFunctionTime);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "The elapsed time to complete the scan_blocks_for_authdata() function was %ld seconds.\n", dblComprehensiveFunctionTime);
 
     return true;
 }
@@ -1407,11 +1407,11 @@ gu32BlockHeight = height;
 
                         // Validate blockuuiddate, and popoulate blockuuidList
                         if (!found_opreturn_in_blockuuiddata (scrOpreturnData, error_level)) {
-                            LogPrint (BCLog::ALL, "\n");
-                            LogPrint (BCLog::ALL, "An invalid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+                            LogPrint (BCLog::STORAGE, "\n");
+                            LogPrint (BCLog::STORAGE, "An invalid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
                         } else {
-                            //LogPrint (BCLog::ALL, "\n");
-                            //LogPrint (BCLog::ALL, "A valid Tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+                            //LogPrint (BCLog::STORAGE, "\n");
+                            //LogPrint (BCLog::STORAGE, "A valid Tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
                         }
 
 #ifdef TIMING
@@ -1434,18 +1434,18 @@ gu32BlockHeight = height;
     dblComprehensiveFunctionTime = (double) (end_t - start_t) / CLOCKS_PER_SEC;
 
 #ifdef TIMING
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "elapsed ReadBlockFromDisk %ld \n", t_rbfd);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed ReadBlockFromDisk %ld \n", t_rbfd);
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "elapsed is_opreturn_an_authdata %ld \n", t_ioaa);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed is_opreturn_an_authdata %ld \n", t_ioaa);
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "elapsed found_opreturn_in_authdata %ld \n", t_foia);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed found_opreturn_in_authdata %ld \n", t_foia);
 #endif
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "The elapsed time to complete the scan_blocks_for_blockuuiddata() function was %ld seconds.\n", dblComprehensiveFunctionTime);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "The elapsed time to complete the scan_blocks_for_blockuuiddata() function was %ld seconds.\n", dblComprehensiveFunctionTime);
 
     return true;
 }
@@ -1560,11 +1560,11 @@ gu32BlockHeight = height;
 
                         // Validate blocktenantdate, and popoulate blocktenantList
                         if (!found_opreturn_in_blocktenantdata (scrOpreturnData, error_level)) {
-                            LogPrint (BCLog::ALL, "\n");
-                            LogPrint (BCLog::ALL, "An invalid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+                            LogPrint (BCLog::STORAGE, "\n");
+                            LogPrint (BCLog::STORAGE, "An invalid uuid was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
                         } else {
-                            //LogPrint (BCLog::ALL, "\n");
-                            //LogPrint (BCLog::ALL, "A valid Tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
+                            //LogPrint (BCLog::STORAGE, "\n");
+                            //LogPrint (BCLog::STORAGE, "A valid Tenant public key was found in TX %s (vout %d).\n", blkBlock.vtx[vtx]->GetHash().ToString(), vout);
                         }
 
 #ifdef TIMING
@@ -1587,18 +1587,18 @@ gu32BlockHeight = height;
     dblComprehensiveFunctionTime = (double) (end_t - start_t) / CLOCKS_PER_SEC;
 
 #ifdef TIMING
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "elapsed ReadBlockFromDisk %ld \n", t_rbfd);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed ReadBlockFromDisk %ld \n", t_rbfd);
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "elapsed is_opreturn_an_authdata %ld \n", t_ioaa);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed is_opreturn_an_authdata %ld \n", t_ioaa);
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "elapsed found_opreturn_in_authdata %ld \n", t_foia);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed found_opreturn_in_authdata %ld \n", t_foia);
 #endif
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "The elapsed time to complete the scan_blocks_for_blocktenantdata() function was %ld seconds.\n", dblComprehensiveFunctionTime);
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "The elapsed time to complete the scan_blocks_for_blocktenantdata() function was %ld seconds.\n", dblComprehensiveFunctionTime);
 
     return true;
 }
@@ -1671,14 +1671,14 @@ bool scan_blocks_for_specific_authdata (ChainstateManager& chainman, uint160 has
     //end = clock ();    
     //t_cp = t_cp + (double) (end - start) / CLOCKS_PER_SEC;
 
-    //LogPrint (BCLog::ALL, "\n");
-    //LogPrint (BCLog::ALL, "elapsed time sbfsa ReadBlockFromDisk  %ld \n", t_rbfd);
+    //LogPrint (BCLog::STORAGE, "\n");
+    //LogPrint (BCLog::STORAGE, "elapsed time sbfsa ReadBlockFromDisk  %ld \n", t_rbfd);
 
-    //LogPrint (BCLog::ALL, "\n");
-    //LogPrint (BCLog::ALL, "elapsed time sbfsa is_opreturn_an_authdata  %ld \n", t_ioaa);
+    //LogPrint (BCLog::STORAGE, "\n");
+    //LogPrint (BCLog::STORAGE, "elapsed time sbfsa is_opreturn_an_authdata  %ld \n", t_ioaa);
 
-    //LogPrint (BCLog::ALL, "\n");
-    //LogPrint (BCLog::ALL, "elapsed time sbfsa compare_pubkey  %ld \n", t_cp);
+    //LogPrint (BCLog::STORAGE, "\n");
+    //LogPrint (BCLog::STORAGE, "elapsed time sbfsa compare_pubkey  %ld \n", t_cp);
 
                         return true;
                     }
@@ -1718,16 +1718,16 @@ bool generate_auth_payload(std::string& payload, int& type, uint32_t& time, std:
 
     payload += HexStr(signature);
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "ADDAUTH DATA STRUCTURE (generate_auth_payload)\n");
-    LogPrint (BCLog::ALL, "magic type time pubkey magic-type-time-pubkey-hashed-signed \n");
-    LogPrint (BCLog::ALL, "%s %s %s %s %s\n",
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "ADDAUTH DATA STRUCTURE (generate_auth_payload)\n");
+    LogPrint (BCLog::STORAGE, "magic type time pubkey magic-type-time-pubkey-hashed-signed \n");
+    LogPrint (BCLog::STORAGE, "%s %s %s %s %s\n",
       payload.substr( 0, OPENCODING_MAGICLEN*2),
       payload.substr( OPENCODING_MAGICLEN*2, OPAUTH_OPERATIONLEN*2),
       payload.substr( OPENCODING_MAGICLEN*2+OPAUTH_OPERATIONLEN*2, OPAUTH_TIMELEN*2),
       payload.substr( OPENCODING_MAGICLEN*2+OPAUTH_OPERATIONLEN*2+OPAUTH_TIMELEN*2, OPAUTH_HASHLEN*2),
       payload.substr( 0, payload.length()-(OPENCODING_MAGICLEN*2+OPAUTH_OPERATIONLEN*2+OPAUTH_TIMELEN*2+OPAUTH_HASHLEN*2)));
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
 
 
@@ -1763,16 +1763,16 @@ bool generate_blockuuid_payload(std::string& payload, int& type, uint32_t& time,
 
 
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "BLOCKUUID DATA STRUCTURE (generate_blockuuid_payload)\n");
-    LogPrint (BCLog::ALL, "magic type time uuid magic-type-time-uuid-hashed-signed \n");
-    LogPrint (BCLog::ALL, "%s %s %s %s %s\n",
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "BLOCKUUID DATA STRUCTURE (generate_blockuuid_payload)\n");
+    LogPrint (BCLog::STORAGE, "magic type time uuid magic-type-time-uuid-hashed-signed \n");
+    LogPrint (BCLog::STORAGE, "%s %s %s %s %s\n",
       payload.substr( 0, OPBLOCKUUID_MAGICLEN*2),
       payload.substr( OPBLOCKUUID_MAGICLEN*2, OPBLOCKUUID_OPERATIONLEN*2),
       payload.substr( OPBLOCKUUID_MAGICLEN*2+OPBLOCKUUID_OPERATIONLEN*2, OPBLOCKUUID_TIMELEN*2),
       payload.substr( OPBLOCKUUID_MAGICLEN*2+OPBLOCKUUID_OPERATIONLEN*2+OPBLOCKUUID_TIMELEN*2, OPBLOCKUUID_UUIDLEN*2),
       payload.substr( 0, payload.length()-(OPBLOCKUUID_MAGICLEN*2+OPBLOCKUUID_OPERATIONLEN*2+OPBLOCKUUID_TIMELEN*2+OPBLOCKUUID_UUIDLEN*2)));
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
 
 
@@ -1809,16 +1809,16 @@ bool generate_blocktenant_payload(std::string& payload, int& type, uint32_t& tim
 
 
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "BLOCKTENANT DATA STRUCTURE (generate_blocktenant_payload)\n");
-    LogPrint (BCLog::ALL, "magic type time tenant magic-type-time-uuid-hashed-signed \n");
-    LogPrint (BCLog::ALL, "%s %s %s %s %s\n",
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "BLOCKTENANT DATA STRUCTURE (generate_blocktenant_payload)\n");
+    LogPrint (BCLog::STORAGE, "magic type time tenant magic-type-time-uuid-hashed-signed \n");
+    LogPrint (BCLog::STORAGE, "%s %s %s %s %s\n",
       payload.substr( 0, OPBLOCKTENANT_MAGICLEN*2),
       payload.substr( OPBLOCKTENANT_MAGICLEN*2, OPBLOCKTENANT_OPERATIONLEN*2),
       payload.substr( OPBLOCKTENANT_MAGICLEN*2+OPBLOCKTENANT_OPERATIONLEN*2, OPBLOCKTENANT_TIMELEN*2),
       payload.substr( OPBLOCKTENANT_MAGICLEN*2+OPBLOCKTENANT_OPERATIONLEN*2+OPBLOCKTENANT_TIMELEN*2, OPBLOCKTENANT_TENANTLEN*2),
       payload.substr( 0, payload.length()-(OPBLOCKTENANT_MAGICLEN*2+OPBLOCKTENANT_OPERATIONLEN*2+OPBLOCKTENANT_TIMELEN*2+OPBLOCKTENANT_TENANTLEN*2)));
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
 
 
@@ -1830,14 +1830,14 @@ bool generate_blocktenant_payload(std::string& payload, int& type, uint32_t& tim
 bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload)
 {
 
-    LogPrint (BCLog::ALL, "BUILD ADDAUTH TRANSACTION (generate_auth_transaction)\n");
-    LogPrint (BCLog::ALL, "The addauth transaction contains:\n");
-    LogPrint (BCLog::ALL, "1) An input transaction from which to pay for the addauth transaction.\n");
-    LogPrint (BCLog::ALL, "2) An output for making change. \n");
-    LogPrint (BCLog::ALL, "3) An output containing the addauth payload, prepended with 106 as a single byte.\n");
-    LogPrint (BCLog::ALL, "On daemon startup, a blockchain scan for addauth transactions is done.\n");
-    LogPrint (BCLog::ALL, "For each addauth transaction encountered, a public key is added to global variable authList.\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "BUILD ADDAUTH TRANSACTION (generate_auth_transaction)\n");
+    LogPrint (BCLog::STORAGE, "The addauth transaction contains:\n");
+    LogPrint (BCLog::STORAGE, "1) An input transaction from which to pay for the addauth transaction.\n");
+    LogPrint (BCLog::STORAGE, "2) An output for making change. \n");
+    LogPrint (BCLog::STORAGE, "3) An output containing the addauth payload, prepended with 106 as a single byte.\n");
+    LogPrint (BCLog::STORAGE, "On daemon startup, a blockchain scan for addauth transactions is done.\n");
+    LogPrint (BCLog::STORAGE, "For each addauth transaction encountered, a public key is added to global variable authList.\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
     auto vpwallets = GetWallets(wallet_context);
     size_t nWallets = vpwallets.size();
@@ -1866,10 +1866,10 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
     CTxOut txOut(setValue, receiver);
 
 
-    LogPrint (BCLog::ALL, "Input size %d\n", setCoins.size());
-    LogPrint (BCLog::ALL, "Input hash %s\n", it->first->tx->GetHash().ToString());
-    LogPrint (BCLog::ALL, "Input index %d\n", it->second);
-    LogPrint (BCLog::ALL, "Output scriptPubKey %s\n", HexStr(receiver).substr(0, 30));
+    LogPrint (BCLog::STORAGE, "Input size %d\n", setCoins.size());
+    LogPrint (BCLog::STORAGE, "Input hash %s\n", it->first->tx->GetHash().ToString());
+    LogPrint (BCLog::STORAGE, "Input index %d\n", it->second);
+    LogPrint (BCLog::STORAGE, "Output scriptPubKey %s\n", HexStr(receiver).substr(0, 30));
 
     // Flag error and exit gracefully if attempt is made to create transaction with empty scriptPubKey
     if (receiver.size() == 0) {
@@ -1898,12 +1898,12 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
         tx.vout[0].nValue -= nFee;
 
-        LogPrint (BCLog::ALL, "\n");
-        LogPrint (BCLog::ALL, "Input value in satoshis:  %llu\n", setValue);
-        LogPrint (BCLog::ALL, "Transaction bytes: %d\n", nBytes);
-        LogPrint (BCLog::ALL, "Transaction fee in satoshis: %llu\n", nFee);
-        LogPrint (BCLog::ALL, "Change in satoshis: %llu\n", tx.vout[0].nValue);
-        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::STORAGE, "\n");
+        LogPrint (BCLog::STORAGE, "Input value in satoshis:  %llu\n", setValue);
+        LogPrint (BCLog::STORAGE, "Transaction bytes: %d\n", nBytes);
+        LogPrint (BCLog::STORAGE, "Transaction fee in satoshis: %llu\n", nFee);
+        LogPrint (BCLog::STORAGE, "Change in satoshis: %llu\n", tx.vout[0].nValue);
+        LogPrint (BCLog::STORAGE, "\n");
 
         //! sign tx again with correct fee in place
         if (!vpwallets[0]->SignTransaction(tx)) {
@@ -1923,14 +1923,14 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
 bool generate_blockuuid_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload)
 {
 
-    LogPrint (BCLog::ALL, "BUILD BLOCKUUID TRANSACTION (generate_blockuuid_transaction)\n");
-    LogPrint (BCLog::ALL, "The blockuuid transaction contains:\n");
-    LogPrint (BCLog::ALL, "1) An input transaction from which to pay for the blockuuid transaction.\n");
-    LogPrint (BCLog::ALL, "2) An output for making change. \n");
-    LogPrint (BCLog::ALL, "3) An output containing the blockuuid payload, prepended with 106 as a single byte.\n");
-    LogPrint (BCLog::ALL, "On daemon startup, a blockchain scan for blockuuid transactions is done.\n");
-    LogPrint (BCLog::ALL, "For each blockuuid transaction encountered, a uuid is added to global variable blockuuidList.\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "BUILD BLOCKUUID TRANSACTION (generate_blockuuid_transaction)\n");
+    LogPrint (BCLog::STORAGE, "The blockuuid transaction contains:\n");
+    LogPrint (BCLog::STORAGE, "1) An input transaction from which to pay for the blockuuid transaction.\n");
+    LogPrint (BCLog::STORAGE, "2) An output for making change. \n");
+    LogPrint (BCLog::STORAGE, "3) An output containing the blockuuid payload, prepended with 106 as a single byte.\n");
+    LogPrint (BCLog::STORAGE, "On daemon startup, a blockchain scan for blockuuid transactions is done.\n");
+    LogPrint (BCLog::STORAGE, "For each blockuuid transaction encountered, a uuid is added to global variable blockuuidList.\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
     auto vpwallets = GetWallets(wallet_context);
     size_t nWallets = vpwallets.size();
@@ -1959,10 +1959,10 @@ bool generate_blockuuid_transaction(WalletContext& wallet_context, CMutableTrans
     CTxOut txOut(setValue, receiver);
 
 
-    LogPrint (BCLog::ALL, "Input size %d\n", setCoins.size());
-    LogPrint (BCLog::ALL, "Input hash %s\n", it->first->tx->GetHash().ToString());
-    LogPrint (BCLog::ALL, "Input index %d\n", it->second);
-    LogPrint (BCLog::ALL, "Output scriptPubKey %s\n", HexStr(receiver).substr(0, 30));
+    LogPrint (BCLog::STORAGE, "Input size %d\n", setCoins.size());
+    LogPrint (BCLog::STORAGE, "Input hash %s\n", it->first->tx->GetHash().ToString());
+    LogPrint (BCLog::STORAGE, "Input index %d\n", it->second);
+    LogPrint (BCLog::STORAGE, "Output scriptPubKey %s\n", HexStr(receiver).substr(0, 30));
 
     // Flag error and exit gracefully if attempt is made to create transaction with empty scriptPubKey
     if (receiver.size() == 0) {
@@ -1991,12 +1991,12 @@ bool generate_blockuuid_transaction(WalletContext& wallet_context, CMutableTrans
         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
         tx.vout[0].nValue -= nFee;
 
-        LogPrint (BCLog::ALL, "\n");
-        LogPrint (BCLog::ALL, "Input value in satoshis:  %llu\n", setValue);
-        LogPrint (BCLog::ALL, "Transaction bytes: %d\n", nBytes);
-        LogPrint (BCLog::ALL, "Transaction fee in satoshis: %llu\n", nFee);
-        LogPrint (BCLog::ALL, "Change in satoshis: %llu\n", tx.vout[0].nValue);
-        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::STORAGE, "\n");
+        LogPrint (BCLog::STORAGE, "Input value in satoshis:  %llu\n", setValue);
+        LogPrint (BCLog::STORAGE, "Transaction bytes: %d\n", nBytes);
+        LogPrint (BCLog::STORAGE, "Transaction fee in satoshis: %llu\n", nFee);
+        LogPrint (BCLog::STORAGE, "Change in satoshis: %llu\n", tx.vout[0].nValue);
+        LogPrint (BCLog::STORAGE, "\n");
 
         //! sign tx again with correct fee in place
         if (!vpwallets[0]->SignTransaction(tx)) {
@@ -2014,14 +2014,14 @@ bool generate_blockuuid_transaction(WalletContext& wallet_context, CMutableTrans
 bool generate_blocktenant_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload)
 {
 
-    LogPrint (BCLog::ALL, "BUILD BLOCKTENANT TRANSACTION (generate_blocktenant_transaction)\n");
-    LogPrint (BCLog::ALL, "The blocktenant transaction contains:\n");
-    LogPrint (BCLog::ALL, "1) An input transaction from which to pay for the blocktenant transaction.\n");
-    LogPrint (BCLog::ALL, "2) An output for making change. \n");
-    LogPrint (BCLog::ALL, "3) An output containing the blocktenant payload, prepended with 106 as a single byte.\n");
-    LogPrint (BCLog::ALL, "On daemon startup, a blockchain scan for blocktenant transactions is done.\n");
-    LogPrint (BCLog::ALL, "For each blocktenant transaction encountered, a tenant is added to global variable blocktenantList.\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "BUILD BLOCKTENANT TRANSACTION (generate_blocktenant_transaction)\n");
+    LogPrint (BCLog::STORAGE, "The blocktenant transaction contains:\n");
+    LogPrint (BCLog::STORAGE, "1) An input transaction from which to pay for the blocktenant transaction.\n");
+    LogPrint (BCLog::STORAGE, "2) An output for making change. \n");
+    LogPrint (BCLog::STORAGE, "3) An output containing the blocktenant payload, prepended with 106 as a single byte.\n");
+    LogPrint (BCLog::STORAGE, "On daemon startup, a blockchain scan for blocktenant transactions is done.\n");
+    LogPrint (BCLog::STORAGE, "For each blocktenant transaction encountered, a tenant is added to global variable blocktenantList.\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
     auto vpwallets = GetWallets(wallet_context);
     size_t nWallets = vpwallets.size();
@@ -2050,10 +2050,10 @@ bool generate_blocktenant_transaction(WalletContext& wallet_context, CMutableTra
     CTxOut txOut(setValue, receiver);
 
 
-    LogPrint (BCLog::ALL, "Input size %d\n", setCoins.size());
-    LogPrint (BCLog::ALL, "Input hash %s\n", it->first->tx->GetHash().ToString());
-    LogPrint (BCLog::ALL, "Input index %d\n", it->second);
-    LogPrint (BCLog::ALL, "Output scriptPubKey %s\n", HexStr(receiver).substr(0, 30));
+    LogPrint (BCLog::STORAGE, "Input size %d\n", setCoins.size());
+    LogPrint (BCLog::STORAGE, "Input hash %s\n", it->first->tx->GetHash().ToString());
+    LogPrint (BCLog::STORAGE, "Input index %d\n", it->second);
+    LogPrint (BCLog::STORAGE, "Output scriptPubKey %s\n", HexStr(receiver).substr(0, 30));
 
     // Flag error and exit gracefully if attempt is made to create transaction with empty scriptPubKey
     if (receiver.size() == 0) {
@@ -2082,12 +2082,12 @@ bool generate_blocktenant_transaction(WalletContext& wallet_context, CMutableTra
         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
         tx.vout[0].nValue -= nFee;
 
-        LogPrint (BCLog::ALL, "\n");
-        LogPrint (BCLog::ALL, "Input value in satoshis:  %llu\n", setValue);
-        LogPrint (BCLog::ALL, "Transaction bytes: %d\n", nBytes);
-        LogPrint (BCLog::ALL, "Transaction fee in satoshis: %llu\n", nFee);
-        LogPrint (BCLog::ALL, "Change in satoshis: %llu\n", tx.vout[0].nValue);
-        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::STORAGE, "\n");
+        LogPrint (BCLog::STORAGE, "Input value in satoshis:  %llu\n", setValue);
+        LogPrint (BCLog::STORAGE, "Transaction bytes: %d\n", nBytes);
+        LogPrint (BCLog::STORAGE, "Transaction fee in satoshis: %llu\n", nFee);
+        LogPrint (BCLog::STORAGE, "Change in satoshis: %llu\n", tx.vout[0].nValue);
+        LogPrint (BCLog::STORAGE, "\n");
 
         //! sign tx again with correct fee in place
         if (!vpwallets[0]->SignTransaction(tx)) {

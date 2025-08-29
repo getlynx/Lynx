@@ -1,0 +1,12 @@
+. src/init.cpp
+. src/validation.cpp
+. src/wallet/rpc/spend.cpp
+. src/net.cpp
+. src/storage/util.cpp
+. src/storage/storage.cpp
+. src/storage/auth.cpp
+. src/storage/worker.cpp
+. src/storage/rpc.cpp
+. src/logging.cpp
+. src/opfile/src/encode.cpp
+src/opfile/src/decode.cpp

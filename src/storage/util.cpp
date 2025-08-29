@@ -198,12 +198,12 @@ bool is_valid_uuid(std::string& uuid, int& invalidity_type)
 {
     invalidity_type = 0;
     if (uuid.size() != OPENCODING_UUID*2) {
-        //LogPrint (BCLog::ALL, "Invalid uuid length: %s\n", uuid);
+        //LogPrint (BCLog::STORAGE, "Invalid uuid length: %s\n", uuid);
         invalidity_type = 1;
         return false;
     }    
     if (!is_hex_notation(uuid)) {
-        //LogPrint (BCLog::ALL, "Invalid uuid hex notation: %s\n", uuid);
+        //LogPrint (BCLog::STORAGE, "Invalid uuid hex notation: %s\n", uuid);
         invalidity_type = 2;
         return false;
     }  

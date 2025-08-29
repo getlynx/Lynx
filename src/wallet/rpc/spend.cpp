@@ -45,7 +45,7 @@ void get_min_depth (CWallet* wallet, int& pintMinDepth)
         const auto& txout = output.txout;
         {
 
-            LogPrint (BCLog::ALL, "Satoshis: %d\n", output.txout.nValue);
+            LogPrint (BCLog::STORAGE, "Satoshis: %d\n", output.txout.nValue);
 
             LOCK(wallet->cs_wallet);
 
@@ -122,7 +122,7 @@ void fncGetMinUTXODepth (CWallet* iwltWallet, int& ointMinUTXODeoth)
         {
 
             // Report coin value
-            LogPrint (BCLog::ALL, "Satoshis: %d\n", output.txout.nValue);
+            LogPrint (BCLog::STORAGE, "Satoshis: %d\n", output.txout.nValue);
 
             // Lock wallet
             LOCK(iwltWallet->cs_wallet);
