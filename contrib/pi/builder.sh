@@ -25,10 +25,14 @@ set -euo pipefail
 #      - Sets up 4GB swap file if current swap is less than 3GB
 #      - Installs Lynx ARM binaries if not present
 #      - Creates systemd service (lynx.service) for the Lynx daemon
+#      - Creates wallet backup service (lynx-wallet-backup.service) running every 60 minutes
 #
 #   2. USER EXPERIENCE:
 #      - Adds convenient aliases to ~/.bashrc for common Lynx operations
-#      - Creates a beautiful MOTD (Message of the Day) with node status
+#      - Creates a beautiful MOTD (Message of the Day) with real-time node statistics
+#      - Shows staking performance metrics directly from wallet RPC (not log files)
+#      - Displays 24-hour and 7-day yield rates based on network block time
+#      - Tracks immature stake rewards awaiting maturity
 #      - Provides quick access to wallet commands, system monitoring, and logs
 #
 #   3. NODE MAINTENANCE:
@@ -39,13 +43,16 @@ set -euo pipefail
 #
 ################################################################################
 #
-# ALIASES CREATED (type 'motd' to see all):
+# ALIASES CREATED (type 'l' to see all):
 #   WALLET COMMANDS:
 #     gb    - Get wallet balances
 #     gna   - Generate new address
 #     lag   - List address groupings
 #     sta   - Send to address
 #     swe   - Sweep a wallet (send all funds)
+#     bac   - Manual wallet backup
+#     lbac  - List backup directory contents
+#     wd    - Change to Lynx working directory
 #
 #   SYSTEM COMMANDS:
 #     lv    - Show Lynx version
@@ -59,7 +66,7 @@ set -euo pipefail
 #
 #   USEFUL COMMANDS:
 #     htop  - Monitor system resources
-#     motd  - Show help message again
+#     l     - Show help message and node statistics
 #
 ################################################################################
 #
@@ -75,6 +82,7 @@ set -euo pipefail
 #   - wget, curl, unzip
 #   - fallocate, mkswap, swapon
 #   - logger (for system logging)
+#   - awk (for JSON parsing - no jq required)
 #
 ################################################################################
 #
@@ -92,6 +100,12 @@ set -euo pipefail
 #   - INITIAL SETUP: Creates all necessary files and services
 #   - MAINTENANCE: Runs every 12 minutes via systemd timer
 #   - SYNC MONITORING: Checks blockchain sync status and manages daemon
+#
+# PERFORMANCE OPTIMIZATIONS:
+#   - Stakes counting: Uses wallet RPC instead of parsing debug.log (prevents truncation issues)
+#   - Block counting: Uses fixed 5-minute block time instead of intensive RPC loops
+#   - Immature stakes: Uses listtransactions with awk parsing (no jq dependency)
+#   - All metrics calculated in real-time from wallet, not from log files
 #
 # LOGGING:
 #   - All operations are logged to systemd journal
@@ -168,10 +182,17 @@ create_motd_function() {
 show_lynx_motd() {
     echo ""
     WorkingDirectory=/var/lib/lynx
-    # Count stakes won in the last 24 hours
-    stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '24 hours ago' '+%Y-%m-%d')" | wc -l)
-    if [ -z "$stakes_won" ] || [ "$stakes_won" = "0" ]; then
-        stakes_won=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date '+%Y-%m-%d')" | wc -l)
+    # Count stakes won in the last 24 hours using wallet RPC
+    # Get timestamp from 24 hours ago
+    since_timestamp=$(date -d '24 hours ago' +%s)
+    
+    # Query wallet for stake transactions from last 24 hours
+    # Uses awk to parse JSON and count unique stake transactions
+    stakes_won=$(lynx-cli listtransactions "*" 1000 0 true 2>/dev/null | awk -v since="$since_timestamp" '/"category".*"stake"/ { in_stake=1 } /"time":/ && in_stake { gsub(/[^0-9]/, "", $2); if ($2 >= since) { time_ok=1 } else { time_ok=0 } } /"txid":/ && in_stake && time_ok { gsub(/[",]/, "", $2); txids[$2]=1; in_stake=0; time_ok=0 } END { print length(txids) }')
+    
+    # Default to 0 if command fails or returns empty
+    if [ -z "$stakes_won" ] || [ "$stakes_won" = "" ]; then
+        stakes_won="0"
     fi
 
     # Calculate dynamic spacing for "Stakes won in last 24 hours" display
@@ -180,11 +201,10 @@ show_lynx_motd() {
     spaces_needed=$((28 - stakes_digits))
     spacing=$(printf '%*s' "$spaces_needed" '')
 
-    # Count total blocks (UpdateTip) in the last 24 hours for yield calculation
-    total_blocks=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '24 hours ago' '+%Y-%m-%d')" | wc -l)
-    if [ -z "$total_blocks" ] || [ "$total_blocks" = "0" ]; then
-        total_blocks=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date '+%Y-%m-%d')" | wc -l)
-    fi
+    # Calculate total blocks in last 24 hours based on average block time
+    # Lynx has a 5-minute (300 second) average block time
+    # 24 hours = 1440 minutes / 5 minutes per block = 288 blocks
+    total_blocks=288
 
     # Calculate percent yield (stakes won / total blocks * 100)
     if [ "$total_blocks" -gt 0 ]; then
@@ -194,22 +214,25 @@ show_lynx_motd() {
         percent_yield="0.000"
     fi
 
-    # Calculate dynamic spacing for "Yield rate" display
-    # Formula: 28 - yield_digits = spaces needed (28 is the base spacing for 6 digits: "0.000")
+    # Calculate dynamic spacing for "24-hour yield rate" display
+    # Formula: 20 - yield_digits = spaces needed (20 is the base spacing for 6 digits: "0.000")
     yield_numeric=$(echo "$percent_yield" | sed 's/%//')
     yield_digits=${#yield_numeric}
-    spaces_needed=$((28 - yield_digits))
+    spaces_needed=$((20 - yield_digits))
     yield_spacing=$(printf '%*s' "$spaces_needed" '')
 
-    # Count stakes won in the last 7 days
-    stakes_won_7d=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '7 days ago' '+%Y-%m-%d')" | wc -l)
-    if [ -z "$stakes_won_7d" ] || [ "$stakes_won_7d" = "0" ]; then
-        # Try to get stakes from the last 7 days by checking each day
-        stakes_won_7d=0
-        for i in {1..7}; do
-            daily_stakes=$(grep "New proof-of-stake block found" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d "$i days ago" '+%Y-%m-%d')" | wc -l)
-            stakes_won_7d=$((stakes_won_7d + daily_stakes))
-        done
+    # Count stakes won in the last 7 days using wallet RPC
+    # Get timestamp from 7 days ago
+    since_timestamp_7d=$(date -d '7 days ago' +%s)
+    
+    # Query wallet for stake transactions from last 7 days
+    # Note: May need to increase transaction count for longer periods
+    # Uses awk to parse JSON and count unique stake transactions
+    stakes_won_7d=$(lynx-cli listtransactions "*" 5000 0 true 2>/dev/null | awk -v since="$since_timestamp_7d" '/"category".*"stake"/ { in_stake=1 } /"time":/ && in_stake { gsub(/[^0-9]/, "", $2); if ($2 >= since) { time_ok=1 } else { time_ok=0 } } /"txid":/ && in_stake && time_ok { gsub(/[",]/, "", $2); txids[$2]=1; in_stake=0; time_ok=0 } END { print length(txids) }')
+    
+    # Default to 0 if command fails or returns empty
+    if [ -z "$stakes_won_7d" ] || [ "$stakes_won_7d" = "" ]; then
+        stakes_won_7d="0"
     fi
 
     # Calculate dynamic spacing for "Stakes won in last 7 days" display
@@ -218,16 +241,10 @@ show_lynx_motd() {
     spaces_needed=$((30 - stakes_7d_digits))
     spacing_7d=$(printf '%*s' "$spaces_needed" '')
 
-    # Count total blocks (UpdateTip) in the last 7 days for yield calculation
-    total_blocks_7d=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d '7 days ago' '+%Y-%m-%d')" | wc -l)
-    if [ -z "$total_blocks_7d" ] || [ "$total_blocks_7d" = "0" ]; then
-        # Try to get blocks from the last 7 days by checking each day
-        total_blocks_7d=0
-        for i in {1..7}; do
-            daily_blocks=$(grep "UpdateTip" $WorkingDirectory/debug.log 2>/dev/null | grep "$(date -d "$i days ago" '+%Y-%m-%d')" | wc -l)
-            total_blocks_7d=$((total_blocks_7d + daily_blocks))
-        done
-    fi
+    # Calculate total blocks in last 7 days based on average block time
+    # Lynx has a 5-minute (300 second) average block time
+    # 7 days = 10080 minutes / 5 minutes per block = 2016 blocks
+    total_blocks_7d=2016
 
     # Calculate percent yield for 7 days (stakes won / total blocks * 100)
     if [ "$total_blocks_7d" -gt 0 ]; then
@@ -244,16 +261,17 @@ show_lynx_motd() {
     spaces_needed=$((22 - yield_7d_digits))
     yield_7d_spacing=$(printf '%*s' "$spaces_needed" '')
 
-    # Count immature UTXOs (confirmations < 31)
-    immature_utxos=$(lynx-cli listunspent 2>/dev/null | grep confirmations | sed 's/.*"confirmations": \([0-9]*\).*/\1/' | awk '$1 < 31' | wc -l)
-    if [ -z "$immature_utxos" ]; then
+    # Count immature stake UTXOs (confirmations < 31 from stake transactions)
+    # Using listtransactions to identify stake rewards that are still maturing
+    immature_utxos=$(lynx-cli listtransactions "*" 500 0 true 2>/dev/null | awk '/"category".*"stake"/ {stake=1} /"confirmations":/ && stake {gsub(/[^0-9]/, "", $2); if ($2 < 31 && $2 > 0) count++; stake=0} END {print count+0}')
+    if [ -z "$immature_utxos" ] || [ "$immature_utxos" = "" ]; then
         immature_utxos="0"
     fi
 
-    # Calculate dynamic spacing for "Immature UTXOs" display
-    # Formula: 20 - immature_digits = spaces needed (20 is the base spacing for 1 digit)
+    # Calculate dynamic spacing for "Immature stakes" display
+    # Formula: 19 - immature_digits = spaces needed (19 is the base spacing for 1 digit)
     immature_digits=${#immature_utxos}
-    spaces_needed=$((20 - immature_digits))
+    spaces_needed=$((19 - immature_digits))
     immature_spacing=$(printf '%*s' "$spaces_needed" '')
 
     # Get current wallet balance
@@ -285,10 +303,10 @@ show_lynx_motd() {
     echo "╠════════════════════════════════════════════════════════════════╣"
     echo "║  NODE STATUS:                                                  ║"
     echo "║    🎯 Stakes won in last 24 hours: $stakes_won$spacing║"
-    echo "║    📊 Yield rate (stakes/blocks): ${percent_yield}%$yield_spacing║"
+    echo "║    📊 24-hour yield rate (stakes/blocks): ${percent_yield}%$yield_spacing║"
     echo "║    🎯 Stakes won in last 7 days: $stakes_won_7d$spacing_7d║"
     echo "║    📊 7-day yield rate (stakes/blocks): ${percent_yield_7d}%$yield_7d_spacing║"
-    echo "║    🔄 Immature UTXOs (< 31 confirmations): $immature_utxos$immature_spacing║"
+    echo "║    🔄 Immature stakes (< 31 confirmations): $immature_utxos$immature_spacing║"
     echo "║    💰 Current wallet balance: $wallet_balance$balance_spacing║"
     echo "║                                                                ║"
     echo "║  WALLET COMMANDS:                                              ║"
@@ -313,7 +331,7 @@ show_lynx_motd() {
     echo "║                                                                ║"
     echo "║  USEFUL COMMANDS:                                              ║"
     echo "║    htop                   - Monitor system resources           ║"
-    echo "║    motd                   - Show this help message again       ║"
+    echo "║    l                      - Show this help message again       ║"
     echo "║                                                                ║"
     echo "║  📚 Complete project documentation: https://docs.getlynx.io/   ║"
     echo "║  💾 Store files permanently: https://clevver.org/              ║"
@@ -362,7 +380,7 @@ swe() { lynx-cli sendtoaddress "\$1" "\$(lynx-cli getbalance)" "" "" true; }
 alias jou='journalctl -t builder.sh -n 100 -f'
 alias gbi='lynx-cli getblockchaininfo'
 alias lelp='lynx-cli help'
-alias motd='show_lynx_motd'
+alias l='show_lynx_motd'
 alias stat='systemctl status lynx'
 $ALIAS_BLOCK_END
 
