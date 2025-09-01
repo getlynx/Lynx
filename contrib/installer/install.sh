@@ -613,8 +613,9 @@ cleanup_bashrc_empty_lines() {
 
 # Function to create install.service and install.timer if not present
 create_install_timer() {
+    log "Checking for the existence of /etc/systemd/system/install.service and /etc/systemd/system/install.timer."
     if [ ! -f /etc/systemd/system/install.service ] || [ ! -f /etc/systemd/system/install.timer ]; then
-        log "Creating /etc/systemd/system/install.service and install.timer."
+        log "Creating /etc/systemd/system/install.service and /etc/systemd/system/install.timer."
         cat <<EOF > /etc/systemd/system/install.service
 [Unit]
 Description=Run install.sh every 12 minutes
@@ -644,13 +645,18 @@ Persistent=false
 [Install]
 WantedBy=timers.target
 EOF
+        log "Executing daemon-reload for new /etc/systemd/system/install.service and /etc/systemd/system/install.timer."
         systemctl daemon-reload
-        systemctl enable install.timer
+        log "Enabled systemd for new /etc/systemd/system/install.timer."
+        systemctl enable install.timer >/dev/null 2>&1
+        log "Starting systemd for new /etc/systemd/system/install.timer."
         systemctl start install.timer
-        log "/etc/systemd/system/install.service and install.timer created, enabled, and started."
+        log "/etc/systemd/system/install.service and /etc/systemd/system/install.timer created, enabled, and started."
         
         # Disable firewalld and SELinux on RHEL-based systems
+        log "Checking for RHEL-based system to disable firewalld and SELinux."
         if [ "$os_family" = "redhat" ]; then
+            log "Checking for firewalld to disable on RHEL-based system."
             # Disable firewalld if installed
             if systemctl list-unit-files | grep -q firewalld; then
                 log "Disabling firewalld on RHEL-based system..."
@@ -680,18 +686,32 @@ EOF
             else
                 log "SELinux is not installed - skipping"
             fi
+        else
+            log "Not a RHEL-based system - skipping"
         fi
         
-        log "Gracefully exiting script."
+        log "Installation of Lynx has begun. The device will reboot in 5 seconds. Please wait..."
+        echo ""
+        echo ""
         echo "Installation of Lynx has begun. The device will reboot in 5 seconds. Please wait..."
+        echo ""
+        echo ""
         sleep 5
-        reboot
+        
+        # Try multiple reboot methods for reliability
+        log "Attempting to reboot system..."
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl reboot
+        elif command -v shutdown >/dev/null 2>&1; then
+            shutdown -r now
+        else
+            reboot
+        fi
+        
+        # If we get here, force exit
         exit 0
     else
-        # Only log if system has been running for 6 hours or less
-        if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-            log "/etc/systemd/system/install.service and install.timer already exist. Skipping creation."
-        fi
+        log "/etc/systemd/system/install.service and /etc/systemd/system/install.timer already exist. Skipping creation."
     fi
 }
 
@@ -1319,33 +1339,6 @@ EOF
     fi
 }
 
-
-
-# Function to check if blockchain sync is complete
-check_blockchain_sync() {
-    # Try to get blockchain info with error handling
-    SYNC_STATUS=$(/usr/local/bin/lynx-cli getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
-
-    # Check if the command succeeded and returned valid data
-    if [ $? -eq 0 ] && [ -n "$SYNC_STATUS" ] && [ "$SYNC_STATUS" != "null" ]; then
-        if [ "$SYNC_STATUS" = "false" ]; then
-            log "Blockchain sync complete. Stopping and disabling install.timer."
-            systemctl stop install.timer
-            systemctl disable install.timer
-            log "Disabling rc.local to prevent future install.sh downloads"
-            chmod -x /etc/rc.local
-            return
-        else
-            #log "Blockchain still syncing or status unknown (got:$SYNC_STATUS). Restarting Lynx daemon."
-            log "Blockchain still syncing or status unknown. Expected behaviour. Restarting Lynx daemon. "
-            systemctl restart lynx.service
-        fi
-    else
-        log "Daemon not ready or RPC call failed. Will try again next time."
-        return 0
-    fi
-}
-
 # If called with 'update', run only the update process
 if [[ "${1:-}" == "update" ]]; then
     check_root
@@ -1358,7 +1351,49 @@ if [[ "${1:-}" == "update" ]]; then
     exit 0
 fi
 
+# If called with 'isBlockchainSyncComplete', run only the blockchain sync check
+isBlockchainSyncComplete() {
+    # Compact blockchain sync check logic
+    WorkingDirectory=/var/lib/lynx
+
+    # Check if lynx-cli is available
+    if [ ! -f "/usr/local/bin/lynx-cli" ]; then 
+        log "ERROR: lynx-cli binary not found. Cannot check sync status."
+        log "Will continue to install Lynx and other services."
+        return 0
+    fi
+
+    # Get blockchain sync status
+    log "Checking blockchain sync status..."
+    SYNC_STATUS=$(/usr/local/bin/lynx-cli -datadir=$WorkingDirectory getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
+
+    # Log the raw status for debugging
+    log "Raw sync status (initialblockdownload): '$SYNC_STATUS'"
+
+    # If sync is complete (false), stop and disable timer
+    if [ "$SYNC_STATUS" = "false" ]; then
+        log "Blockchain sync complete. Stopping and disabling install.timer."
+        systemctl stop install.timer
+        systemctl disable install.timer
+        log "Disabling rc.local to prevent future install.sh downloads"
+        chmod -x /etc/rc.local
+        exit 0
+    fi
+
+    # If still syncing, restart lynx service
+    if [ -n "$SYNC_STATUS" ] && [ "$SYNC_STATUS" != "null" ]; then
+        log "Blockchain still syncing (initialblockdownload: $SYNC_STATUS). Restarting Lynx daemon. This is expected behaviour."
+        systemctl restart lynx.service
+    else
+        log "Daemon not ready or RPC call failed. Will try again next time."
+    fi
+
+    exit 0
+}
+
 check_root
+
+isBlockchainSyncComplete
 
 # Set os_family early so it's available for all functions
 os_family=$(get_os_family)
@@ -1400,6 +1435,3 @@ create_lynx_service
 
 # Call the lynx service running check function
 ensure_lynx_service_running
-
-# Call the blockchain sync check function
-check_blockchain_sync
