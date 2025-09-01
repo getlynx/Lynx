@@ -127,10 +127,10 @@ bool is_valid_authchunk (std::string& chunk, int& error_level, int offset)
     char checkhash[OPENCODING_CHECKSUM*8];
     memset(checkhash, 0, sizeof(checkhash));
 
-//LogPrint (BCLog::ALL, "chunk.c_str() %s\n", chunk.c_str());
-//LogPrint (BCLog::ALL, "opdata.c_str() %s\n", opdata.c_str());
-//LogPrint (BCLog::ALL, "&opdata.c_str()[6] %s\n", &opdata.c_str()[6]);
-//LogPrint (BCLog::ALL, "\n");
+//LogPrint (BCLog::STORAGE, "chunk.c_str() %s\n", chunk.c_str());
+//LogPrint (BCLog::STORAGE, "opdata.c_str() %s\n", opdata.c_str());
+//LogPrint (BCLog::STORAGE, "&opdata.c_str()[6] %s\n", &opdata.c_str()[6]);
+//LogPrint (BCLog::STORAGE, "\n");
 
     //sha256_hash_hex(chunk.c_str(), checkhash, (OPENCODING_MAGICLEN*2) + (OPENCODING_VERSIONLEN*2) + (OPENCODING_UUID*2) + (OPENCODING_CHUNKLEN*2));
     sha256_hash_hex(&chunk.c_str()[offset], checkhash, (OPENCODING_MAGICLEN*2) + (OPENCODING_VERSIONLEN*2) + (OPENCODING_UUID*2) + (OPENCODING_CHUNKLEN*2));
@@ -147,12 +147,12 @@ bool is_valid_authchunk (std::string& chunk, int& error_level, int offset)
     // test pubkey
     uint160 hash160(Hash160(pubkey));
 
-    LogPrint (BCLog::ALL, "pubKey from header chunk signature %s\n", hash160.ToString());
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "pubKey from header chunk signature %s\n", hash160.ToString());
+    LogPrint (BCLog::STORAGE, "\n");
 
 ghshAuthenticatetenantPubkey = hash160;    
 
-// LogPrint (BCLog::ALL, "initAuthTime %d\n", Params().GetConsensus().initAuthTime);
+// LogPrint (BCLog::STORAGE, "initAuthTime %d\n", Params().GetConsensus().initAuthTime);
 
 // authTime = Params().GetConsensus().initAuthTime;
 
@@ -231,8 +231,8 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
 
 
 
-    LogPrint (BCLog::ALL, "uuid %s \n", get_info.first);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "uuid %s \n", get_info.first);
+    LogPrint (BCLog::STORAGE, "\n");
 
     unsigned char key[32];
 
@@ -242,12 +242,12 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
         key[i] = static_cast<unsigned char>(byteValue);
     }
 
-    LogPrint (BCLog::ALL, "key \n");
+    LogPrint (BCLog::STORAGE, "key \n");
     for (int i = 0; i < 32; i++) {
-        LogPrint (BCLog::ALL, "%d ", key[i]);
+        LogPrint (BCLog::STORAGE, "%d ", key[i]);
     }
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
 
 
@@ -302,8 +302,8 @@ if (gintReturnJSONAssetFlag == 0) {
             return false;
         }
 
-LogPrint (BCLog::ALL, "protocol from build_file_from_chunks %d \n", protocol);
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "protocol from build_file_from_chunks %d \n", protocol);
+LogPrint (BCLog::STORAGE, "\n");
 
 //    end = clock ();    
 //    t_ccc = t_ccc + (double) (end - start) / CLOCKS_PER_SEC;
@@ -484,14 +484,14 @@ unsigned char chrPadValue = vctDecyptedAsset.back();
 vctDecyptedAsset.resize(vctDecyptedAsset.size() - chrPadValue);
 
 // Report decrypted asset
-LogPrint (BCLog::ALL, "Decrypted asset \n");
+LogPrint (BCLog::STORAGE, "Decrypted asset \n");
 for (size_t i = 0; i < vctDecyptedAsset.size(); ++i) {
-    LogPrint (BCLog::ALL, "%s",vctDecyptedAsset[i]);
+    LogPrint (BCLog::STORAGE, "%s",vctDecyptedAsset[i]);
 }
-LogPrint (BCLog::ALL, "\n");
-LogPrint (BCLog::ALL, "Decrypted asset length %d \n", vctDecyptedAsset.size());
-LogPrint (BCLog::ALL, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "\n");
+LogPrint (BCLog::STORAGE, "Decrypted asset length %d \n", vctDecyptedAsset.size());
+LogPrint (BCLog::STORAGE, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
+LogPrint (BCLog::STORAGE, "\n");
 
 */
 
@@ -505,20 +505,20 @@ LogPrint (BCLog::ALL, "\n");
 
 
 
-LogPrint (BCLog::ALL, "gintFetchAssetFullProtocol from build_file_from_chunks %d \n", gintFetchAssetFullProtocol);
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "gintFetchAssetFullProtocol from build_file_from_chunks %d \n", gintFetchAssetFullProtocol);
+LogPrint (BCLog::STORAGE, "\n");
 
-LogPrint (BCLog::ALL, "Asset size %d \n", chunkdata.size()/2);
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "Asset size %d \n", chunkdata.size()/2);
+LogPrint (BCLog::STORAGE, "\n");
 
 /*
 
-LogPrint (BCLog::ALL, "Asset in decimal \n");
+LogPrint (BCLog::STORAGE, "Asset in decimal \n");
 for (int i = 0; i < chunkdata.size()/2; i++) {
-    LogPrint (BCLog::ALL, "%d ", buffer[i]);
+    LogPrint (BCLog::STORAGE, "%d ", buffer[i]);
 }
-LogPrint (BCLog::ALL, "\n");
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "\n");
+LogPrint (BCLog::STORAGE, "\n");
 
 */
 
@@ -536,12 +536,12 @@ if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
 
 /*
 
-    LogPrint (BCLog::ALL, "Encrypted asset from blockchain in decimal \n");
+    LogPrint (BCLog::STORAGE, "Encrypted asset from blockchain in decimal \n");
     for (int i = 0; i < intEncryptedFilesize; i++) {
-        LogPrint (BCLog::ALL, "%d ", buffer[i]);
+        LogPrint (BCLog::STORAGE, "%d ", buffer[i]);
     }
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
 */
 
@@ -564,14 +564,14 @@ if ((gintFetchAssetFullProtocol == 2) || (gintFetchAssetFullProtocol == 3)) {
 
 /*
 
-    LogPrint (BCLog::ALL, "Decrypted asset \n");
+    LogPrint (BCLog::STORAGE, "Decrypted asset \n");
     for (size_t i = 0; i < vctDecyptedAsset.size(); ++i) {
-        LogPrint (BCLog::ALL, "%s",vctDecyptedAsset[i]);
+        LogPrint (BCLog::STORAGE, "%s",vctDecyptedAsset[i]);
     }
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "Decrypted asset length %d \n", vctDecyptedAsset.size());
-    LogPrint (BCLog::ALL, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "Decrypted asset length %d \n", vctDecyptedAsset.size());
+    LogPrint (BCLog::STORAGE, "Decrypted asset position 5 in decimal %d \n", vctDecyptedAsset[4]);
+    LogPrint (BCLog::STORAGE, "\n");
 
 */
 
@@ -651,14 +651,14 @@ if (gintReturnJSONAssetFlag == 0) {
 
 }
 
-    LogPrint (BCLog::ALL, "(build_file_from_chunks)\n");
+    LogPrint (BCLog::STORAGE, "(build_file_from_chunks)\n");
 
     gstrJSONFetchAssetExtension = "";
 
     //! if protocol 01, rename file with extension
     if (((protocol == 1) || (protocol == 3))) {
 
-LogPrint (BCLog::ALL, "chunkdata.size %d buffer %d %d %d %d \n", chunkdata.size(), buffer[0], buffer[1], buffer[2], buffer[3]);
+LogPrint (BCLog::STORAGE, "chunkdata.size %d buffer %d %d %d %d \n", chunkdata.size(), buffer[0], buffer[1], buffer[2], buffer[3]);
 
         std::string extension;
         int extoffset;
@@ -671,8 +671,8 @@ LogPrint (BCLog::ALL, "chunkdata.size %d buffer %d %d %d %d \n", chunkdata.size(
             extension += buffer[extwrite];
         }
 
-        LogPrint (BCLog::ALL, "Extension found: %s", extension.c_str());
-        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::STORAGE, "Extension found: %s", extension.c_str());
+        LogPrint (BCLog::STORAGE, "\n");
 
         gstrJSONFetchAssetExtension = extension;
 
@@ -690,36 +690,36 @@ LogPrint (BCLog::ALL, "chunkdata.size %d buffer %d %d %d %d \n", chunkdata.size(
         filepath = newfilepath;
 
     } else {
-        LogPrint (BCLog::ALL, "No extension found.\n");
-        LogPrint (BCLog::ALL, "\n");
+        LogPrint (BCLog::STORAGE, "No extension found.\n");
+        LogPrint (BCLog::STORAGE, "\n");
     }
 
     if (debug) printf("\n");
 
 #ifdef TIMING
-    LogPrint (BCLog::ALL, "elapsed get_uuid_from_chunk %ld \n", t_gufc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed get_uuid_from_chunk %ld \n", t_gufc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed get_chunklen_from_chunk %ld \n", t_gclfc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed get_chunklen_from_chunk %ld \n", t_gclfc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed get_chunkhash_from_chunk %ld \n", t_gchfc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed get_chunkhash_from_chunk %ld \n", t_gchfc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed get_chunkdata_from_chunk %ld \n", t_gcdfc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed get_chunkdata_from_chunk %ld \n", t_gcdfc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed sha256_hash_hex %ld \n", t_shh);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed sha256_hash_hex %ld \n", t_shh);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed get_chunknumber_from_chunk %ld \n", t_gcnfc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed get_chunknumber_from_chunk %ld \n", t_gcnfc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed get_chunktotal_from_chunk %ld \n", t_gctfc);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed get_chunktotal_from_chunk %ld \n", t_gctfc);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "elapsed binlify_from_hex %ld \n", t_bfh);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "elapsed binlify_from_hex %ld \n", t_bfh);
+    LogPrint (BCLog::STORAGE, "\n");
 #endif
 
     gstrAssetFullyQualifiedFilepath = filepath;

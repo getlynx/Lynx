@@ -294,8 +294,8 @@ if (strParameter4 == "2") {
         strParameter5 = request.params[4].get_str();
     }
 
-LogPrint (BCLog::ALL, "json 0 gstrJSONAssetStoreCharacters %s \n", gstrJSONAssetStoreCharacters);
-LogPrint (BCLog::ALL, "json 1 gstrJSONAssetStoreCharacters size %d \n", gstrJSONAssetStoreCharacters.size());
+LogPrint (BCLog::STORAGE, "json 0 gstrJSONAssetStoreCharacters %s \n", gstrJSONAssetStoreCharacters);
+LogPrint (BCLog::STORAGE, "json 1 gstrJSONAssetStoreCharacters size %d \n", gstrJSONAssetStoreCharacters.size());
 
     if ((strParameter1.size() == 0) && (strParameter4.size() == 0)) {
 
@@ -315,7 +315,7 @@ LogPrint (BCLog::ALL, "json 1 gstrJSONAssetStoreCharacters size %d \n", gstrJSON
 
     }
 
-LogPrint (BCLog::ALL, "strParameter %d %d %d %d %d \n", strParameter1.size(), strParameter2.size(), strParameter3.size(), strParameter4.size(), strParameter5.size());    
+LogPrint (BCLog::STORAGE, "strParameter %d %d %d %d %d \n", strParameter1.size(), strParameter2.size(), strParameter3.size(), strParameter4.size(), strParameter5.size());    
 
     // return "test";
 
@@ -332,7 +332,7 @@ LogPrint (BCLog::ALL, "strParameter %d %d %d %d %d \n", strParameter1.size(), st
     // Get number of suitable inputs
     estimate_coins_for_opreturn(vctWallets.front().get(), intNumberOfSuitableInputs);
 
-    LogPrint (BCLog::ALL, "suitable inputs %d \n", intNumberOfSuitableInputs);
+    LogPrint (BCLog::STORAGE, "suitable inputs %d \n", intNumberOfSuitableInputs);
 
 
 
@@ -381,7 +381,7 @@ LogPrint (BCLog::ALL, "strParameter %d %d %d %d %d \n", strParameter1.size(), st
         // Get current time
         uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
 
-        // LogPrint (BCLog::ALL, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32CurrentTime, gu32AuthenticationTime);
+        // LogPrint (BCLog::STORAGE, "u32CurrentTime  gu32AuthenticationTime %u %u\n", u32CurrentTime, gu32AuthenticationTime);
 
         // If authentication session expired
         if ((u32CurrentTime - gu32AuthenticationTime) > 21600) {
@@ -449,7 +449,7 @@ LogPrint (BCLog::ALL, "strParameter %d %d %d %d %d \n", strParameter1.size(), st
 
     }
 
-    LogPrint (BCLog::ALL, "transactions %d \n", filelen/512/256+1);
+    LogPrint (BCLog::STORAGE, "transactions %d \n", filelen/512/256+1);
 
     if (intNumberOfSuitableInputs < ((filelen/512/256)+1)) {
 
@@ -495,9 +495,9 @@ LogPrint (BCLog::ALL, "strParameter %d %d %d %d %d \n", strParameter1.size(), st
 
 
 
-LogPrint (BCLog::ALL, "uuid %s \n", strAssetUUID);
-LogPrint (BCLog::ALL, "encrypt %d \n", intEncrypt);
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "uuid %s \n", strAssetUUID);
+LogPrint (BCLog::STORAGE, "encrypt %d \n", intEncrypt);
+LogPrint (BCLog::STORAGE, "\n");
 
 
 
@@ -515,21 +515,21 @@ LogPrint (BCLog::ALL, "\n");
 
 
             std::string strUUID1 = strAssetUUID;
-            LogPrint (BCLog::ALL, "UUID1 %s \n", strUUID1);
+            LogPrint (BCLog::STORAGE, "UUID1 %s \n", strUUID1);
             std::vector<uint8_t> vctUUID1(strUUID1.begin(), strUUID1.end());
             uint160 u16UUID2(Hash160(vctUUID1));
-            LogPrint (BCLog::ALL, "UUID2 %s \n", u16UUID2.ToString());
+            LogPrint (BCLog::STORAGE, "UUID2 %s \n", u16UUID2.ToString());
             std::string strUUID2 = u16UUID2.ToString();
             std::string strUUID3 = strUUID2;
             for (int i = 0; i < 8; i++) {
                 strUUID3[i] = strUUID1[i];
             }
-            LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
+            LogPrint (BCLog::STORAGE, "UUID3 %s \n", strUUID3);
             std::string strUUID4 = strUUID3;
             for (int i = 40; i < 64; i++) {
                 strUUID4 = strUUID4 + strUUID1[i];
             }
-            LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
+            LogPrint (BCLog::STORAGE, "UUID4 %s \n", strUUID4);
 
             strAssetUUID0 = strAssetUUID;
 
@@ -639,21 +639,21 @@ LogPrint (BCLog::ALL, "\n");
 
 
         std::string strUUID1 = strAssetUUID;
-        LogPrint (BCLog::ALL, "UUID1 %s \n", strUUID1);
+        LogPrint (BCLog::STORAGE, "UUID1 %s \n", strUUID1);
         std::vector<uint8_t> vctUUID1(strUUID1.begin(), strUUID1.end());
         uint160 u16UUID2(Hash160(vctUUID1));
-        LogPrint (BCLog::ALL, "UUID2 %s \n", u16UUID2.ToString());
+        LogPrint (BCLog::STORAGE, "UUID2 %s \n", u16UUID2.ToString());
         std::string strUUID2 = u16UUID2.ToString();
         std::string strUUID3 = strUUID2;
         for (int i = 0; i < 8; i++) {
             strUUID3[i] = strUUID1[i];
         }
-        LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
+        LogPrint (BCLog::STORAGE, "UUID3 %s \n", strUUID3);
         std::string strUUID4 = strUUID3;
         for (int i = 40; i < 64; i++) {
             strUUID4 = strUUID4 + strUUID1[i];
         }
-        LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
+        LogPrint (BCLog::STORAGE, "UUID4 %s \n", strUUID4);
 
         strAssetUUID0 = strAssetUUID;
 
@@ -700,7 +700,7 @@ LogPrint (BCLog::ALL, "\n");
     // add_put_task(strAssetFilename, strAssetUUID);
     add_put_task("", strAssetUUID);
 
-LogPrint (BCLog::ALL, "json 2 gstrAssetFilename uuid %s %s\n", gstrAssetFilename, strAssetUUID);
+LogPrint (BCLog::STORAGE, "json 2 gstrAssetFilename uuid %s %s\n", gstrAssetFilename, strAssetUUID);
 
     // Get estimated number of chunks
     // int intEstimatedNumberOfChunks = calculate_chunks_from_filesize(intAssetFilesize);
@@ -1071,21 +1071,21 @@ static RPCHelpMan fetch()
 
 
             std::string strUUID1 = strUUID;
-            LogPrint (BCLog::ALL, "UUID1 %s \n", strUUID1);
+            LogPrint (BCLog::STORAGE, "UUID1 %s \n", strUUID1);
             std::vector<uint8_t> vctUUID1(strUUID1.begin(), strUUID1.end());
             uint160 u16UUID2(Hash160(vctUUID1));
-            LogPrint (BCLog::ALL, "UUID2 %s \n", u16UUID2.ToString());
+            LogPrint (BCLog::STORAGE, "UUID2 %s \n", u16UUID2.ToString());
             std::string strUUID2 = u16UUID2.ToString();
             std::string strUUID3 = strUUID2;
             for (int i = 0; i < 8; i++) {
                 strUUID3[i] = strUUID1[i];
             }
-            LogPrint (BCLog::ALL, "UUID3 %s \n", strUUID3);
+            LogPrint (BCLog::STORAGE, "UUID3 %s \n", strUUID3);
             std::string strUUID4 = strUUID3;
             for (int i = 40; i < 64; i++) {
                 strUUID4 = strUUID4 + strUUID1[i];
             }
-            LogPrint (BCLog::ALL, "UUID4 %s \n", strUUID4);
+            LogPrint (BCLog::STORAGE, "UUID4 %s \n", strUUID4);
 
             strUUID = strUUID4;
 
@@ -1093,8 +1093,8 @@ static RPCHelpMan fetch()
 
 
 
-            LogPrint (BCLog::ALL, "strUUID %s \n", strUUID);
-            LogPrint (BCLog::ALL, "\n");
+            LogPrint (BCLog::STORAGE, "strUUID %s \n", strUUID);
+            LogPrint (BCLog::STORAGE, "\n");
 
             if (is_blockuuid_member(strUUID)) {
 
@@ -1147,8 +1147,8 @@ static RPCHelpMan fetch()
                     
                 
         
-LogPrint (BCLog::ALL, "gintFetchAssetFullProtocol from fetch() %d \n", gintFetchAssetFullProtocol);
-LogPrint (BCLog::ALL, "\n");
+LogPrint (BCLog::STORAGE, "gintFetchAssetFullProtocol from fetch() %d \n", gintFetchAssetFullProtocol);
+LogPrint (BCLog::STORAGE, "\n");
 
 // return "test";
 
@@ -1184,7 +1184,7 @@ if (intReturnJSONAssetFlag != 0) {
 
     perform_get_task(std::make_pair(strUUID, strPath), error_level);
 
-LogPrint (BCLog::ALL, "error_level %d \n", error_level);
+LogPrint (BCLog::STORAGE, "error_level %d \n", error_level);
 
     if (error_level != 0) {
 
@@ -1200,19 +1200,19 @@ LogPrint (BCLog::ALL, "error_level %d \n", error_level);
 
     }
 
-LogPrint (BCLog::ALL, "aSsEt %d %d %d %d %d \n",  gstrAssetCharacters.c_str()[0], 
+LogPrint (BCLog::STORAGE, "aSsEt %d %d %d %d %d \n",  gstrAssetCharacters.c_str()[0], 
                                                   gstrAssetCharacters.c_str()[1], 
                                                   gstrAssetCharacters.c_str()[2], 
                                                   gstrAssetCharacters.c_str()[3], 
                                                   gstrAssetCharacters.c_str()[4]);
 
-LogPrint (BCLog::ALL, "filler \n");
-LogPrint (BCLog::ALL, "filler \n");
-LogPrint (BCLog::ALL, "filler \n");
-LogPrint (BCLog::ALL, "filler \n");
-LogPrint (BCLog::ALL, "filler \n");
+LogPrint (BCLog::STORAGE, "filler \n");
+LogPrint (BCLog::STORAGE, "filler \n");
+LogPrint (BCLog::STORAGE, "filler \n");
+LogPrint (BCLog::STORAGE, "filler \n");
+LogPrint (BCLog::STORAGE, "filler \n");
 
-    LogPrint (BCLog::ALL, "AsSeT %s \n", gstrAssetCharacters);
+    LogPrint (BCLog::STORAGE, "AsSeT %s \n", gstrAssetCharacters);
 
     // FILE* f = fopen(gstrAssetFullyQualifiedFilepath.c_str(), "w");
     // fwrite(gstrAssetCharacters.data(), 1, gstrAssetCharacters.size(), f);
@@ -1546,9 +1546,9 @@ static RPCHelpMan list()
     dblElapsedTime = (double) (clkEnd - clkStart) / CLOCKS_PER_SEC;
 
     // Output elapsed time to debug
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "Elapsed time for list %ld \n", dblElapsedTime);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "Elapsed time for list %ld \n", dblElapsedTime);
+    LogPrint (BCLog::STORAGE, "\n");
 
     // Return results
     return unvResult2;
@@ -1796,17 +1796,17 @@ static RPCHelpMan auth()
 
 
     /*
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "disablestaking %d \n", gArgs.GetBoolArg("-disablestaking", false));
+    LogPrint (BCLog::STORAGE, "disablestaking %d \n", gArgs.GetBoolArg("-disablestaking", false));
 
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "rpcuser %s \n", gArgs.GetArg("-rpcuser", ""));
+    LogPrint (BCLog::STORAGE, "rpcuser %s \n", gArgs.GetArg("-rpcuser", ""));
 
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "rpctenant %s \n", gArgs.GetArg("-rpctenant", ""));
+    LogPrint (BCLog::STORAGE, "rpctenant %s \n", gArgs.GetArg("-rpctenant", ""));
     */
 
     // Results
@@ -2208,8 +2208,8 @@ static RPCHelpMan allow()
         type = 0;
         time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
 
-        // LogPrint (BCLog::ALL, "\n");
-        // LogPrint (BCLog::ALL, "time in seconds since the first second of 1970 (3600*24*365*54 ..): %d\n", time);
+        // LogPrint (BCLog::STORAGE, "\n");
+        // LogPrint (BCLog::STORAGE, "time in seconds since the first second of 1970 (3600*24*365*54 ..): %d\n", time);
 
         if (!generate_auth_payload(opreturn_payload, type, time, hash160)) {
             ret.push_back("error-generating-authpayload");

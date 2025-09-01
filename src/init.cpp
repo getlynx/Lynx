@@ -1876,9 +1876,9 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 
     // ********************************************************* Step 12.3: read authdata
 
-LogPrint (BCLog::ALL, "MAX_PACKAGE_COUNT %d\n", MAX_PACKAGE_COUNT);
-LogPrint (BCLog::ALL, "MAX_PACKAGE_SIZE %d\n", MAX_PACKAGE_SIZE);
-LogPrint (BCLog::ALL, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSAGE_LENGTH);
+LogPrint (BCLog::STORAGE, "MAX_PACKAGE_COUNT %d\n", MAX_PACKAGE_COUNT);
+LogPrint (BCLog::STORAGE, "MAX_PACKAGE_SIZE %d\n", MAX_PACKAGE_SIZE);
+LogPrint (BCLog::STORAGE, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSAGE_LENGTH);
 
     gintAuthenticationFailures = 0;
 
@@ -1890,17 +1890,17 @@ LogPrint (BCLog::ALL, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSAGE_L
         // return InitError(strprintf(_("Error while parsing blockuuiddata chunks")));
     // }
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "blockuuidList size %d \n", blockuuidList.size());
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "blockuuidList size %d \n", blockuuidList.size());
+    LogPrint (BCLog::STORAGE, "\n");
 
     // if (!scan_blocks_for_blocktenantdata(chainman)) {
         // return InitError(strprintf(_("Error while parsing blocktenantdata chunks")));
     // }
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "blocktenantList size %d \n", blocktenantList.size());
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "blocktenantList size %d \n", blocktenantList.size());
+    LogPrint (BCLog::STORAGE, "\n");
 
     // ********************************************************* Step 12.5: start staking
 #ifdef ENABLE_WALLET

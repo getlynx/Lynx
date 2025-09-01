@@ -88,7 +88,7 @@ void perform_put_task(std::pair<std::string, std::string>& put_info, int& error_
     // int filelen = read_file_size(put_info.first);
     int filelen;
 
-LogPrint (BCLog::ALL, "json 3 \n");
+LogPrint (BCLog::STORAGE, "json 3 \n");
 
     if (gintJSONAssetStore == 0) {
         filelen = read_file_size(gstrAssetFilename);
@@ -96,12 +96,12 @@ LogPrint (BCLog::ALL, "json 3 \n");
         filelen = gstrJSONAssetStoreCharacters.size();
     }
 
-LogPrint (BCLog::ALL, "json 4 %d \n", filelen);
+LogPrint (BCLog::STORAGE, "json 4 %d \n", filelen);
 
     // check file length
     int maxfilelength = 25 * 1024 * 1024;
     if (filelen > maxfilelength) {
-        LogPrint (BCLog::ALL, "File length exceeds max file length. filelen: %d maxfilelength: %d\n", filelen, maxfilelength);
+        LogPrint (BCLog::STORAGE, "File length exceeds max file length. filelen: %d maxfilelength: %d\n", filelen, maxfilelength);
         error_level = ERR_FILELENGTH;
         return;
     }
@@ -109,14 +109,14 @@ LogPrint (BCLog::ALL, "json 4 %d \n", filelen);
     int est_chunks = calculate_chunks_from_filesize(filelen);
     estimate_coins_for_opreturn(vpwallets.front().get(), usable_inputs);
 
-    LogPrint (BCLog::ALL, "File length: %d\n", filelen);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "File length: %d\n", filelen);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "Number of chunks per transactuion: %d\n", OPRETURN_PER_TX);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "Number of chunks per transactuion: %d\n", OPRETURN_PER_TX);
+    LogPrint (BCLog::STORAGE, "\n");
 
-    LogPrint (BCLog::ALL, "Number of groups of %d chunks %d\n", OPRETURN_PER_TX, (est_chunks+(OPRETURN_PER_TX-1))/OPRETURN_PER_TX);
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "Number of groups of %d chunks %d\n", OPRETURN_PER_TX, (est_chunks+(OPRETURN_PER_TX-1))/OPRETURN_PER_TX);
+    LogPrint (BCLog::STORAGE, "\n");
 
     // one usable input per batch of 256 chunks
     if (usable_inputs < ((est_chunks+(OPRETURN_PER_TX-1))/OPRETURN_PER_TX)) {
@@ -124,7 +124,7 @@ LogPrint (BCLog::ALL, "json 4 %d \n", filelen);
         return;
     }
 
-LogPrint (BCLog::ALL, "json 5 \n");
+LogPrint (BCLog::STORAGE, "json 5 \n");
 
     // build chunks from file
     int total_chunks;
@@ -134,28 +134,28 @@ LogPrint (BCLog::ALL, "json 5 \n");
         return;
     }
 
-LogPrint (BCLog::ALL, "json 6 \n");
+LogPrint (BCLog::STORAGE, "json 6 \n");
 
 //LogPrintf ("harness return\n");
 //error_level = ERR_LOWINPUTS;
 //return;    
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "CREATE AND SUBMIT CHUNK TRANSACTIONS (perform_put_task)\n");
-    LogPrint (BCLog::ALL, "For each group of 256 chunks, there will be one putfile transaction\n");
-    LogPrint (BCLog::ALL, "For each putfile transaction, there will be one input, used to pay for the transaction.\n");
-    LogPrint (BCLog::ALL, "For each putfile transaction, the first output will be the change from the input.\n");
-    LogPrint (BCLog::ALL, "The change from the input is the value of the input minus the cost of chunk storage.\n");
-    LogPrint (BCLog::ALL, "The cost of chunk storage is one satoshi per byte of transaction.\n");
-    LogPrint (BCLog::ALL, "For each putfile transaction, there will be one output per chunk.\n");
-    LogPrint (BCLog::ALL, "A chunk output output-script is the chunk prepended with 106 as a single byte.\n");
-    LogPrint (BCLog::ALL, "Chunk outputs have a value of zero satoshis\n");
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "For each putfile transaction, the value of the input is given.\n");
-    LogPrint (BCLog::ALL, "Next, the number of transaction bytes is given.\n");
-    LogPrint (BCLog::ALL, "Next, the number of satoshis used to pay for the storage is given.\n");
-    LogPrint (BCLog::ALL, "Finally, the amount of change from the input is given.\n");
-    LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "CREATE AND SUBMIT CHUNK TRANSACTIONS (perform_put_task)\n");
+    LogPrint (BCLog::STORAGE, "For each group of 256 chunks, there will be one putfile transaction\n");
+    LogPrint (BCLog::STORAGE, "For each putfile transaction, there will be one input, used to pay for the transaction.\n");
+    LogPrint (BCLog::STORAGE, "For each putfile transaction, the first output will be the change from the input.\n");
+    LogPrint (BCLog::STORAGE, "The change from the input is the value of the input minus the cost of chunk storage.\n");
+    LogPrint (BCLog::STORAGE, "The cost of chunk storage is one satoshi per byte of transaction.\n");
+    LogPrint (BCLog::STORAGE, "For each putfile transaction, there will be one output per chunk.\n");
+    LogPrint (BCLog::STORAGE, "A chunk output output-script is the chunk prepended with 106 as a single byte.\n");
+    LogPrint (BCLog::STORAGE, "Chunk outputs have a value of zero satoshis\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "For each putfile transaction, the value of the input is given.\n");
+    LogPrint (BCLog::STORAGE, "Next, the number of transaction bytes is given.\n");
+    LogPrint (BCLog::STORAGE, "Next, the number of satoshis used to pay for the storage is given.\n");
+    LogPrint (BCLog::STORAGE, "Finally, the amount of change from the input is given.\n");
+    LogPrint (BCLog::STORAGE, "\n");
 
     // create tx, sign and submit for each chunk
     CMutableTransaction txChunk;
@@ -196,22 +196,22 @@ LogPrint (BCLog::ALL, "json 6 \n");
 void perform_get_task(std::pair<std::string, std::string> get_info, int& error_level)
 {
 
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "FETCHASSET (perform_get_task)\n");
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "fetchasset does two things:\n");
-    LogPrint (BCLog::ALL, "1) Scan blockchain for chunks given uuid.\n");
-    LogPrint (BCLog::ALL, "The chunks are placed in order, regardless of blockchain chunk order.\n");
-    LogPrint (BCLog::ALL, "(scan_blocks_for_specific_uuid)\n");
-    LogPrint (BCLog::ALL, "2) Store file on disc.\n");
-    LogPrint (BCLog::ALL, "The filename will be the uuid, and will be created in the given path.\n");
-    LogPrint (BCLog::ALL, "(build_file_from_chunks)\n");
-    LogPrint (BCLog::ALL, "\n");
-    LogPrint (BCLog::ALL, "uuid: %s\n", get_info.first);
-    LogPrint (BCLog::ALL, "path: %s\n", get_info.second);
-    LogPrint (BCLog::ALL, "\n");
-    //LogPrint (BCLog::ALL, "\n");
-    //LogPrint (BCLog::ALL, "\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "FETCHASSET (perform_get_task)\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "fetchasset does two things:\n");
+    LogPrint (BCLog::STORAGE, "1) Scan blockchain for chunks given uuid.\n");
+    LogPrint (BCLog::STORAGE, "The chunks are placed in order, regardless of blockchain chunk order.\n");
+    LogPrint (BCLog::STORAGE, "(scan_blocks_for_specific_uuid)\n");
+    LogPrint (BCLog::STORAGE, "2) Store file on disc.\n");
+    LogPrint (BCLog::STORAGE, "The filename will be the uuid, and will be created in the given path.\n");
+    LogPrint (BCLog::STORAGE, "(build_file_from_chunks)\n");
+    LogPrint (BCLog::STORAGE, "\n");
+    LogPrint (BCLog::STORAGE, "uuid: %s\n", get_info.first);
+    LogPrint (BCLog::STORAGE, "path: %s\n", get_info.second);
+    LogPrint (BCLog::STORAGE, "\n");
+    //LogPrint (BCLog::STORAGE, "\n");
+    //LogPrint (BCLog::STORAGE, "\n");
 
     clock_t start, end;
     double build_time_taken, scan_time_taken;
@@ -244,7 +244,7 @@ void perform_get_task(std::pair<std::string, std::string> get_info, int& error_l
     end = clock ();    
     build_time_taken = (double) (end - start) / CLOCKS_PER_SEC;
 
-    LogPrint (BCLog::ALL, "elapsed time perform_get_task scan %ld build %ld\n", scan_time_taken, build_time_taken);
+    LogPrint (BCLog::STORAGE, "elapsed time perform_get_task scan %ld build %ld\n", scan_time_taken, build_time_taken);
 
 }
 

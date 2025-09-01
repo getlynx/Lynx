@@ -2443,7 +2443,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     int64_t nSigOpsCost = 0;
     blockundo.vtxundo.reserve(block.vtx.size() - 1);
 
-// LogPrint (BCLog::ALL, "VALIDATION\n");
+// LogPrint (BCLog::STORAGE, "VALIDATION\n");
 
     for (unsigned int i = 0; i < block.vtx.size(); i++)
     {
@@ -2467,11 +2467,11 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
                             
                                 // Validate authdata, and popoulate authList
                                 if (!found_opreturn_in_authdata (opreturn_out, error_level)) {
-                                    LogPrint (BCLog::ALL, "\n");
-                                    LogPrint (BCLog::ALL, "invalid authdata message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                    LogPrint (BCLog::STORAGE, "\n");
+                                    LogPrint (BCLog::STORAGE, "invalid authdata message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
                                 } else {
-                                    LogPrint (BCLog::ALL, "\n");
-                                    LogPrint (BCLog::ALL, "valid authdata message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                    LogPrint (BCLog::STORAGE, "\n");
+                                    LogPrint (BCLog::STORAGE, "valid authdata message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
                                 }
                             
                             }
@@ -2482,11 +2482,11 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
                             
                                 // Validate blockuuiddata, and popoulate blockuuidList
                                 if (!found_opreturn_in_blockuuiddata (opreturn_out, error_level)) {
-                                    LogPrint (BCLog::ALL, "\n");
-                                    LogPrint (BCLog::ALL, "invalid blockuuid message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                    LogPrint (BCLog::STORAGE, "\n");
+                                    LogPrint (BCLog::STORAGE, "invalid blockuuid message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
                                 } else {
-                                    LogPrint (BCLog::ALL, "\n");
-                                    LogPrint (BCLog::ALL, "valid blockuuid message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                    LogPrint (BCLog::STORAGE, "\n");
+                                    LogPrint (BCLog::STORAGE, "valid blockuuid message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
                                 }
                             
                             }
@@ -2497,11 +2497,11 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
                             
                                 // Validate blocktenantdata, and popoulate blocktenantList
                                 if (!found_opreturn_in_blocktenantdata (opreturn_out, error_level)) {
-                                    LogPrint (BCLog::ALL, "\n");
-                                    LogPrint (BCLog::ALL, "invalid tenant message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                    LogPrint (BCLog::STORAGE, "\n");
+                                    LogPrint (BCLog::STORAGE, "invalid tenant message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
                                 } else {
-                                    LogPrint (BCLog::ALL, "\n");
-                                    LogPrint (BCLog::ALL, "valid blocktenant message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
+                                    LogPrint (BCLog::STORAGE, "\n");
+                                    LogPrint (BCLog::STORAGE, "valid blocktenant message in tx %s vout %d\n", tx.GetHash().ToString(), vout);
                                 }
                             
                             }
