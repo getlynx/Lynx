@@ -591,6 +591,22 @@ RPCHelpMan sendmany()
     ParseRecipients(sendTo, subtractFeeFromAmount, recipients);
     const bool verbose{request.params[9].isNull() ? false : request.params[9].get_bool()};
 
+
+
+int chain_tip_height = pwallet->chain().getHeight().value_or(-1);
+
+
+
+int intMinDepth;
+fncGetMinUTXODepth (pwallet.get(), intMinDepth);
+if (intMinDepth < 30) {
+    int intBlockNumber = (30 - intMinDepth) + chain_tip_height;
+    std::string strReply = "Staking rewards still maturing - send functions will unlock in " + std::to_string((30 - intMinDepth)) + " block(s) (block " + std::to_string(intBlockNumber) + ") once your staked coins have completed their required cooling period. Tip: Disable staking to avoid earning new coins that extend the cooling period.";
+    return strReply;
+}
+
+
+
     return SendMoney(*pwallet, coin_control, recipients, std::move(mapValue), verbose);
 },
     };
@@ -1462,6 +1478,22 @@ RPCHelpMan send()
             SetOptionsInputWeights(options["inputs"], options);
             FundTransaction(*pwallet, rawTx, fee, change_position, options, coin_control, /*override_min_fee=*/false);
 
+
+
+int chain_tip_height = pwallet->chain().getHeight().value_or(-1);
+
+
+
+int intMinDepth;
+fncGetMinUTXODepth (pwallet.get(), intMinDepth);
+if (intMinDepth < 30) {
+    int intBlockNumber = (30 - intMinDepth) + chain_tip_height;
+    std::string strReply = "Staking rewards still maturing - send functions will unlock in " + std::to_string((30 - intMinDepth)) + " block(s) (block " + std::to_string(intBlockNumber) + ") once your staked coins have completed their required cooling period. Tip: Disable staking to avoid earning new coins that extend the cooling period.";
+    return strReply;
+}
+
+
+
             return FinishTransaction(pwallet, options, rawTx);
         }
     };
@@ -1713,6 +1745,23 @@ RPCHelpMan sendall()
                     pwallet->LockCoin(txin.prevout);
                 }
             }
+
+
+
+
+int chain_tip_height = pwallet->chain().getHeight().value_or(-1);
+
+
+
+int intMinDepth;
+fncGetMinUTXODepth (pwallet.get(), intMinDepth);
+if (intMinDepth < 30) {
+    int intBlockNumber = (30 - intMinDepth) + chain_tip_height;
+    std::string strReply = "Staking rewards still maturing - send functions will unlock in " + std::to_string((30 - intMinDepth)) + " block(s) (block " + std::to_string(intBlockNumber) + ") once your staked coins have completed their required cooling period. Tip: Disable staking to avoid earning new coins that extend the cooling period.";
+    return strReply;
+}
+
+
 
             return FinishTransaction(pwallet, options, rawTx);
         }
