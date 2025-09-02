@@ -12,10 +12,11 @@ set -euo pipefail
 # PURPOSE:
 #   This script automates the setup and maintenance of a Lynx cryptocurrency node
 #   on AMD and ARM-based systems (Raspberry Pi, ARM64 servers, etc.). It handles the
-#   complete lifecycle from initial setup to ongoing maintenance.
+#   complete lifecycle from initial setup to ongoing maintenance with improved
+#   efficiency and error handling.
 #
 # AUTHOR: Lynx Development Team
-# VERSION: 2.0
+# VERSION: 3.0
 # LAST UPDATED: 2025
 # DOCUMENTATION: https://docs.getlynx.io/
 #
@@ -45,32 +46,38 @@ set -euo pipefail
 #      - Automatically restarts daemon during sync
 #      - Disables timer once sync is complete
 #
+#   4. ENHANCED FEATURES:
+#      - Smart OS detection with consolidated logic
+#      - Intelligent locale configuration (skips if already configured)
+#      - Robust error handling and logging
+#      - Efficient package management and system updates
+#
 ################################################################################
 #
 # ALIASES CREATED (type 'l' to see all):
 #   WALLET COMMANDS:
-#     gb    - Get wallet balances
-#     gna   - Generate new address
-#     lag   - List address groupings
-#     sta   - Send to address
-#     swe   - Sweep a wallet (send all funds)
-#     bac   - Manual wallet backup
-#     lbac  - List backup directory contents
-#     wd    - Change to Lynx working directory
+#     gba    - Get wallet balances
+#     gna    - Generate new address
+#     lag    - List address groupings
+#     sta    - Send to address
+#     swe    - Sweep a wallet (send all funds)
+#     bac    - Manual wallet backup
+#     lba    - List backup directory contents
+#     wd     - Change to Lynx working directory
 #
 #   SYSTEM COMMANDS:
-#     lv    - Show Lynx version
-#     lyc   - Edit Lynx config file
-#     lyl   - View Lynx debug log (real-time)
-#     lynx  - Restart Lynx daemon
-#     jou   - View install script logs
-#     gbi   - Get blockchain info
-#     lelp  - Show Lynx help
-#     stat  - Check Lynx service status
+#     lyv    - Show Lynx version
+#     lyc    - Edit Lynx config file
+#     lyl    - View Lynx debug log (real-time)
+#     lyn    - Restart Lynx daemon
+#     jou    - View install script logs
+#     gbi    - Get blockchain info
+#     hel    - Show Lynx help
+#     stat   - Check Lynx service status
 #
 #   USEFUL COMMANDS:
-#     htop  - Monitor system resources
-#     l     - Show help message and node statistics
+#     htop   - Monitor system resources
+#     l      - Show help message and node statistics
 #
 ################################################################################
 #
@@ -111,12 +118,15 @@ set -euo pipefail
 #   - INITIAL SETUP: Creates all necessary files and services
 #   - MAINTENANCE: Runs every 12 minutes via systemd timer
 #   - SYNC MONITORING: Checks blockchain sync status and manages daemon
+#   - UPDATE MODE: Updates Lynx to latest release (use 'update' argument)
 #
 # PERFORMANCE OPTIMIZATIONS:
 #   - Stakes counting: Uses wallet RPC instead of parsing debug.log (prevents truncation issues)
 #   - Block counting: Uses fixed 5-minute block time instead of intensive RPC loops
 #   - Immature stakes: Uses listtransactions with awk parsing (no jq dependency)
 #   - All metrics calculated in real-time from wallet, not from log files
+#   - Smart locale configuration (skips if already configured)
+#   - Efficient OS detection (single function call)
 #
 # LOGGING:
 #   - All operations are logged to systemd journal
@@ -129,6 +139,7 @@ set -euo pipefail
 #   - All file operations use proper permissions
 #   - Systemd services run with appropriate security contexts
 #   - Swap file has restricted permissions (600)
+#   - Strict bash settings (set -euo pipefail)
 #
 ################################################################################
 #
@@ -151,6 +162,16 @@ set -euo pipefail
 #   - /etc/systemd/system/lynx.service
 #   - /swapfile (if needed)
 #   - ~/.bashrc (aliases added)
+#
+################################################################################
+#
+# RECENT IMPROVEMENTS (v3.0):
+#   - Consolidated OS detection into single getSystemDetails() function
+#   - Renamed functions for better clarity (e.g., update_lynx_release → getCompatibleBinary)
+#   - Enhanced locale configuration with smart checks
+#   - Improved error handling and unbound variable protection
+#   - More robust file existence checks
+#   - Cleaner code structure and organization
 #
 ################################################################################
 #
@@ -200,7 +221,6 @@ setTimeZone() {
 
 # Update and upgrade system packages, install required tools
 packageInstallAndUpdate() {
-    log "UPDATING SYSTEM PACKAGES"
     if [ "$os_family" = "debian" ]; then
         log "Updating package lists and upgrading Debian/Ubuntu system..."
         apt-get update -y >/dev/null 2>&1 || log "Failed to update package lists"
@@ -256,11 +276,11 @@ uptime_seconds=$(cat /proc/uptime | cut -d' ' -f1 | cut -d'.' -f1)
 # Threshold for conditional logging (6 hours = 21600 seconds)
 log_threshold_seconds=21600
 
-# Function to create a nicely formatted MOTD function
-create_motd_function() {
+# Create a nicely formatted command list bashrc file
+createCommandListConsole() {
     cat <<'EOF'
 # Function to display Lynx aliases in a nicely formatted MOTD
-show_lynx_motd() {
+executeHelpCommand() {
     echo ""
     WorkingDirectory=/var/lib/lynx
     # Count stakes won in the last 24 hours using wallet RPC
@@ -429,8 +449,8 @@ show_lynx_motd() {
 EOF
 }
 
-# Function to add useful aliases and MOTD to /root/.bashrc
-add_aliases_to_bashrc() {
+# Add useful aliases and MOTD to /root/.bashrc
+addAliasesToBashrcFile() {
     local BASHRC="/root/.bashrc"
     local ALIAS_BLOCK_START="# === LYNX ALIASES START ==="
     local ALIAS_BLOCK_END="# === LYNX ALIASES END ==="
@@ -465,7 +485,7 @@ swe() { lynx-cli sendtoaddress "\$1" "\$(lynx-cli getbalance)" "" "" true; }
 jou() { if [ "\$1" = "-f" ]; then journalctl -t install.sh -f; elif [ "\$2" = "-f" ]; then journalctl -t install.sh -n \${1:-30} -f; else journalctl -t install.sh -n \${1:-30}; fi; }
 alias gbi='lynx-cli getblockchaininfo'
 hel() { if [ -n "\$1" ]; then lynx-cli help | grep -i "\$1"; else lynx-cli help; fi; }
-alias h='show_lynx_motd'
+alias h='executeHelpCommand'
 alias sta='systemctl status lynx'
 alias upd='/usr/local/bin/install.sh update'
 ssp() { update_ssh_port "\$1"; }
@@ -605,8 +625,8 @@ pass() { toggle_password_auth "\$1"; } # Toggle password authentication in SSH c
 toggle_password_auth() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "\$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "\$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "\$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "\$ssh_config"; echo "\$new_setting" >> "\$ssh_config"; if [ "\$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; }
 
 $MOTD_BLOCK_START
-$(create_motd_function)
-show_lynx_motd
+$(createCommandListConsole)
+executeHelpCommand
 
 # Automatically change to root directory when switching to root user
 cd /root
@@ -615,7 +635,7 @@ EOF
 }
 
 # Function to clean up multiple consecutive empty lines in bashrc
-cleanup_bashrc_empty_lines() {
+truncateFileSpace() {
     local BASHRC="/root/.bashrc"
 
     # Only proceed if the file exists
@@ -630,8 +650,8 @@ cleanup_bashrc_empty_lines() {
     log "Cleaned up multiple empty lines in $BASHRC"
 }
 
-# Function to create install.service and install.timer if not present
-create_install_timer() {
+# Create install.service and install.timer if not present
+createInstallServiceUnit() {
     log "Checking for the existence of /etc/systemd/system/install.service and /etc/systemd/system/install.timer."
     if [ ! -f /etc/systemd/system/install.service ] || [ ! -f /etc/systemd/system/install.timer ]; then
         log "Creating /etc/systemd/system/install.service and /etc/systemd/system/install.timer."
@@ -734,8 +754,8 @@ EOF
     fi
 }
 
-# Function to create wallet backup service and timer
-create_wallet_backup_timer() {
+# Create wallet backup service and timer
+createWalletBackupServiceUnit() {
     log "Creating /etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer."
     
     # Stop and disable the timer before recreating it to avoid conflicts
@@ -886,8 +906,8 @@ EOF
      log "/etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer created, enabled, and started."
 }
 
-# Function to check and update swap to at least 4GB if less than 3GB
-check_and_update_swap() {
+# Check and update swap to at least 4GB if less than 3GB
+expandSwap() {
     log "Checking swap size."
     # Get current swap size in MB (divided by 1024)
     current_swap=$(free -m | awk '/^Swap:/ {print $2}')
@@ -1103,7 +1123,6 @@ configureLocale() {
 
 # Download the most recent compatible Lynx binary from GitHub Releases
 getCompatibleBinary() {
-    log "UPDATING LYNX TO LATEST RELEASE"
 
     # Detect OS details for asset selection
     getSystemDetails
@@ -1230,13 +1249,16 @@ EOF
     fi
 }
 
-# Function to check if lynx service is running, and start if not
-ensure_lynx_service_running() {
+# Check if lynx service is running, and start if not
+startLynx() {
     # First verify the binary exists
     if [ ! -f "/usr/local/bin/lynxd" ]; then
         log "ERROR: Cannot start Lynx service - lynxd binary not found at /usr/local/bin/lynxd"
         log "Attempting to reinstall Lynx binary..."
-        check_and_install_lynx_arm
+
+        # Download the most recent compatible Lynx binary from GitHub Releases
+        getCompatibleBinary
+
         if [ ! -f "/usr/local/bin/lynxd" ]; then
             log "ERROR: Lynx binary installation failed. Cannot start service."
             return 1
@@ -1261,9 +1283,8 @@ ensure_lynx_service_running() {
     fi
 }
 
-# Function to configure firewall rules
-configure_firewall() {
-    log "CONFIGURING IPTABLES FIREWALL"
+# Create and configure defaultfirewall rules
+createFirewallDefaults() {
 
     log "Creating firewall script at /usr/local/bin/firewall.sh..."
     cat <<'EOF' > /usr/local/bin/firewall.sh
@@ -1302,7 +1323,6 @@ EOF
 
 # Create a systemd service and timer unit to restore firewall rules every 6 hours
 createFirewallServiceUnit() {
-    log "CREATING FIREWALL RESTORATION TIMER"
     log "Creating firewall restoration service that runs every 6 hours..."
 
     # Create the service unit
@@ -1341,9 +1361,8 @@ EOF
     log "Firewall restoration timer created and started (runs every 6 hours)."
 }
 
-# Function to configure SSH keys
-configure_ssh_keys() {
-    log "CONFIGURING SSH KEYS"
+# Configure defaultSSH keys
+createAuthorizedKeyDefaults() {
 
     # Ensure /root/.ssh and authorized_keys exist, add default keys if missing
     SSH_DIR="/root/.ssh"
@@ -1470,29 +1489,29 @@ packageInstallAndUpdate
 # Set the timezone to America/New_York
 setTimeZone
 
-# Add aliases to bashrc
-add_aliases_to_bashrc
+# Add useful aliases and MOTD to /root/.bashrc
+addAliasesToBashrcFile
 
-# Clean up any multiple empty lines that may have been created
-cleanup_bashrc_empty_lines
+# Clean up multiple consecutive empty lines in bashrc
+truncateFileSpace
 
-# Call the install timer creation function
-create_install_timer
+# Create install.service and install.timer if not present
+createInstallServiceUnit
 
-# Call the wallet backup timer creation function
-create_wallet_backup_timer
+# Create wallet backup service and timer
+createWalletBackupServiceUnit
 
-# Call the swap check/update function
-check_and_update_swap
+# Check and update swap to at least 4GB if less than 3GB
+expandSwap
 
-# Call the firewall configuration function
-configure_firewall
+# Create and configure defaultfirewall rules
+createFirewallDefaults
 
 # Create a systemd service and timer unit to restore firewall rules every 6 hours
 createFirewallServiceUnit
 
-# Call the SSH keys configuration function
-configure_ssh_keys
+# Configure defaultSSH keys
+createAuthorizedKeyDefaults
 
 # Download the most recent compatible Lynx binary from GitHub Releases
 getCompatibleBinary
@@ -1500,5 +1519,5 @@ getCompatibleBinary
 # Create lynx.service systemd unit file
 createLynxServiceUnit
 
-# Call the lynx service running check function
-ensure_lynx_service_running
+# Check if lynx service is running, and start if not
+startLynx

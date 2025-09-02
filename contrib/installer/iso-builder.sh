@@ -374,13 +374,12 @@ if [ \"\$_IP\" ]; then
   printf \"My IP address is %s\n\" \"\$_IP\"
 fi
 
-printf \"\n\n\n\n\n\n\n\nLynx initialization will start in 60 seconds.\n\n\n\n\n\n\"
-sleep 60
+printf \"\n\n\n\n\n\n\n\nLynx initialization will start in 5 seconds.\n\n\n\n\n\n\"
+sleep 5
 
-# Ping Google NS server to test public network access
-if timeout 10 /bin/ping -c 1 8.8.8.8
+# Ping Google NS server to test public network access (try multiple times with longer timeout for slow networks)
+if timeout 90 /bin/ping -c 10 -W 8 8.8.8.8
 then
-        sleep 30
         wget -qO /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
 else
         echo \"Network access was not detected. For best results, connect an ethernet cable to your home or work wifi router. This device will reboot and try again in 60 seconds. For more information, visit https://docs.getlynx.io/lynx-core/lynxci/iso-for-raspberry-pi\"
