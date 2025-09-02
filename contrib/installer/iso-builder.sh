@@ -31,7 +31,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 #      - Detects partition offsets (boot and root partitions)
 #      - Mounts partitions safely with proper error handling
 #      - Creates rc.local script for automatic Lynx node setup
-#      - Configures the image to download and run builder.sh on first boot
+#      - Configures the image to download and run install.sh on first boot
 #
 #   3. OUTPUT GENERATION:
 #      - Creates final image with date-stamped filename
@@ -90,7 +90,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 #   1. Displays IP address information
 #   2. Waits 60 seconds for network initialization
 #   3. Tests network connectivity (ping 8.8.8.8)
-#   4. Downloads and executes builder.sh from GitHub
+#   4. Downloads and executes install.sh from GitHub
 #   5. Sets up Lynx node automatically
 #   6. Reboots if network is unavailable (retries every 60 seconds)
 #
@@ -113,12 +113,12 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ################################################################################
 #
 # NETWORK REQUIREMENTS:
-#   - Outbound HTTPS access to GitHub (for builder.sh download)
+#   - Outbound HTTPS access to GitHub (for install.sh download)
 #   - Outbound HTTP/HTTPS to Raspberry Pi Foundation (for OS downloads)
 #   - ICMP access for network connectivity testing (ping 8.8.8.8)
 #
 # REMOTE RESOURCES:
-#   - GitHub: https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/pi/builder.sh
+#   - GitHub: https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh
 #   - Raspberry Pi Foundation: https://downloads.raspberrypi.org/
 #
 ################################################################################
@@ -381,7 +381,7 @@ sleep 60
 if timeout 10 /bin/ping -c 1 8.8.8.8
 then
         sleep 30
-        wget -qO /usr/local/bin/builder.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/pi/builder.sh && chmod +x /usr/local/bin/builder.sh && /usr/local/bin/builder.sh
+        wget -qO /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
 else
         echo \"Network access was not detected. For best results, connect an ethernet cable to your home or work wifi router. This device will reboot and try again in 60 seconds. For more information, visit https://docs.getlynx.io/lynx-core/lynxci/iso-for-raspberry-pi\"
         sleep 60
