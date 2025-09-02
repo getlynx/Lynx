@@ -173,17 +173,17 @@ log() {
 }
 
 # Check if running as root
-check_root() {
+isRootUser() {
     if [ "$EUID" -ne 0 ]; then
         log "This script must be run as root. Please use sudo or run as root user."
         exit 1
     fi
 }
 
-set_timezone() {
-    log "SETTING SYSTEM TIMEZONE"
+# Set the timezone to America/New_York
+setTimeZone() {
     local tz="America/New_York"
-    log "Setting system timezone to $tz..."
+    log "Setting system timezone to $tz"
     if command -v timedatectl >/dev/null 2>&1; then
         timedatectl set-timezone "$tz" || log "Failed to set system timezone with timedatectl"
         log "System timezone set to $tz"
@@ -199,7 +199,7 @@ set_timezone() {
 }
 
 # Update and upgrade system packages, install required tools
-update_system() {
+packageInstallAndUpdate() {
     log "UPDATING SYSTEM PACKAGES"
     if [ "$os_family" = "debian" ]; then
         log "Updating package lists and upgrading Debian/Ubuntu system..."
@@ -470,23 +470,42 @@ alias sta='systemctl status lynx'
 alias upd='/usr/local/bin/install.sh update'
 ssp() { update_ssh_port "\$1"; }
 
-# Detect the OS family (Debian/Ubuntu or Redhat/CentOS/Fedora)
-get_os_family() {
+getSystemDetails() {
+    log "Detecting OS information..."
+    
     if [ -f /etc/os-release ]; then
-        . /etc/os-release
+        source /etc/os-release
+        
+        # Set OS family (basic categorization)
         case "\$ID" in
             debian|ubuntu)
-                echo "debian"
+                os_family="debian"
                 ;;
             rhel|centos|fedora|rocky|almalinux|ol)
-                echo "redhat"
+                os_family="redhat"
                 ;;
             *)
-                echo "\$ID"
+                os_family="\$ID"
                 ;;
         esac
+        
+        # Set detailed OS info
+        os_name=$(echo "\$ID" | tr '[:upper:]' '[:lower:]')
+        os_version=$(echo "\$VERSION_ID" | tr -d '"')
+        
+        if [ "\$os_family" = "redhat" ]; then
+            os_major_version=$(echo "\$os_version" | cut -d. -f1)
+        else
+            os_major_version="\$os_version"
+        fi
+        
+        log "Detected: \$os_name \$os_version (Family: \$os_family)"
     else
-        echo "unknown"
+        os_family="unknown"
+        os_name="unknown"
+        os_version="unknown"
+        os_major_version="unknown"
+        log "Could not detect OS information"
     fi
 }
 
@@ -564,7 +583,7 @@ update_ssh_port() {
     echo "SSH port updated successfully to \$new_port"
     
     # Check if we're on RHEL system
-    if [ "\$(get_os_family)" = "redhat" ]; then
+    if [ "\$os_family" = "redhat" ]; then
         echo "The device will be rebooted in 5 seconds to ensure all changes take full effect..."
         echo "Connect to the new port: ssh -p \$new_port root@\$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 'YOUR_SERVER_IP')"
         echo ""
@@ -580,9 +599,9 @@ update_ssh_port() {
 }
 
 # Advanced hidden aliases: Not included in the MOTD command options
-alias fire='nano /usr/local/bin/firewall.sh'
-alias sshe='nano /root/.ssh/authorized_keys'
-pass() { toggle_password_auth "\$1"; }
+alias fire='nano /usr/local/bin/firewall.sh' # Edit the firewall script
+alias sshe='nano /root/.ssh/authorized_keys' # Edit the SSH keys file
+pass() { toggle_password_auth "\$1"; } # Toggle password authentication in SSH config
 toggle_password_auth() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "\$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "\$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "\$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "\$ssh_config"; echo "\$new_setting" >> "\$ssh_config"; if [ "\$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; }
 
 $MOTD_BLOCK_START
@@ -965,91 +984,130 @@ check_and_update_swap() {
 # This function is called before downloading or updating Lynx
 # It sources /etc/os-release and parses the relevant fields
 # Example: os_name=debian, os_version=11, os_major_version=11
+# Combined function to detect OS family and detailed information
 # This helps select the correct Lynx release asset for the system
-detect_os_details() {
-    log "Detecting detailed OS information..."
-    source /etc/os-release
-    os_name=$(echo "$ID" | tr '[:upper:]' '[:lower:]')
-    os_version=$(echo "$VERSION_ID" | tr -d '"')
-    if [ "$os_family" = "redhat" ]; then
-        os_major_version=$(echo "$os_version" | cut -d. -f1)
-    else
-        os_major_version="$os_version"
-    fi
-    log "Detected: $os_name $os_version (Family: $os_family)"
-}
-
-# Detect the OS family (Debian/Ubuntu or Redhat/CentOS/Fedora)
-get_os_family() {
+getSystemDetails() {
+    log "Detecting OS information..."
+    
     if [ -f /etc/os-release ]; then
-        . /etc/os-release
+        source /etc/os-release
+        
+        # Set OS family (basic categorization)
         case "$ID" in
             debian|ubuntu)
-                echo "debian"
+                os_family="debian"
                 ;;
             rhel|centos|fedora|rocky|almalinux|ol)
-                echo "redhat"
+                os_family="redhat"
                 ;;
             *)
-                echo "$ID"
+                os_family="$ID"
                 ;;
         esac
+        
+        # Set detailed OS info
+        os_name=$(echo "$ID" | tr '[:upper:]' '[:lower:]')
+        os_version=$(echo "$VERSION_ID" | tr -d '"')
+        
+        if [ "$os_family" = "redhat" ]; then
+            os_major_version=$(echo "$os_version" | cut -d. -f1)
+        else
+            os_major_version="$os_version"
+        fi
+        
+        log "Detected: $os_name $os_version (Family: $os_family)"
     else
-        echo "unknown"
+        os_family="unknown"
+        os_name="unknown"
+        os_version="unknown"
+        os_major_version="unknown"
+        log "Could not detect OS information"
     fi
 }
 
 # Configure system locale for UTF-8 support
-configure_locale() {
-    log "CONFIGURING SYSTEM LOCALE"
+configureLocale() {
     local preferredLocale="en_US.UTF-8"
     local preferredLocaleFile="/etc/locale.gen"
+
+    # Check if locale is already properly configured
+    if [ -n "${LANG:-}" ] && [ -n "${LC_ALL:-}" ] && [ "${LANG:-}" = "$preferredLocale" ] && [ "${LC_ALL:-}" = "$preferredLocale" ]; then
+        log "Locale already configured as $preferredLocale. Skipping configuration."
+        return 0
+    fi
 
     if [ "$os_family" = "debian" ]; then
         log "Configuring locale for Debian/Ubuntu system..."
         # Ensure locales package is installed
         if ! dpkg -s locales >/dev/null 2>&1; then
             log "Installing locales package..."
-            apt-get update -y >/dev/null 2>&1 && apt-get install -y locales >/dev/null 2>&1 || handle_error "Failed to install locales package"
+            apt-get update -y >/dev/null 2>&1 && apt-get install -y locales >/dev/null 2>&1 || log "Failed to install locales package"
         fi
-        # Uncomment or add the preferred locale in /etc/locale.gen
-        if ! grep -q "^$preferredLocale UTF-8" "$preferredLocaleFile"; then
-            log "Configuring $preferredLocale in $preferredLocaleFile..."
-            sed -i "/^# $preferredLocale UTF-8/s/^# //" "$preferredLocaleFile"
+        
+        # Check if locale is already enabled in locale.gen
+        if [ -f "$preferredLocaleFile" ] && grep -q "^$preferredLocale UTF-8" "$preferredLocaleFile"; then
+            log "Locale $preferredLocale already enabled in $preferredLocaleFile"
+        else
+            log "Enabling $preferredLocale in $preferredLocaleFile..."
+            # Uncomment or add the preferred locale in /etc/locale.gen
+            sed -i "/^# $preferredLocale UTF-8/s/^# //" "$preferredLocaleFile" 2>/dev/null || true
             if ! grep -q "^$preferredLocale UTF-8" "$preferredLocaleFile"; then
                 echo "$preferredLocale UTF-8" >> "$preferredLocaleFile"
             fi
         fi
-        # Generate the locale
-        log "Generating locale..."
-        locale-gen "$preferredLocale" >/dev/null 2>&1 || handle_error "Failed to generate locale"
-        # Set system-wide locale
-        log "Setting system-wide locale..."
-        update-locale LANG=$preferredLocale LC_ALL=$preferredLocale || handle_error "Failed to update system locale"
+        
+        # Check if locale is already generated
+        if locale -a 2>/dev/null | grep -q "^$preferredLocale$"; then
+            log "Locale $preferredLocale already generated. Skipping generation."
+        else
+            log "Generating locale $preferredLocale..."
+            locale-gen "$preferredLocale" >/dev/null 2>&1 || log "Failed to generate locale"
+        fi
+        
+        # Check if system-wide locale is already set
+        if [ -f /etc/default/locale ] && grep -q "^LANG=$preferredLocale$" /etc/default/locale; then
+            log "System-wide locale already set to $preferredLocale. Skipping update."
+        else
+            log "Setting system-wide locale to $preferredLocale..."
+            update-locale LANG=$preferredLocale LC_ALL=$preferredLocale || log "Failed to update system locale"
+        fi
+        
     elif [ "$os_family" = "redhat" ]; then
         log "Configuring locale for RedHat/Rocky/AlmaLinux system..."
-        # Install the appropriate language pack for UTF-8 support
-        if command -v dnf >/dev/null 2>&1; then
-            log "Installing language pack using dnf..."
-            dnf install -y glibc-langpack-en >/dev/null 2>&1 || log "Failed to install glibc-langpack-en, continuing..."
+        # Check if language pack is already installed
+        if locale -a 2>/dev/null | grep -q "^$preferredLocale$"; then
+            log "Locale $preferredLocale already available. Skipping language pack installation."
         else
-            log "Installing glibc-common using yum..."
-            yum install -y glibc-common >/dev/null 2>&1 || log "Failed to install glibc-common, continuing..."
+            # Install the appropriate language pack for UTF-8 support
+            if command -v dnf >/dev/null 2>&1; then
+                log "Installing language pack using dnf..."
+                dnf install -y glibc-langpack-en >/dev/null 2>&1 || log "Failed to install glibc-langpack-en, continuing..."
+            else
+                log "Installing glibc-common using yum..."
+                yum install -y glibc-common >/dev/null 2>&1 || log "Failed to install glibc-common, continuing..."
+            fi
         fi
-        # Set locale environment variables
-        export LANG=en_US.UTF-8
-        export LC_ALL=en_US.UTF-8
+        
+        # Set locale environment variables (only if not already set)
+        if [ "$LANG" != "$preferredLocale" ] || [ "$LC_ALL" != "$preferredLocale" ]; then
+            export LANG=$preferredLocale
+            export LC_ALL=$preferredLocale
+            log "Locale environment variables set to $preferredLocale"
+        else
+            log "Locale environment variables already set to $preferredLocale"
+        fi
     fi
+    
     log "Locale configuration completed"
 }
 
-# Download the latest Lynx release from GitHub and install/update the binaries
-# This function is called if Lynx is already installed (update) or as part of the install flow
-# It stops the Lynx service, fetches the latest release, extracts the binaries, sets permissions, and restarts the service
-update_lynx_release() {
+# Download the most recent compatible Lynx binary from GitHub Releases
+getCompatibleBinary() {
     log "UPDATING LYNX TO LATEST RELEASE"
-    # Ensure os_family is set for compatibility logic
-    os_family=$(get_os_family)
+
+    # Detect OS details for asset selection
+    getSystemDetails
+    
     # Gracefully stop Lynx if running
     if systemctl is-active --quiet lynx.service; then
         log "Stopping Lynx service..."
@@ -1061,8 +1119,6 @@ update_lynx_release() {
     if [ $? -ne 0 ] || [ -z "$release_info" ]; then
         log "Failed to fetch release information from GitHub API"
     fi
-    # Detect OS details for asset selection
-    detect_os_details
     # Detect architecture
     ARCH="$(uname -m)"
     log "Searching for compatible binary for $os_name $os_version ($ARCH)..."
@@ -1131,8 +1187,8 @@ update_lynx_release() {
     log "Lynx has been updated to the latest release."
 }
 
-# Function to create lynx.service systemd unit file if not present
-create_lynx_service() {
+# Create lynx.service systemd unit file
+createLynxServiceUnit() {
     if [ ! -f /etc/systemd/system/lynx.service ]; then
         log "Creating /etc/systemd/system/lynx.service systemd unit file."
         cat <<EOF > /etc/systemd/system/lynx.service
@@ -1146,7 +1202,7 @@ Wants=network-online.target
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
-ExecStart=/usr/local/bin/lynxd -datadir=$WorkingDirectory -assumevalid=fa71fe1bdfa0f68ef184c8cddc4c401cae852b566f36042ec59396c9273e8bce
+ExecStart=/usr/local/bin/lynxd -datadir=$WorkingDirectory -dbcache=2048 -assumevalid=fa71fe1bdfa0f68ef184c8cddc4c401cae852b566f36042ec59396c9273e8bce
 ExecStop=/usr/local/bin/lynx-cli -datadir=$WorkingDirectory stop
 Restart=on-failure
 RestartSec=30
@@ -1244,8 +1300,8 @@ EOF
     chmod +x /usr/local/bin/firewall.sh
 }
 
-# Create a systemd timer to restore firewall rules every 6 hours
-create_firewall_timer() {
+# Create a systemd service and timer unit to restore firewall rules every 6 hours
+createFirewallServiceUnit() {
     log "CREATING FIREWALL RESTORATION TIMER"
     log "Creating firewall restoration service that runs every 6 hours..."
 
@@ -1341,17 +1397,26 @@ EOF
 
 # If called with 'update', run only the update process
 if [[ "${1:-}" == "update" ]]; then
-    check_root
-    # Set os_family early so it's available for all functions
-    os_family=$(get_os_family)
-    update_system
-    set_timezone
-    detect_os_details
-    update_lynx_release
+
+    # Check if running as root
+    isRootUser
+
+    # Detect OS details early so they're available for all functions
+    getSystemDetails
+
+    # Update and upgrade system packages, install required tools
+    packageInstallAndUpdate
+
+    # Set the timezone to America/New_York
+    setTimeZone
+
+    # Download the most recent compatible Lynx binary from GitHub Releases
+    getCompatibleBinary
+
     exit 0
 fi
 
-# If called with 'isBlockchainSyncComplete', run only the blockchain sync check
+# Check if blockchain has completed syncing
 isBlockchainSyncComplete() {
     # Compact blockchain sync check logic
     WorkingDirectory=/var/lib/lynx
@@ -1364,11 +1429,7 @@ isBlockchainSyncComplete() {
     fi
 
     # Get blockchain sync status
-    log "Checking blockchain sync status..."
     SYNC_STATUS=$(/usr/local/bin/lynx-cli -datadir=$WorkingDirectory getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
-
-    # Log the raw status for debugging
-    log "Raw sync status (initialblockdownload): '$SYNC_STATUS'"
 
     # If sync is complete (false), stop and disable timer
     if [ "$SYNC_STATUS" = "false" ]; then
@@ -1391,17 +1452,23 @@ isBlockchainSyncComplete() {
     exit 0
 }
 
-check_root
+# Check if running as root
+isRootUser
 
+# Check if blockchain has completed syncing
 isBlockchainSyncComplete
 
-# Set os_family early so it's available for all functions
-os_family=$(get_os_family)
+# Detect OS details early so they're available for all functions
+getSystemDetails
 
-configure_locale
-update_system
-set_timezone
-detect_os_details
+# Configure system locale for UTF-8 support
+configureLocale
+
+# Update and upgrade system packages, install required tools
+packageInstallAndUpdate
+
+# Set the timezone to America/New_York
+setTimeZone
 
 # Add aliases to bashrc
 add_aliases_to_bashrc
@@ -1421,17 +1488,17 @@ check_and_update_swap
 # Call the firewall configuration function
 configure_firewall
 
-# Call the firewall timer creation function
-create_firewall_timer
+# Create a systemd service and timer unit to restore firewall rules every 6 hours
+createFirewallServiceUnit
 
 # Call the SSH keys configuration function
 configure_ssh_keys
 
-# Call the Lynx check/install function
-update_lynx_release
+# Download the most recent compatible Lynx binary from GitHub Releases
+getCompatibleBinary
 
-# Call the lynx service creation function
-create_lynx_service
+# Create lynx.service systemd unit file
+createLynxServiceUnit
 
 # Call the lynx service running check function
 ensure_lynx_service_running
