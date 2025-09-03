@@ -105,10 +105,10 @@ set -euo pipefail
 #   curl -sSL https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh | tee /usr/local/bin/install.sh | bash
 #
 #   Or for a permanent installation (one command):
-#   wget -O /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
+#   wget -4 -O /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
 #
 #   Or for a permanent installation (separate steps):
-#   wget -O /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh
+#   wget -4 -O /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh
 #   chmod +x /usr/local/bin/install.sh
 #   /usr/local/bin/install.sh 
 #
