@@ -229,7 +229,7 @@ packageInstallAndUpdate() {
         log "Performing distribution upgrade..."
         apt-get dist-upgrade -y >/dev/null 2>&1 || log "Failed to perform distribution upgrade"
         log "Installing required packages (unzip, htop, iptables, git, gawk, util-linux, curl)..."
-        apt-get install -y unzip htop iptables gcc build-essential git gawk util-linux curl >/dev/null 2>&1 || log "Failed to install required packages"
+        apt-get install -y unzip nano htop iptables gcc build-essential git gawk util-linux curl >/dev/null 2>&1 || log "Failed to install required packages"
     elif [ "$os_family" = "redhat" ]; then
         log "Updating RedHat/Rocky/AlmaLinux system..."
         if command -v dnf >/dev/null 2>&1; then
@@ -240,7 +240,7 @@ packageInstallAndUpdate() {
             log "Installing EPEL repository for htop..."
             dnf install -y epel-release >/dev/null 2>&1 || log "Failed to install epel-release"
             log "Installing required packages with dnf (unzip, htop, iptables, gcc, git, gawk, util-linux, curl)..."
-            dnf install -y unzip htop iptables gcc git gawk util-linux curl >/dev/null 2>&1 || log "Failed to install required packages"
+            dnf install -y unzip nano htop iptables gcc git gawk util-linux curl >/dev/null 2>&1 || log "Failed to install required packages"
         else
             log "Refreshing package cache with yum..."
             yum makecache -y >/dev/null 2>&1 || log "Failed to refresh package cache"
@@ -249,7 +249,7 @@ packageInstallAndUpdate() {
             log "Installing EPEL repository for htop..."
             yum install -y epel-release >/dev/null 2>&1 || log "Failed to install epel-release"
             log "Installing required packages with yum (unzip, htop, iptables, gcc, git, gawk, util-linux, curl)..."
-            yum install -y unzip htop iptables gcc git gawk util-linux curl >/dev/null 2>&1 || log "Failed to install required packages"
+            yum install -y unzip nano htop iptables gcc git gawk util-linux curl >/dev/null 2>&1 || log "Failed to install required packages"
         fi
     else
         log "Unsupported OS family: $os_family"
