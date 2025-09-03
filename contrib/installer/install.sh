@@ -492,10 +492,10 @@ ssp() { update_ssh_port "\$1"; }
 
 getSystemDetails() {
     log "Detecting OS information..."
-    
+
     if [ -f /etc/os-release ]; then
         source /etc/os-release
-        
+
         # Set OS family (basic categorization)
         case "\$ID" in
             debian|ubuntu)
@@ -508,17 +508,17 @@ getSystemDetails() {
                 os_family="\$ID"
                 ;;
         esac
-        
+
         # Set detailed OS info
         os_name=$(echo "\$ID" | tr '[:upper:]' '[:lower:]')
         os_version=$(echo "\$VERSION_ID" | tr -d '"')
-        
+
         if [ "\$os_family" = "redhat" ]; then
             os_major_version=$(echo "\$os_version" | cut -d. -f1)
         else
             os_major_version="\$os_version"
         fi
-        
+
         log "Detected: \$os_name \$os_version (Family: \$os_family)"
     else
         os_family="unknown"
@@ -543,10 +543,10 @@ update_ssh_port() {
         echo "Example: update_ssh_port 2222"
         return 0
     fi
-    
+
     local new_port="\$1"
     local current_port
-    
+
     # Validate port number
     if ! [[ "\$new_port" =~ ^[0-9]+$ ]] || [ "\$new_port" -lt 1 ] || [ "\$new_port" -gt 65535 ]; then
         echo "ERROR: Invalid port number. Must be between 1 and 65535."
@@ -588,15 +588,83 @@ update_ssh_port() {
     echo "Updating firewall script..."
     sed -i "/# SSH_PORT_START/,/# SSH_PORT_END/s/iptables -A INPUT -p tcp --dport [0-9]* -j ACCEPT/iptables -A INPUT -p tcp --dport \$new_port -j ACCEPT/" /usr/local/bin/firewall.sh
     
-    echo "Applying firewall rules..."
-    /usr/local/bin/firewall.sh
+    echo "Applying firewall rules and restarting SSH daemon with multiple attempts..."
+    log "Starting firewall reset and SSH daemon restart with multiple attempts for reliability"
     
-    echo "Restarting SSH daemon..."
-    if systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; then
-        echo "SSH daemon restarted successfully"
+    # Reset firewall and restart SSH daemon three times for reliability
+    local attempt=1
+    local max_attempts=3
+    local ssh_success=false
+    
+    while [ $attempt -le $max_attempts ]; do
+        echo "=== Attempt $attempt of $max_attempts ==="
+        log "Starting attempt $attempt of $max_attempts for firewall reset and SSH restart"
+        
+        # Reset firewall rules
+        echo "Resetting firewall rules (attempt $attempt)..."
+        log "Resetting firewall rules (attempt $attempt)"
+        if /usr/local/bin/firewall.sh; then
+            echo "Firewall reset successful (attempt $attempt)"
+            log "Firewall reset successful (attempt $attempt)"
+        else
+            echo "WARNING: Firewall reset failed (attempt $attempt), continuing..."
+            log "WARNING: Firewall reset failed (attempt $attempt), continuing with SSH restart"
+        fi
+        
+        # Wait a moment for firewall to settle
+        sleep 2
+        
+        # Restart SSH daemon
+        echo "Restarting SSH daemon (attempt $attempt)..."
+        log "Restarting SSH daemon (attempt $attempt)"
+        if systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; then
+            echo "SSH daemon restart successful (attempt $attempt)"
+            log "SSH daemon restart successful (attempt $attempt)"
+            
+            # Verify SSH is actually running
+            sleep 3
+            if systemctl is-active --quiet sshd 2>/dev/null || systemctl is-active --quiet ssh 2>/dev/null; then
+                echo "SSH daemon verification successful (attempt $attempt)"
+                log "SSH daemon verification successful (attempt $attempt)"
+                ssh_success=true
+                break
+            else
+                echo "WARNING: SSH daemon restart succeeded but service not active (attempt $attempt)"
+                log "WARNING: SSH daemon restart succeeded but service not active (attempt $attempt)"
+            fi
+        else
+            echo "ERROR: SSH daemon restart failed (attempt $attempt)"
+            log "ERROR: SSH daemon restart failed (attempt $attempt)"
+        fi
+        
+        # Wait before next attempt
+        if [ $attempt -lt $max_attempts ]; then
+            echo "Waiting 5 seconds before next attempt..."
+            log "Waiting 5 seconds before next attempt (attempt $attempt)"
+            sleep 5
+        fi
+        
+        attempt=$((attempt + 1))
+    done
+    
+    # Final status report
+    if [ "$ssh_success" = true ]; then
+        echo "SUCCESS: SSH daemon is running after $((attempt - 1)) attempt(s)"
+        log "SUCCESS: SSH daemon is running after $((attempt - 1)) attempt(s)"
     else
-        echo "ERROR: Failed to restart SSH daemon"
-        return 1
+        echo "ERROR: Failed to restart SSH daemon after $max_attempts attempts"
+        log "ERROR: Failed to restart SSH daemon after $max_attempts attempts"
+        echo "Attempting emergency SSH restart..."
+        log "Attempting emergency SSH restart after all attempts failed"
+        if systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; then
+            echo "Emergency SSH restart successful"
+            log "Emergency SSH restart successful"
+            ssh_success=true
+        else
+            echo "CRITICAL: Emergency SSH restart also failed"
+            log "CRITICAL: Emergency SSH restart also failed - SSH service may be broken"
+            return 1
+        fi
     fi
 
     echo ""
@@ -691,7 +759,7 @@ EOF
         log "Starting systemd for new /etc/systemd/system/install.timer."
         systemctl start install.timer
         log "/etc/systemd/system/install.service and /etc/systemd/system/install.timer created, enabled, and started."
-        
+
         # Disable firewalld and SELinux on RHEL-based systems
         log "Checking for RHEL-based system to disable firewalld and SELinux."
         if [ "$os_family" = "redhat" ]; then
@@ -705,7 +773,7 @@ EOF
             else
                 log "firewalld is not installed - skipping"
             fi
-            
+
             # Disable SELinux if running
             if command -v getenforce >/dev/null 2>&1; then
                 current_selinux=$(getenforce 2>/dev/null)
@@ -728,7 +796,7 @@ EOF
         else
             log "Not a RHEL-based system - skipping"
         fi
-        
+
         log "Installation of Lynx has begun. The device will reboot in 5 seconds. Please wait..."
         echo ""
         echo ""
@@ -736,7 +804,7 @@ EOF
         echo ""
         echo ""
         sleep 5
-        
+
         # Try multiple reboot methods for reliability
         log "Attempting to reboot system..."
         if command -v systemctl >/dev/null 2>&1; then
@@ -746,7 +814,7 @@ EOF
         else
             reboot
         fi
-        
+
         # If we get here, force exit
         exit 0
     else
@@ -757,16 +825,16 @@ EOF
 # Create wallet backup service and timer
 createWalletBackupServiceUnit() {
     log "Creating /etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer."
-    
+
     # Stop and disable the timer before recreating it to avoid conflicts
     systemctl stop lynx-wallet-backup.timer 2>/dev/null || true
     systemctl disable lynx-wallet-backup.timer 2>/dev/null || true
-    
+
     # Create backup directory
     mkdir -p /var/lib/lynx-backup
     chown root:root /var/lib/lynx-backup
     chmod 700 /var/lib/lynx-backup
-    
+
     # Create the backup script
     cat <<'EOF' > /usr/local/bin/backup.sh
 #!/bin/bash
@@ -811,11 +879,11 @@ fi
 if [ -f "$BACKUP_FILE" ]; then
     # Set secure permissions on the backup file
     chmod 400 "$BACKUP_FILE"
-    
+
     # Calculate hash of the new backup
     log "Calculating hash of new backup..."
     new_hash=$(sha256sum "$BACKUP_FILE" | cut -d" " -f1)
-    
+
     # Check if any existing backup has the same hash
     duplicate_found=false
     for existing_file in "$BACKUP_DIR"/*.dat; do
@@ -837,12 +905,12 @@ if [ -f "$BACKUP_FILE" ]; then
     else
         log "New wallet backup created successfully: $BACKUP_FILE"
         log "Backup hash: $new_hash"
-        
+
         # Check if we have more than 100 backup files and remove oldest ones
         backup_count=$(ls -1 "$BACKUP_DIR"/*.dat 2>/dev/null | wc -l)
         if [ "$backup_count" -gt 100 ]; then
             log "Backup count ($backup_count) exceeds limit of 100. Removing oldest backups..."
-            
+
             # List all backup files by modification time (oldest first) and remove excess
             ls -1t "$BACKUP_DIR"/*.dat 2>/dev/null | tail -n +101 | while read -r old_file; do
                 if [ -f "$old_file" ]; then
@@ -850,7 +918,7 @@ if [ -f "$BACKUP_FILE" ]; then
                     log "Removed old backup: $(basename "$old_file")"
                 fi
             done
-            
+
             # Get final count after cleanup
             final_count=$(ls -1 "$BACKUP_DIR"/*.dat 2>/dev/null | wc -l)
             log "Backup cleanup complete. Current backup count: $final_count"
