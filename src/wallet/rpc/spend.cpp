@@ -154,6 +154,11 @@ void fncGetMinUTXODepth (CWallet* iwltWallet, int& ointMinUTXODeoth)
             // Get wallet transaction
             const CWalletTx* wtxWalletTransaction = iwltWallet->GetWalletTx(output.outpoint.hash);
 
+            // If wallet transaction not found, skip this output
+            if (!wtxWalletTransaction) {
+                continue;
+            }
+
             // Get depth
             int intDepth = iwltWallet->GetTxDepthInMainChain(*wtxWalletTransaction);
 

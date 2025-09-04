@@ -1239,6 +1239,9 @@ int intNumberOfImmatureCoins = 0;
             }
 
             const CWalletTx* wtx = wallet->GetWalletTx(output.outpoint.hash);
+            if (!wtx) {
+                continue;
+            }
             int depth = wallet->GetTxDepthInMainChain(*wtx);
             if (depth < COINBASE_MATURITY) {
 
@@ -1293,6 +1296,9 @@ bool select_coins_for_opreturn(CWallet* wallet, std::set<std::pair<const CWallet
             }
 
             const CWalletTx* wtx = wallet->GetWalletTx(output.outpoint.hash);
+            if (!wtx) {
+                continue;
+            }
             int depth = wallet->GetTxDepthInMainChain(*wtx);
             if (depth < COINBASE_MATURITY) {
                 continue;
