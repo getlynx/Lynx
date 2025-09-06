@@ -287,9 +287,22 @@ executeHelpCommand() {
     # Get timestamp from 24 hours ago
     since_timestamp=$(date -d '24 hours ago' +%s)
 
-    # Query wallet for stake transactions from last 24 hours
-    # Uses awk to parse JSON and count unique stake transactions
-    stakes_won=$(lynx-cli listtransactions "*" 1000 0 true 2>/dev/null | awk -v since="$since_timestamp" '/"category".*"stake"/ { in_stake=1 } /"time":/ && in_stake { gsub(/[^0-9]/, "", $2); if ($2 >= since) { time_ok=1 } else { time_ok=0 } } /"txid":/ && in_stake && time_ok { gsub(/[",]/, "", $2); txids[$2]=1; in_stake=0; time_ok=0 } END { print length(txids) }')
+
+    # Count stakes from debug.log file for last 24 hours
+    # Get cutoff time in ISO format (YYYY-MM-DDTHH:MM:SSZ)
+    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ)
+    
+    # Count CheckStake entries in debug.log from last 24 hours
+    # Uses grep to find stake entries, then awk to filter by timestamp
+    stakes_won=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '
+        {
+            # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
+            timestamp = substr($0, 1, 20) "Z"
+            if (timestamp >= cutoff) {
+                count++
+            }
+        }
+        END { print count+0 }')
 
     # Default to 0 if command fails or returns empty
     if [ -z "$stakes_won" ] || [ "$stakes_won" = "" ]; then
@@ -322,14 +335,21 @@ executeHelpCommand() {
     spaces_needed=$((20 - yield_digits))
     yield_spacing=$(printf '%*s' "$spaces_needed" '')
 
-    # Count stakes won in the last 7 days using wallet RPC
-    # Get timestamp from 7 days ago
-    since_timestamp_7d=$(date -d '7 days ago' +%s)
+    # Count stakes won in the last 7 days using debug.log
+    # Get cutoff time in ISO format (YYYY-MM-DDTHH:MM:SSZ) for 7 days ago
+    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ)
 
-    # Query wallet for stake transactions from last 7 days
-    # Note: May need to increase transaction count for longer periods
-    # Uses awk to parse JSON and count unique stake transactions
-    stakes_won_7d=$(lynx-cli listtransactions "*" 5000 0 true 2>/dev/null | awk -v since="$since_timestamp_7d" '/"category".*"stake"/ { in_stake=1 } /"time":/ && in_stake { gsub(/[^0-9]/, "", $2); if ($2 >= since) { time_ok=1 } else { time_ok=0 } } /"txid":/ && in_stake && time_ok { gsub(/[",]/, "", $2); txids[$2]=1; in_stake=0; time_ok=0 } END { print length(txids) }')
+    # Count CheckStake entries in debug.log from last 7 days
+    # Uses grep to find stake entries, then awk to filter by timestamp
+    stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '
+        {
+            # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
+            timestamp = substr($0, 1, 20) "Z"
+            if (timestamp >= cutoff) {
+                count++
+            }
+        }
+        END { print count+0 }')
 
     # Default to 0 if command fails or returns empty
     if [ -z "$stakes_won_7d" ] || [ "$stakes_won_7d" = "" ]; then
@@ -362,9 +382,9 @@ executeHelpCommand() {
     spaces_needed=$((22 - yield_7d_digits))
     yield_7d_spacing=$(printf '%*s' "$spaces_needed" '')
 
-    # Count immature stake UTXOs (confirmations < 31 from stake transactions)
-    # Using listtransactions to identify stake rewards that are still maturing
-    immature_utxos=$(lynx-cli listtransactions "*" 500 0 true 2>/dev/null | awk '/"category".*"stake"/ {stake=1} /"confirmations":/ && stake {gsub(/[^0-9]/, "", $2); if ($2 < 31 && $2 > 0) count++; stake=0} END {print count+0}')
+    # Count immature stake UTXOs (confirmations < 31 from unspent outputs)
+    # Using listunspent to identify stake rewards that are still maturing
+    immature_utxos=$(lynx-cli listunspent 2>/dev/null | awk '/"confirmations":/ {gsub(/[^0-9]/, "", $2); if ($2 < 31 && $2 > 0) count++} END {print count+0}')
     if [ -z "$immature_utxos" ] || [ "$immature_utxos" = "" ]; then
         immature_utxos="0"
     fi
@@ -479,14 +499,14 @@ alias lag='lynx-cli listaddressgroupings'
 alias lyv='lynx-cli -version'
 lyc() { if [ "\$1" = "-e" ]; then nano "$WorkingDirectory/lynx.conf"; else cat "$WorkingDirectory/lynx.conf"; fi; }
 lyl() { if [ "\$1" = "-f" ]; then tail -f "$WorkingDirectory/debug.log"; elif [ "\$2" = "-f" ]; then tail -n \${1:-30} -f "$WorkingDirectory/debug.log"; else tail -n \${1:-30} "$WorkingDirectory/debug.log"; fi; }
-lyn() { if [ "\$1" = "-d" ]; then systemctl stop lynx && rm -rf "$WorkingDirectory/debug.log" && systemctl start lynx; else systemctl stop lynx && systemctl start lynx; fi; }
+lyn() { if [ "\$1" = "-d" ]; then echo "If you delete the debug log, the Staking results in Node Status will reset."; read -p "Do you want to continue? (y/N): " confirm; if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then systemctl stop lynx && rm -rf "$WorkingDirectory/debug.log" && systemctl start lynx; else echo "Operation cancelled."; fi; else systemctl restart lynx; fi; }
 alias sta='lynx-cli sendtoaddress \$1 \$2'
 swe() { lynx-cli sendtoaddress "\$1" "\$(lynx-cli getbalance)" "" "" true; }
 jou() { if [ "\$1" = "-f" ]; then journalctl -t install.sh -f; elif [ "\$2" = "-f" ]; then journalctl -t install.sh -n \${1:-30} -f; else journalctl -t install.sh -n \${1:-30}; fi; }
 alias gbi='lynx-cli getblockchaininfo'
 hel() { if [ -n "\$1" ]; then lynx-cli help | grep -i "\$1"; else lynx-cli help; fi; }
 alias h='executeHelpCommand'
-alias sta='systemctl status lynx'
+alias sst='systemctl status lynx'
 alias upd='/usr/local/bin/install.sh update'
 ssp() { update_ssh_port "\$1"; }
 
