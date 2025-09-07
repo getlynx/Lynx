@@ -69,7 +69,7 @@ set -euo pipefail
 #     lyv    - Show Lynx version
 #     lyc    - Edit Lynx config file
 #     lyl    - View Lynx debug log (real-time)
-#     lyn    - Restart Lynx daemon
+#     lyr    - Restart Lynx daemon
 #     jou    - View install script logs
 #     gbi    - Get blockchain info
 #     hel    - Show Lynx help
@@ -433,7 +433,7 @@ executeHelpCommand() {
     echo "║  LYNX COMMANDS:                                                ║"
     echo "║    lyl [lines] [-f]       - View Lynx debug log (default 30)   ║"
     echo "║    lyv                    - Show Lynx version                  ║"
-    echo "║    lyn [-d]               - Restart Lynx (-d to purge debug)   ║"
+    echo "║    lyr [-d]               - Restart Lynx (-d to purge debug)   ║"
     echo "║    lyc [-e]               - View/edit Lynx conf (-e to edit)   ║"
     echo "║    gbi                    - Get blockchain info                ║"
     echo "║    hel [keyword]          - Show Lynx help (keyword search)    ║"
@@ -448,7 +448,7 @@ executeHelpCommand() {
     echo "║    lba                    - List backup directory contents     ║"
     echo "║                                                                ║"
     echo "║  SYSTEM COMMANDS:                                              ║"
-    echo "║    sta                    - Check Lynx service status          ║"
+    echo "║    sst                    - Check Lynx service status          ║"
     echo "║    jou [lines] [-f]       - View install logs (default 30)     ║"
     echo "║    upd                    - Update Lynx to latest release      ║"
     echo "║    ssp [port]             - Change SSH port                    ║"
@@ -499,7 +499,7 @@ alias lag='lynx-cli listaddressgroupings'
 alias lyv='lynx-cli -version'
 lyc() { if [ "\$1" = "-e" ]; then nano "$WorkingDirectory/lynx.conf"; else cat "$WorkingDirectory/lynx.conf"; fi; }
 lyl() { if [ "\$1" = "-f" ]; then tail -f "$WorkingDirectory/debug.log"; elif [ "\$2" = "-f" ]; then tail -n \${1:-30} -f "$WorkingDirectory/debug.log"; else tail -n \${1:-30} "$WorkingDirectory/debug.log"; fi; }
-lyn() { if [ "\$1" = "-d" ]; then echo "If you delete the debug log, the Staking results in Node Status will reset."; read -p "Do you want to continue? (y/N): " confirm; if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then systemctl stop lynx && rm -rf "$WorkingDirectory/debug.log" && systemctl start lynx; else echo "Operation cancelled."; fi; else systemctl restart lynx; fi; }
+lyr() { if [ "\$1" = "-d" ]; then echo "If you delete the debug log, the Staking results in Node Status will reset."; read -p "Do you want to continue? (y/N): " confirm; if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then systemctl stop lynx && rm -rf "$WorkingDirectory/debug.log" && systemctl start lynx; else echo "Operation cancelled."; fi; else systemctl restart lynx; fi; }
 alias sta='lynx-cli sendtoaddress \$1 \$2'
 swe() { lynx-cli sendtoaddress "\$1" "\$(lynx-cli getbalance)" "" "" true; }
 jou() { if [ "\$1" = "-f" ]; then journalctl -t install.sh -f; elif [ "\$2" = "-f" ]; then journalctl -t install.sh -n \${1:-30} -f; else journalctl -t install.sh -n \${1:-30}; fi; }
@@ -1258,7 +1258,7 @@ Wants=network-online.target
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
-ExecStart=/usr/local/bin/lynxd -datadir=$WorkingDirectory -dbcache=2048 -assumevalid=fa71fe1bdfa0f68ef184c8cddc4c401cae852b566f36042ec59396c9273e8bce
+ExecStart=/usr/local/bin/lynxd -datadir=$WorkingDirectory -dbcache=2048 -assumevalid=485bea987c62039d365a9458b6df2e3ef679054f2bd6e016877f783652912cfb
 ExecStop=/usr/local/bin/lynx-cli -datadir=$WorkingDirectory stop
 Restart=on-failure
 RestartSec=30
