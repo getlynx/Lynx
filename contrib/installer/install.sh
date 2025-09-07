@@ -667,20 +667,12 @@ update_ssh_port() {
     echo ""
     echo "SSH port updated successfully to \$new_port"
 
-    # Check if we're on RHEL system
-    if [ "\$os_family" = "redhat" ]; then
-        echo "The device will be rebooted in 5 seconds to ensure all changes take full effect..."
-        echo "Connect to the new port: ssh -p \$new_port root@\$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 'YOUR_SERVER_IP')"
-        echo ""
-        sleep 5
-        reboot
-    else
-        echo "You will be logged out in 5 seconds..."
-        echo "Connect to the new port: ssh -p \$new_port root@\$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 'YOUR_SERVER_IP')"
-        echo ""
-        sleep 5
-        pkill -u root
-    fi
+    echo "The device will be rebooted in 5 seconds to ensure all changes take full effect..."
+    echo "Connect to the new port: ssh -p \$new_port root@\$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 'YOUR_SERVER_IP')"
+    echo ""
+    sleep 5
+    reboot
+
 }
 
 # Advanced hidden aliases: Not included in the MOTD command options
