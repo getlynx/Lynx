@@ -16,7 +16,7 @@ set -euo pipefail
 #   efficiency and error handling.
 #
 # AUTHOR: Lynx Development Team
-# VERSION: 3.0
+# VERSION: 3.1
 # LAST UPDATED: 2025
 # DOCUMENTATION: https://docs.getlynx.io/
 #
@@ -31,6 +31,7 @@ set -euo pipefail
 #      - Installs Lynx ARM binaries if not present
 #      - Creates systemd service (lynx.service) for the Lynx daemon
 #      - Creates wallet backup service (lynx-wallet-backup.service) running every 60 minutes
+#      - Configures firewall rules and SSH security settings
 #
 #   2. USER EXPERIENCE:
 #      - Adds convenient aliases to ~/.bashrc for common Lynx operations
@@ -47,14 +48,16 @@ set -euo pipefail
 #      - Disables timer once sync is complete
 #
 #   4. ENHANCED FEATURES:
-#      - Smart OS detection with consolidated logic
+#      - Smart OS detection with consolidated logic (Debian/RedHat families)
+#      - OS-specific service management (sshd vs ssh)
 #      - Intelligent locale configuration (skips if already configured)
 #      - Robust error handling and logging
 #      - Efficient package management and system updates
+#      - SSH port management with OS-aware restart commands
 #
 ################################################################################
 #
-# ALIASES CREATED (type 'l' to see all):
+# ALIASES CREATED (type 'h' to see all):
 #   WALLET COMMANDS:
 #     gba    - Get wallet balances
 #     gna    - Generate new address
@@ -63,34 +66,45 @@ set -euo pipefail
 #     swe    - Sweep a wallet (send all funds)
 #     bac    - Manual wallet backup
 #     lba    - List backup directory contents
-#     wd     - Change to Lynx working directory
+#     wdi    - Change to Lynx working directory
+#
+#   LYNX COMMANDS:
+#     lyv    - Show Lynx version
+#     lyc    - View/edit Lynx config file (-e to edit)
+#     lyl    - View Lynx debug log (default 30 lines, -f for follow)
+#     lyr    - Restart Lynx daemon (-d to purge debug log)
+#     gbi    - Get blockchain info
+#     hel    - Show Lynx help (with keyword search)
 #
 #   SYSTEM COMMANDS:
-#     lyv    - Show Lynx version
-#     lyc    - Edit Lynx config file
-#     lyl    - View Lynx debug log (real-time)
-#     lyr    - Restart Lynx daemon
-#     jou    - View install script logs
-#     gbi    - Get blockchain info
-#     hel    - Show Lynx help
-#     stat   - Check Lynx service status
+#     sst    - Check Lynx service status
+#     jou    - View install logs (default 30 lines, -f for follow)
+#     upd    - Update Lynx to latest release
+#     ssp    - Change SSH port
+#     wdi    - Change to Lynx working directory
+#     ipt    - List iptables rules (verbose)
 #
 #   USEFUL COMMANDS:
+#     h      - Show help message and node statistics
 #     htop   - Monitor system resources
-#     l      - Show help message and node statistics
+#
+#   HIDDEN/ADVANCED COMMANDS:
+#     fire   - Edit firewall script
+#     sshe   - Edit SSH authorized keys
+#     pass   - Toggle password authentication (on/off)
 #
 ################################################################################
 #
 # SYSTEM REQUIREMENTS:
 #   - AMD or ARM architecture (aarch64 or arm*)
-#   - Debian/Ubuntu-based or RHEL system
+#   - Debian/Ubuntu-based or RHEL system (Rocky, AlmaLinux, CentOS, Fedora)
 #   - Root privileges
 #   - Internet connection
 #   - Minimum 4GB RAM recommended
 #
 # DEPENDENCIES:
 #   - systemd
-#   - wget, curl, unzip
+#   - wget, curl, unzip, nano, htop, iptables, gcc, build-essential, git, gawk, util-linux
 #   - fallocate, mkswap, swapon
 #   - systemd-cat (for system logging)
 #   - awk (for JSON parsing - no jq required)
@@ -121,12 +135,13 @@ set -euo pipefail
 #   - UPDATE MODE: Updates Lynx to latest release (use 'update' argument)
 #
 # PERFORMANCE OPTIMIZATIONS:
-#   - Stakes counting: Uses wallet RPC instead of parsing debug.log (prevents truncation issues)
+#   - Stakes counting: Uses debug.log parsing with timestamp filtering
 #   - Block counting: Uses fixed 5-minute block time instead of intensive RPC loops
-#   - Immature stakes: Uses listtransactions with awk parsing (no jq dependency)
-#   - All metrics calculated in real-time from wallet, not from log files
+#   - Immature stakes: Uses listunspent with awk parsing (no jq dependency)
+#   - All metrics calculated in real-time from wallet and logs
 #   - Smart locale configuration (skips if already configured)
 #   - Efficient OS detection (single function call)
+#   - OS-specific service management for better reliability
 #
 # LOGGING:
 #   - All operations are logged to systemd journal
@@ -140,38 +155,49 @@ set -euo pipefail
 #   - Systemd services run with appropriate security contexts
 #   - Swap file has restricted permissions (600)
 #   - Strict bash settings (set -euo pipefail)
+#   - Firewall configuration with iptables
+#   - SSH security hardening options
+#   - Password authentication toggle functionality
 #
 ################################################################################
 #
 # TROUBLESHOOTING:
 #   - Check service status: systemctl status lynx
-#   - View debug logs: tail -f $WorkingDirectory/debug.log
-#   - Check install logs: journalctl -t install.sh -f
-#   - Restart daemon: systemctl restart lynx
-#   - Manual sync check: lynx-cli getblockchaininfo
+#   - View debug logs: lyl -f (or tail -f $WorkingDirectory/debug.log)
+#   - Check install logs: jou -f (or journalctl -t install.sh -f)
+#   - Restart daemon: lyr (or systemctl restart lynx)
+#   - Manual sync check: gbi (or lynx-cli getblockchaininfo)
+#   - Check firewall rules: ipt (or iptables -L -vn)
+#   - View SSH config: sshe (or nano /root/.ssh/authorized_keys)
 #
 ################################################################################
 #
 # NETWORK PORTS:
 #   - Lynx daemon typically uses port 22566 (configurable in lynx.conf)
 #   - RPC typically uses port 8332 (configurable in lynx.conf)
+#   - SSH port is configurable via ssp command (default varies by system)
 #
 # FILES CREATED:
 #   - /etc/systemd/system/install.service
 #   - /etc/systemd/system/install.timer
 #   - /etc/systemd/system/lynx.service
+#   - /etc/systemd/system/lynx-wallet-backup.service
+#   - /etc/systemd/system/lynx-wallet-backup.timer
+#   - /usr/local/bin/firewall.sh
+#   - /usr/local/bin/backup.sh
 #   - /swapfile (if needed)
 #   - ~/.bashrc (aliases added)
 #
 ################################################################################
 #
-# RECENT IMPROVEMENTS (v3.0):
-#   - Consolidated OS detection into single getSystemDetails() function
-#   - Renamed functions for better clarity (e.g., update_lynx_release → getCompatibleBinary)
-#   - Enhanced locale configuration with smart checks
-#   - Improved error handling and unbound variable protection
-#   - More robust file existence checks
-#   - Cleaner code structure and organization
+# RECENT IMPROVEMENTS (v3.1):
+#   - Added OS-specific SSH service management (sshd vs ssh)
+#   - Enhanced SSH port change functionality with OS-aware restart commands
+#   - Added iptables alias (ipt) for firewall rule inspection
+#   - Improved conditional logic for RedHat vs Debian system handling
+#   - Updated MOTD to include new ipt command
+#   - Enhanced documentation with current alias list
+#   - Better error handling for service restarts
 #
 ################################################################################
 #
