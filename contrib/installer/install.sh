@@ -453,6 +453,7 @@ executeHelpCommand() {
     echo "║    upd                    - Update Lynx to latest release      ║"
     echo "║    ssp [port]             - Change SSH port                    ║"
     echo "║    wdi                    - Change to Lynx working directory   ║"
+    echo "║    ipt                    - List iptables rules                ║"
     echo "║                                                                ║"
     echo "║  USEFUL COMMANDS:                                              ║"
     echo "║    htop                   - Monitor system resources           ║"
@@ -509,6 +510,7 @@ alias h='executeHelpCommand'
 alias sst='systemctl status lynx'
 alias upd='/usr/local/bin/install.sh update'
 ssp() { update_ssh_port "\$1"; }
+alias ipt='iptables -L -vn'
 
 getSystemDetails() {
     log "Detecting OS information..."
