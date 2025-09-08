@@ -408,17 +408,17 @@ executeHelpCommand() {
     spaces_needed=$((22 - yield_7d_digits))
     yield_7d_spacing=$(printf '%*s' "$spaces_needed" '')
 
-    # Count immature stake UTXOs (confirmations < 31 from unspent outputs)
-    # Using listunspent to identify stake rewards that are still maturing
+    # Count immature UTXOs (confirmations < 31 from unspent outputs)
+    # Using listunspent to identify UTXO that are still maturing
     immature_utxos=$(lynx-cli listunspent 2>/dev/null | awk '/"confirmations":/ {gsub(/[^0-9]/, "", $2); conf = $2 + 0; if (conf < 31 && conf > 0) count++} END {print count+0}')
     if [ -z "$immature_utxos" ] || [ "$immature_utxos" = "" ]; then
         immature_utxos="0"
     fi
 
-    # Calculate dynamic spacing for "Immature stakes" display
-    # Formula: 19 - immature_digits = spaces needed (19 is the base spacing for 1 digit)
+    # Calculate dynamic spacing for "Immature transactions" display
+    # Formula: 8 - immature_digits = spaces needed (8 is the base spacing for 1 digit)
     immature_digits=${#immature_utxos}
-    spaces_needed=$((19 - immature_digits))
+    spaces_needed=$((12 - immature_digits))
     immature_spacing=$(printf '%*s' "$spaces_needed" '')
 
     # Get current wallet balance
@@ -453,7 +453,7 @@ executeHelpCommand() {
     echo "║    📊 24-hour yield rate (stakes/blocks): ${percent_yield}%$yield_spacing║"
     echo "║    🎯 Stakes won in last 7 days: $stakes_won_7d$spacing_7d║"
     echo "║    📊 7-day yield rate (stakes/blocks): ${percent_yield_7d}%$yield_7d_spacing║"
-    echo "║    🔄 Immature stakes (< 31 confirmations): $immature_utxos$immature_spacing║"
+    echo "║    🔄 Immature transactions (< 31 confirmations): $immature_utxos$immature_spacing║"
     echo "║    💰 Current wallet balance: $wallet_balance$balance_spacing║"
     echo "║                                                                ║"
     echo "║  LYNX COMMANDS:                                                ║"
