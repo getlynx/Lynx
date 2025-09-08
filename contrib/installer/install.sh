@@ -410,7 +410,7 @@ executeHelpCommand() {
 
     # Count immature stake UTXOs (confirmations < 31 from unspent outputs)
     # Using listunspent to identify stake rewards that are still maturing
-    immature_utxos=$(lynx-cli listunspent 2>/dev/null | awk '/"confirmations":/ {gsub(/[^0-9]/, "", $2); if ($2 < 31 && $2 > 0) count++} END {print count+0}')
+    immature_utxos=$(lynx-cli listunspent 2>/dev/null | awk '/"confirmations":/ {gsub(/[^0-9]/, "", $2); conf = $2 + 0; if (conf < 31 && conf > 0) count++} END {print count+0}')
     if [ -z "$immature_utxos" ] || [ "$immature_utxos" = "" ]; then
         immature_utxos="0"
     fi
