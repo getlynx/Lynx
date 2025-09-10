@@ -418,7 +418,7 @@ executeHelpCommand() {
     # Calculate dynamic spacing for "Immature transactions" display
     # Formula: 8 - immature_digits = spaces needed (8 is the base spacing for 1 digit)
     immature_digits=${#immature_utxos}
-    spaces_needed=$((12 - immature_digits))
+    spaces_needed=$((13 - immature_digits))
     immature_spacing=$(printf '%*s' "$spaces_needed" '')
 
     # Get current wallet balance

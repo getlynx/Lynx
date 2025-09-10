@@ -3417,8 +3417,8 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         }
 
         if (!pfrom.IsInboundConn()) {
-            LogPrintf("New outbound peer connected: version: %d, blocks=%d, peer=%d%s (%s)\n",
-                      pfrom.nVersion.load(), peer->m_starting_height,
+            LogPrintf("New outbound peer connected: version=%s, protocol=%d, blocks=%d, peer=%d%s (%s)\n",
+                      pfrom.cleanSubVer, pfrom.nVersion.load(), peer->m_starting_height,
                       pfrom.GetId(), (fLogIPs ? strprintf(", peeraddr=%s", pfrom.addr.ToStringAddrPort()) : ""),
                       pfrom.ConnectionTypeAsString());
         }
