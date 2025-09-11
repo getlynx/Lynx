@@ -675,11 +675,12 @@ update_ssh_port() {
 
 }
 
-# Advanced hidden aliases: Not included in the MOTD command options
+# Advanced hidden aliases: Not included in the 'h' command options
 alias fire='nano /usr/local/bin/firewall.sh' # Edit the firewall script
 alias sshe='nano /root/.ssh/authorized_keys' # Edit the SSH keys file
 pass() { toggle_password_auth "\$1"; } # Toggle password authentication in SSH config
 toggle_password_auth() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "\$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "\$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "\$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "\$ssh_config"; echo "\$new_setting" >> "\$ssh_config"; if [ "\$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; }
+alias capa='lynx-cli capacity' # Display the data storage capacity of the node
 
 $MOTD_BLOCK_START
 $(createCommandListConsole)
