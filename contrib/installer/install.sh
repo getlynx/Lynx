@@ -80,7 +80,7 @@ set -euo pipefail
 #     sst    - Check Lynx service status
 #     jou    - View install logs (default 30 lines, -f for follow)
 #     upd    - Update Lynx to latest release
-#     ssp    - Change SSH port
+#     usp    - Change SSH port
 #     wdi    - Change to Lynx working directory
 #     ipt    - List iptables rules (verbose)
 #
@@ -90,7 +90,7 @@ set -euo pipefail
 #
 #   HIDDEN/ADVANCED COMMANDS:
 #     fire   - Edit firewall script
-#     sshe   - Edit SSH authorized keys
+#     shh   - Edit SSH authorized keys
 #     pass   - Toggle password authentication (on/off)
 #
 ################################################################################
@@ -104,7 +104,7 @@ set -euo pipefail
 #
 # DEPENDENCIES:
 #   - systemd
-#   - wget, curl, unzip, nano, htop, iptables, gcc, build-essential, git, gawk, util-linux
+#   - wget, curl, unzip, nano, htop, iptables
 #   - fallocate, mkswap, swapon
 #   - systemd-cat (for system logging)
 #   - awk (for JSON parsing - no jq required)
@@ -168,14 +168,14 @@ set -euo pipefail
 #   - Restart daemon: lyr (or systemctl restart lynx)
 #   - Manual sync check: gbi (or lynx-cli getblockchaininfo)
 #   - Check firewall rules: ipt (or iptables -L -vn)
-#   - View SSH config: sshe (or nano /root/.ssh/authorized_keys)
+#   - View SSH config: shh (or nano /root/.ssh/authorized_keys)
 #
 ################################################################################
 #
 # NETWORK PORTS:
 #   - Lynx daemon typically uses port 22566 (configurable in lynx.conf)
 #   - RPC typically uses port 8332 (configurable in lynx.conf)
-#   - SSH port is configurable via ssp command (default varies by system)
+#   - SSH port is configurable via usp command (default varies by system)
 #
 # FILES CREATED:
 #   - /etc/systemd/system/install.service
@@ -254,8 +254,8 @@ packageInstallAndUpdate() {
         apt-get upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
         log "Performing distribution upgrade..."
         apt-get dist-upgrade -y >/dev/null 2>&1 || log "Failed to perform distribution upgrade"
-        log "Installing required packages (unzip, htop, iptables, git, gawk, util-linux, curl)..."
-        apt-get install -y unzip nano htop iptables gcc build-essential git gawk util-linux curl >/dev/null 2>&1 || log "Failed to install required packages"
+        log "Installing required packages (unzip, nano, htop, iptables, curl)..."
+        apt-get install -y unzip nano htop iptables curl >/dev/null 2>&1 || log "Failed to install required packages"
     elif [ "$os_family" = "redhat" ]; then
         log "Updating RedHat/Rocky/AlmaLinux system..."
         if command -v dnf >/dev/null 2>&1; then
@@ -265,8 +265,8 @@ packageInstallAndUpdate() {
             dnf upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
             log "Installing EPEL repository for htop..."
             dnf install -y epel-release >/dev/null 2>&1 || log "Failed to install epel-release"
-            log "Installing required packages with dnf (unzip, htop, iptables, gcc, git, gawk, util-linux, curl)..."
-            dnf install -y unzip nano htop iptables gcc git gawk util-linux curl >/dev/null 2>&1 || log "Failed to install required packages"
+            log "Installing required packages with dnf (unzip, nano, htop, iptables, curl)..."
+            dnf install -y unzip nano htop iptables curl >/dev/null 2>&1 || log "Failed to install required packages"
         else
             log "Refreshing package cache with yum..."
             yum makecache -y >/dev/null 2>&1 || log "Failed to refresh package cache"
@@ -274,14 +274,16 @@ packageInstallAndUpdate() {
             yum upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
             log "Installing EPEL repository for htop..."
             yum install -y epel-release >/dev/null 2>&1 || log "Failed to install epel-release"
-            log "Installing required packages with yum (unzip, htop, iptables, gcc, git, gawk, util-linux, curl)..."
-            yum install -y unzip nano htop iptables gcc git gawk util-linux curl >/dev/null 2>&1 || log "Failed to install required packages"
+            log "Installing required packages with yum (unzip, nano, htop, iptables, curl)..."
+            yum install -y unzip nano htop iptables curl >/dev/null 2>&1 || log "Failed to install required packages"
         fi
     else
         log "Unsupported OS family: $os_family"
     fi
     log "System update completed successfully"
 }
+
+echo "Please wait 10 seconds while the script runs..."
 
 # Set the working directory variable for use throughout the script
 WorkingDirectory=/var/lib/lynx
@@ -474,10 +476,10 @@ executeHelpCommand() {
     echo "║    lba                    - List backup directory contents     ║"
     echo "║                                                                ║"
     echo "║  SYSTEM COMMANDS:                                              ║"
-    echo "║    sst                    - Check Lynx service status          ║"
+    echo "║    lss                    - Check Lynx service status          ║"
     echo "║    jou [lines] [-f]       - View install logs (default 30)     ║"
     echo "║    upd                    - Update Lynx to latest release      ║"
-    echo "║    ssp [port]             - Change SSH port                    ║"
+    echo "║    usp [port]             - Change SSH port                    ║"
     echo "║    wdi                    - Change to Lynx working directory   ║"
     echo "║    ipt                    - List iptables rules                ║"
     echo "║                                                                ║"
@@ -493,6 +495,96 @@ executeHelpCommand() {
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo ""
 }
+
+# Function to update SSH port
+update_ssh_port() { 
+    if [ -z "$1" ]; then 
+        # Display current SSH port
+        local current_port
+        current_port=$(grep "^#*Port" /etc/ssh/sshd_config | head -1 | sed 's/^#*Port[[:space:]]*//')
+        if [ -z "$current_port" ]; then
+            current_port="22"
+        fi
+        echo "Current SSH port: $current_port"
+        echo ""
+        echo "Usage: usp <new_port>"
+        echo "Example: usp 2222"
+        return 0
+    fi
+    #
+    local new_port="$1"
+    local current_port
+    #
+    # Validate port number
+    if ! [[ "$new_port" =~ ^[0-9]+$ ]] || [ "$new_port" -lt 1 ] || [ "$new_port" -gt 65535 ]; then
+        echo "ERROR: Invalid port number. Must be between 1 and 65535."
+        return 1
+    fi
+    #
+    # Check for port conflicts in firewall script
+    local existing_ports
+    existing_ports=$(grep -o "dport [0-9]*" /usr/local/bin/firewall.sh | grep -o "[0-9]*" | sort -u)
+    #
+    if echo "$existing_ports" | grep -q "^${new_port}$"; then
+        echo "ERROR: Port $new_port is already in use in the firewall configuration."
+        echo "Current ports in firewall: $existing_ports"
+        echo "Please choose a different port number."
+        return 1
+    fi
+    #
+    # Get current SSH port
+    current_port=$(grep "^#*Port" /etc/ssh/sshd_config | head -1 | sed 's/^#*Port[[:space:]]*//')
+    if [ -z "$current_port" ]; then
+        current_port="22"
+    fi
+    #
+    echo "Current SSH port: $current_port"
+    echo "New SSH port: $new_port"
+    echo ""
+    echo "WARNING: This will change the SSH port and reboot the device!"
+    echo ""
+    read -p "Do you want to continue? (y/N): " confirm
+    #
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Operation cancelled."
+        return 1
+    fi
+    #
+    echo "Updating sshd_config..."
+    sed -i "s/^#*Port.*/Port $new_port/" /etc/ssh/sshd_config
+    #
+    echo "Updating firewall script..."
+    sed -i "/# SSH_PORT_START/,/# SSH_PORT_END/s/iptables -A INPUT -p tcp --dport [0-9]* -j ACCEPT/iptables -A INPUT -p tcp --dport $new_port -j ACCEPT/" /usr/local/bin/firewall.sh
+    #
+    echo "Applying firewall rules..."
+    /usr/local/bin/firewall.sh
+    sleep 2
+    /usr/local/bin/firewall.sh
+    #
+    echo "Restarting SSH daemon..."
+    # Fallback: try both service names
+    if systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; then
+        echo "SSH daemon restarted successfully"
+    else
+        echo "ERROR: Failed to restart SSH daemon"
+        return 1
+    fi
+    #
+    echo ""
+    echo "SSH port updated successfully to $new_port"
+    #
+    echo "A reboot is recommended to ensure all changes take full effect."
+    echo "Connect to the new port: ssh -p $new_port root@$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 'YOUR_SERVER_IP')"
+    echo ""
+    read -p "Reboot the device now? (y/N): " confirm
+    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+        echo "Rebooting in 5 seconds..."
+        sleep 5
+        reboot
+    else
+        echo "Reboot cancelled. You can manually reboot later with: reboot"
+    fi
+}
 EOF
 }
 
@@ -501,194 +593,104 @@ addAliasesToBashrcFile() {
     local BASHRC="/root/.bashrc"
     local ALIAS_BLOCK_START="# === LYNX ALIASES START ==="
     local ALIAS_BLOCK_END="# === LYNX ALIASES END ==="
-    local MOTD_BLOCK_START="# === LYNX MOTD START ==="
-    local MOTD_BLOCK_END="# === LYNX MOTD END ==="
 
     # Remove any existing alias block to avoid duplicates
     if [ -f "$BASHRC" ] && grep -q "$ALIAS_BLOCK_START" "$BASHRC"; then
         sed -i "/$ALIAS_BLOCK_START/,/$ALIAS_BLOCK_END/d" "$BASHRC"
     fi
 
-    # Remove any existing MOTD block to avoid duplicates
-    if [ -f "$BASHRC" ] && grep -q "$MOTD_BLOCK_START" "$BASHRC"; then
-        sed -i "/$MOTD_BLOCK_START/,/$MOTD_BLOCK_END/d" "$BASHRC"
-    fi
-
     # Append the new alias block
     cat <<EOF >> "$BASHRC"
 $ALIAS_BLOCK_START
-alias gba='lynx-cli getbalances'
-alias gna='lynx-cli getnewaddress'
-alias wdi='cd $WorkingDirectory && ls -lh'
-alias bac='/usr/local/bin/backup.sh'
-alias lba='cd /var/lib/lynx-backup && ls -lh'
-alias lag='lynx-cli listaddressgroupings'
-alias lyv='lynx-cli -version'
-lyc() { if [ "\$1" = "-e" ]; then nano "$WorkingDirectory/lynx.conf"; else cat "$WorkingDirectory/lynx.conf"; fi; }
+#
+# This alias is a native Lynx command for getting wallet balances. Also provides a shorter undocumented version.
+gba() { lynx-cli getbalances; }
+gb() { gba; }
+#
+# This alias is a native Lynx command for generating a new addresses. Also provides a shorter undocumented version.
+gna() { lynx-cli getnewaddress; }
+gn() { gna; }
+#
+# This alias is a custom alias for changing to the Lynx working directory. Also provides a shorter undocumented version.
+wdi() { cd $WorkingDirectory && ls -lh; }
+wd() { wdi; }
+#
+# This alias is a native Lynx command to list funded addresses in the current wallet. Also provides a shorter undocumented version.
+lag() { lynx-cli listaddressgroupings; }
+la() { lag; }
+#
+# This alias is a native Lynx command to show the Lynx version. Also provides a shorter undocumented version.
+lyv() { lynx-cli -version; }
+lv() { lyv; }
+#
+# This alias is a native Lynx command to get current blockchain info. Also provides a shorter undocumented version.
+gbi() { lynx-cli getblockchaininfo; }
+gi() { gbi; }
+#
+# This alias is a custom command to view current iptables rules. The fire alias is an undocumented version that allows you to edit the firewall script.
+ipt() { iptables -L -vn; }
+fire() { nano /usr/local/bin/firewall.sh && echo "Applying firewall changes..." && read -p "Execute firewall script to apply changes? (y/N): " confirm && if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then /usr/local/bin/firewall.sh && echo "Firewall rules updated successfully!"; else echo "Firewall script not executed."; fi; }
+#
+# This alias is a custom command to update the SSH port in both the sshd and iptables rules. Prompts to reboot the device to apply the changes.
+usp() { update_ssh_port "\$1"; }
+#
+# This alias is a custom command to view the Lynx debug log. The -f flag allows you to follow the log in real-time. The number of lines can be specified with the first argument. Also provides a shorter undocumented version.
 lyl() { if [ "\$1" = "-f" ]; then tail -f "$WorkingDirectory/debug.log"; elif [ "\$2" = "-f" ]; then tail -n \${1:-30} -f "$WorkingDirectory/debug.log"; else tail -n \${1:-30} "$WorkingDirectory/debug.log"; fi; }
+#
+# This alias is a custom command to view the Lynx config file. The -e flag allows you to edit the config file. Also provides a shorter undocumented version.
+lyc() { if [ "\$1" = "-e" ]; then nano "$WorkingDirectory/lynx.conf" && read -p "Restart Lynx daemon to apply config changes? (y/N): " confirm && if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then lyr; else echo "Lynx daemon not restarted."; fi; else cat "$WorkingDirectory/lynx.conf"; fi; }
+lc() { lyc "\$@"; }
+#
+# This alias is a custom command to restart the Lynx daemon. The -d flag allows you to purge the debug log. Also provides a shorter undocumented version.
 lyr() { if [ "\$1" = "-d" ]; then echo "If you delete the debug log, the Staking results in Node Status will reset."; read -p "Do you want to continue? (y/N): " confirm; if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then systemctl stop lynx && rm -rf "$WorkingDirectory/debug.log" && systemctl start lynx; else echo "Operation cancelled."; fi; else systemctl restart lynx; fi; }
-alias sta='lynx-cli sendtoaddress \$1 \$2'
+lr() { lyr "\$@"; }
+#
+# This alias is a native Lynx command to send funds to an address. Also provides a shorter undocumented version.
+sta() { lynx-cli sendtoaddress "\$1" "\$2"; }
+sa() { sta "\$@"; }
+#
+# This alias is a custom command to sweep all funds to an address. It will empty the wallet of all coins and dust and the recipient pays the transaction fee. A great way to move funds between wallets in full. Also provides a shorter undocumented version.
 swe() { lynx-cli sendtoaddress "\$1" "\$(lynx-cli getbalance)" "" "" true; }
+sw() { swe "\$@"; }
+#
+# This undocumented alias is a native Lynx command to get local node Lynx storage capacity info.
+ca() { lynx-cli capacity; }
+#
+# This alias is a custom command to show the help message.
+h() { executeHelpCommand; }
+#
+# This alias is a native Lynx command to backup the Lynx wallet.
+bac() { /usr/local/bin/backup.sh; }
+lba() { cd /var/lib/lynx-backup && ls -lh; }
+#
+# This alias is a custom command to view the install logs. The -f flag allows you to follow the logs in real-time. The number of lines can be specified with the first argument. Also provides a shorter undocumented version.
 jou() { if [ "\$1" = "-f" ]; then journalctl -t install.sh -f; elif [ "\$2" = "-f" ]; then journalctl -t install.sh -n \${1:-30} -f; else journalctl -t install.sh -n \${1:-30}; fi; }
-alias gbi='lynx-cli getblockchaininfo'
+jo() { jou "\$@"; }
+#
+# This alias is a native Lynx command to show help for a keyword. Also provides a shorter undocumented version.
 hel() { if [ -n "\$1" ]; then lynx-cli help | grep -i "\$1"; else lynx-cli help; fi; }
-alias h='executeHelpCommand'
-alias sst='systemctl status lynx'
-alias upd='/usr/local/bin/install.sh update'
-ssp() { update_ssh_port "\$1"; }
-alias ipt='iptables -L -vn'
-
-getSystemDetails() {
-    log "Detecting OS information..."
-
-    if [ -f /etc/os-release ]; then
-        source /etc/os-release
-
-        # Set OS family (basic categorization)
-        case "\$ID" in
-            debian|ubuntu)
-                os_family="debian"
-                ;;
-            rhel|centos|fedora|rocky|almalinux|ol)
-                os_family="redhat"
-                ;;
-            *)
-                os_family="\$ID"
-                ;;
-        esac
-
-        # Set detailed OS info
-        os_name=$(echo "\$ID" | tr '[:upper:]' '[:lower:]')
-        os_version=$(echo "\$VERSION_ID" | tr -d '"')
-
-        if [ "\$os_family" = "redhat" ]; then
-            os_major_version=$(echo "\$os_version" | cut -d. -f1)
-        else
-            os_major_version="\$os_version"
-        fi
-
-        log "Detected: \$os_name \$os_version (Family: \$os_family)"
-    else
-        os_family="unknown"
-        os_name="unknown"
-        os_version="unknown"
-        os_major_version="unknown"
-        log "Could not detect OS information"
-    fi
-}
-
-update_ssh_port() { 
-    if [ -z "\$1" ]; then 
-        # Display current SSH port
-        local current_port
-        current_port=\$(grep "^#*Port" /etc/ssh/sshd_config | head -1 | sed 's/^#*Port[[:space:]]*//')
-        if [ -z "\$current_port" ]; then
-            current_port="22"
-        fi
-        echo "Current SSH port: \$current_port"
-        echo ""
-        echo "Usage: ssp <new_port>"
-        echo "Example: ssp 2222"
-        return 0
-    fi
-
-    local new_port="\$1"
-    local current_port
-
-    # Validate port number
-    if ! [[ "\$new_port" =~ ^[0-9]+$ ]] || [ "\$new_port" -lt 1 ] || [ "\$new_port" -gt 65535 ]; then
-        echo "ERROR: Invalid port number. Must be between 1 and 65535."
-        return 1
-    fi
-
-    # Check for port conflicts in firewall script
-    local existing_ports
-    existing_ports=\$(grep -o "dport [0-9]*" /usr/local/bin/firewall.sh | grep -o "[0-9]*" | sort -u)
-
-    if echo "\$existing_ports" | grep -q "^\${new_port}$"; then
-        echo "ERROR: Port \$new_port is already in use in the firewall configuration."
-        echo "Current ports in firewall: \$existing_ports"
-        echo "Please choose a different port number."
-        return 1
-    fi
-
-    # Get current SSH port
-    current_port=\$(grep "^#*Port" /etc/ssh/sshd_config | head -1 | sed 's/^#*Port[[:space:]]*//')
-    if [ -z "\$current_port" ]; then
-        current_port="22"
-    fi
-
-    echo "Current SSH port: \$current_port"
-    echo "New SSH port: \$new_port"
-    echo ""
-    echo "WARNING: This will change the SSH port and reboot the device!"
-    echo ""
-    read -p "Do you want to continue? (y/N): " confirm
-
-    if [[ ! "\$confirm" =~ ^[Yy]$ ]]; then
-        echo "Operation cancelled."
-        return 1
-    fi
-
-    echo "Updating sshd_config..."
-    sed -i "s/^#*Port.*/Port \$new_port/" /etc/ssh/sshd_config
-
-    echo "Updating firewall script..."
-    sed -i "/# SSH_PORT_START/,/# SSH_PORT_END/s/iptables -A INPUT -p tcp --dport [0-9]* -j ACCEPT/iptables -A INPUT -p tcp --dport \$new_port -j ACCEPT/" /usr/local/bin/firewall.sh
-
-    echo "Applying firewall rules..."
-    /usr/local/bin/firewall.sh
-
-    echo "Restarting SSH daemon..."
-    if [ "\$os_family" = "redhat" ]; then
-        if systemctl restart sshd 2>/dev/null; then
-            echo "SSH daemon restarted successfully"
-        else
-            echo "ERROR: Failed to restart SSH daemon"
-            return 1
-        fi
-    elif [ "\$os_family" = "debian" ]; then
-        if systemctl restart ssh 2>/dev/null; then
-            echo "SSH daemon restarted successfully"
-        else
-            echo "ERROR: Failed to restart SSH daemon"
-            return 1
-        fi
-    else
-        # Fallback: try both service names
-        if systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; then
-            echo "SSH daemon restarted successfully"
-        else
-            echo "ERROR: Failed to restart SSH daemon"
-            return 1
-        fi
-    fi
-
-    echo ""
-    echo "SSH port updated successfully to \$new_port"
-
-    echo "The device will be rebooted in 5 seconds to ensure all changes take full effect..."
-    echo "Connect to the new port: ssh -p \$new_port root@\$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 'YOUR_SERVER_IP')"
-    echo ""
-    sleep 5
-    reboot
-
-}
-
-# Advanced hidden aliases: Not included in the 'h' command options
-alias fire='nano /usr/local/bin/firewall.sh' # Edit the firewall script
-alias sshe='nano /root/.ssh/authorized_keys' # Edit the SSH keys file
-pass() { toggle_password_auth "\$1"; } # Toggle password authentication in SSH config
-toggle_password_auth() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "\$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "\$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "\$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "\$ssh_config"; echo "\$new_setting" >> "\$ssh_config"; if [ "\$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; }
-alias capa='lynx-cli capacity' # Display the data storage capacity of the node
-
-$MOTD_BLOCK_START
+he() { hel "\$@"; }
+#
+# This alias is a custom command to show the status of the Lynx daemon. A command to show the status of the nginx daemon is also provided, if installed.
+lss() { systemctl status lynx; }
+nss() { systemctl status nginx; }
+#
+# This undocumented alias is a custom command to edit the SSH keys file.
+shh() { nano /root/.ssh/authorized_keys && read -p "Restart SSH daemon to apply changes? (y/N): " confirm && if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null && echo "SSH daemon restarted successfully"; else echo "SSH daemon not restarted. Changes will take effect after manual restart."; fi; }
+#
+# This undocumented alias is a custom command to toggle password authentication in the SSH config. Allowed values are "off" or "on".
+pas() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "\$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "\$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "\$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "\$ssh_config"; echo "\$new_setting" >> "\$ssh_config"; if [ "\$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; } # Toggle password authentication in SSH config
+#
+# This alias is a custom command to update the install script. It will only run the update processes from the /usr/local/bin/install.sh file.
+upd() { /usr/local/bin/install.sh update; }
+#
 $(createCommandListConsole)
+#
+# Automatically execute the 'h' command and change to root directory when switching to root user
 executeHelpCommand
-
-# Automatically change to root directory when switching to root user
 cd /root
-$MOTD_BLOCK_END
+#
+$ALIAS_BLOCK_END
 EOF
 }
 
@@ -1167,7 +1169,7 @@ configureLocale() {
         fi
 
         # Set locale environment variables (only if not already set)
-        if [ "$LANG" != "$preferredLocale" ] || [ "$LC_ALL" != "$preferredLocale" ]; then
+        if [ "${LANG:-}" != "$preferredLocale" ] || [ "${LC_ALL:-}" != "$preferredLocale" ]; then
             export LANG=$preferredLocale
             export LC_ALL=$preferredLocale
             log "Locale environment variables set to $preferredLocale"
