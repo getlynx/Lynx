@@ -283,10 +283,13 @@ packageInstallAndUpdate() {
     log "System update completed successfully"
 }
 
-echo "Please wait 10 seconds while the script runs..."
-
 # Set the working directory variable for use throughout the script
 WorkingDirectory=/var/lib/lynx
+
+# Only show wait message if this is a fresh installation
+if [ ! -d "$WorkingDirectory" ]; then
+    echo "Please wait 10 seconds while the script runs..."
+fi
 
 # Create the Lynx data directory with proper permissions
 mkdir -p $WorkingDirectory
