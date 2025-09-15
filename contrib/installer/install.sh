@@ -115,11 +115,6 @@ set -euo pipefail
 #   This script is typically downloaded and executed by the Pi installer during
 #   the initial system setup. It can also be run manually on any architecture:
 #
-#   Download, save, and run in one command:
-#   curl -sSL https://install.getlynx.io | tee /usr/local/bin/install.sh | bash
-#   or long url
-#   curl -sSL https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh | tee /usr/local/bin/install.sh | bash
-#
 #   Or for a permanent installation (one command):
 #   wget -4 -O /usr/local/bin/install.sh https://install.getlynx.io && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
 #   or long url
