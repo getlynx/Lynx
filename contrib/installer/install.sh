@@ -116,9 +116,13 @@ set -euo pipefail
 #   the initial system setup. It can also be run manually on any architecture:
 #
 #   Download, save, and run in one command:
+#   curl -sSL https://install.getlynx.io | tee /usr/local/bin/install.sh | bash
+#   or long url
 #   curl -sSL https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh | tee /usr/local/bin/install.sh | bash
 #
 #   Or for a permanent installation (one command):
+#   wget -4 -O /usr/local/bin/install.sh https://install.getlynx.io && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
+#   or long url
 #   wget -4 -O /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
 #
 #   Or for a permanent installation (separate steps):
