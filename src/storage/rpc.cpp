@@ -1709,9 +1709,7 @@ static RPCHelpMan auth()
 {
     return RPCHelpMan{"auth",
                 "\nAuthenticate a data storage user for a 72 block (~6 hour) session.\n",
-                {
-                    // {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO, "WIF-Format Privatekey."},
-                },
+                {},
                 {
                     RPCResult{
                         RPCResult::Type::ARR, "", "",
@@ -1733,8 +1731,8 @@ static RPCHelpMan auth()
                 },
 
     RPCExamples{
-                    HelpExampleCli("auth", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo514hJazyCEj9s6eDiFj8")
-            + HelpExampleRpc("auth", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo514hJazyCEj9s6eDiFj8")
+                    HelpExampleCli("auth", "")
+            + HelpExampleRpc("auth", "")
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
@@ -2106,9 +2104,7 @@ static RPCHelpMan capacity()
 {
     return RPCHelpMan{"capacity",
                 "\nReport capacity (KB).\n",
-                {
-                    // {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO, "WIF-Format Privatekey."},
-                },
+                {},
                 {
                     RPCResult{
                         RPCResult::Type::ARR, "", "",
@@ -2122,8 +2118,8 @@ static RPCHelpMan capacity()
                 },
 
     RPCExamples{
-                    HelpExampleCli("capacity", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo514hJazyCEj9s6eDiFj8")
-            + HelpExampleRpc("capacity", "cVDy3BpQNFpGVnsrmXTgGSuU3eq5aeyo514hJazyCEj9s6eDiFj8")
+                    HelpExampleCli("capacity", "")
+            + HelpExampleRpc("capacity", "")
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
