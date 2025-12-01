@@ -312,6 +312,7 @@ createCommandListConsole() {
 # Function to display Lynx aliases in a nicely formatted MOTD
 executeHelpCommand() {
     echo ""
+    echo ""
     WorkingDirectory=/var/lib/lynx
     # Count stakes won in the last 24 hours using wallet RPC
     # Get timestamp from 24 hours ago
@@ -339,12 +340,6 @@ executeHelpCommand() {
         stakes_won="0"
     fi
 
-    # Calculate dynamic spacing for "Stakes won in last 24 hours" display
-    # Formula: 28 - stakes_digits = spaces needed (28 is the base spacing for 1 digit)
-    stakes_digits=${#stakes_won}
-    spaces_needed=$((28 - stakes_digits))
-    spacing=$(printf '%*s' "$spaces_needed" '')
-
     # Calculate total blocks in last 24 hours based on average block time
     # Lynx has a 5-minute (300 second) average block time
     # 24 hours = 1440 minutes / 5 minutes per block = 288 blocks
@@ -357,13 +352,6 @@ executeHelpCommand() {
     else
         percent_yield="0.000"
     fi
-
-    # Calculate dynamic spacing for "24-hour yield rate" display
-    # Formula: 20 - yield_digits = spaces needed (20 is the base spacing for 6 digits: "0.000")
-    yield_numeric=$(echo "$percent_yield" | sed 's/%//')
-    yield_digits=${#yield_numeric}
-    spaces_needed=$((20 - yield_digits))
-    yield_spacing=$(printf '%*s' "$spaces_needed" '')
 
     # Count stakes won in the last 7 days using debug.log
     # Get cutoff time in ISO format (YYYY-MM-DDTHH:MM:SSZ) for 7 days ago
@@ -386,12 +374,6 @@ executeHelpCommand() {
         stakes_won_7d="0"
     fi
 
-    # Calculate dynamic spacing for "Stakes won in last 7 days" display
-    # Formula: 30 - stakes_7d_digits = spaces needed (30 is the base spacing for 1 digit)
-    stakes_7d_digits=${#stakes_won_7d}
-    spaces_needed=$((30 - stakes_7d_digits))
-    spacing_7d=$(printf '%*s' "$spaces_needed" '')
-
     # Calculate total blocks in last 7 days based on average block time
     # Lynx has a 5-minute (300 second) average block time
     # 7 days = 10080 minutes / 5 minutes per block = 2016 blocks
@@ -405,13 +387,6 @@ executeHelpCommand() {
         percent_yield_7d="0.000"
     fi
 
-    # Calculate dynamic spacing for "7-day yield rate" display
-    # Formula: 22 - yield_7d_digits = spaces needed (22 is the base spacing for 5 digits)
-    yield_7d_numeric=$(echo "$percent_yield_7d" | sed 's/%//')
-    yield_7d_digits=${#yield_7d_numeric}
-    spaces_needed=$((22 - yield_7d_digits))
-    yield_7d_spacing=$(printf '%*s' "$spaces_needed" '')
-
     # Count immature UTXOs (confirmations < 31 from unspent outputs)
     # Using listunspent to identify UTXO that are still maturing
     immature_utxos=$(lynx-cli listunspent 2>/dev/null | awk '/"confirmations":/ {gsub(/[^0-9]/, "", $2); conf = $2 + 0; if (conf < 31 && conf > 0) count++} END {print count+0}')
@@ -419,23 +394,11 @@ executeHelpCommand() {
         immature_utxos="0"
     fi
 
-    # Calculate dynamic spacing for "Immature transactions" display
-    # Formula: 8 - immature_digits = spaces needed (8 is the base spacing for 1 digit)
-    immature_digits=${#immature_utxos}
-    spaces_needed=$((13 - immature_digits))
-    immature_spacing=$(printf '%*s' "$spaces_needed" '')
-
     # Get current wallet balance
     wallet_balance=$(lynx-cli getbalance 2>/dev/null || echo "0")
     if [ -z "$wallet_balance" ]; then
         wallet_balance="0"
     fi
-
-    # Calculate dynamic spacing for "Current wallet balance" display
-    # Formula: 33 - balance_digits = spaces needed (33 is the base spacing for 10 digits)
-    balance_digits=${#wallet_balance}
-    spaces_needed=$((33 - balance_digits))
-    balance_spacing=$(printf '%*s' "$spaces_needed" '')
 
     # Get Lynx version for display
     lynx_version=$(lynx-cli -version 2>/dev/null | head -1 || echo "Unknown")
@@ -443,58 +406,212 @@ executeHelpCommand() {
         lynx_version="Unknown"
     fi
 
-    # Calculate dynamic spacing for "Lynx Version" display
-    # Formula: 45 - version_digits = spaces needed (45 is the base spacing for short versions)
-    version_digits=${#lynx_version}
-    spaces_needed=$((45 - version_digits))
-    version_spacing=$(printf '%*s' "$spaces_needed" '')
+    echo "                    🦊 LYNX NODE COMMANDS 🦊"
+    echo ""
+    echo "  NODE STATUS:"
+    echo "    🎯 Stakes won in last 24 hours: $stakes_won"
+    echo "    📊 24-hour yield rate (stakes/blocks): ${percent_yield}%"
+    echo "    🎯 Stakes won in last 7 days: $stakes_won_7d"
+    echo "    📊 7-day yield rate (stakes/blocks): ${percent_yield_7d}%"
+    echo "    🔄 Immature transactions (< 31 confirmations): $immature_utxos"
+    echo "    💰 Current wallet balance: $wallet_balance"
+    echo ""
+    echo "  LYNX COMMANDS:"
+    echo "    lyl [lines] [-f]       - View Lynx debug log (default 30)"
+    echo "    lyv                    - Show Lynx version"
+    echo "    lyr [-d]               - Restart Lynx (-d to purge debug)"
+    echo "    lyc [-e]               - View/edit Lynx conf (-e to edit)"
+    echo "    gbi                    - Get blockchain info"
+    echo "    hel [keyword]          - Show Lynx help (keyword search)"
+    echo ""
+    echo "  WALLET COMMANDS:"
+    echo "    gba                    - Get wallet balances"
+    echo "    gna                    - Generate new address"
+    echo "    lag                    - List address groupings"
+    echo "    sta [address] [amount] - Send to address"
+    echo "    swe [address]          - Sweep a wallet"
+    echo "    bac                    - Manual wallet backup"
+    echo "    lba                    - List backup directory contents"
+    echo "    pri                    - Show wallet value in USD"
+    echo ""
+    echo "  SYSTEM COMMANDS:"
+    echo "    lss                    - Check Lynx service status"
+    echo "    jou [lines] [-f]       - View install logs (default 30)"
+    echo "    upd                    - Update Lynx to latest release"
+    echo "    usp [port]             - Change SSH port"
+    echo "    wdi                    - Change to Lynx working directory"
+    echo "    ipt                    - List iptables rules"
+    echo ""
+    echo "  USEFUL COMMANDS:"
+    echo "    htop                   - Monitor system resources"
+    echo "    h                      - Show this help message again"
+    echo ""
+    echo "  📚 Complete project documentation: https://docs.getlynx.io/"
+    echo "  💾 Store files permanently: https://clevver.org/"
+    echo "  🔍 Blockchain explorer: https://explorer.getlynx.io/"
+    echo "  📈 Trade Lynx: https://freixlite.com/market/LYNX/LTC"
+    echo "  🔢 Lynx Version: $lynx_version"
+    echo ""
+    echo ""
+}
 
-    echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║                    🦊 LYNX NODE COMMANDS 🦊                    ║"
-    echo "╠════════════════════════════════════════════════════════════════╣"
-    echo "║  NODE STATUS:                                                  ║"
-    echo "║    🎯 Stakes won in last 24 hours: $stakes_won$spacing║"
-    echo "║    📊 24-hour yield rate (stakes/blocks): ${percent_yield}%$yield_spacing║"
-    echo "║    🎯 Stakes won in last 7 days: $stakes_won_7d$spacing_7d║"
-    echo "║    📊 7-day yield rate (stakes/blocks): ${percent_yield_7d}%$yield_7d_spacing║"
-    echo "║    🔄 Immature transactions (< 31 confirmations): $immature_utxos$immature_spacing║"
-    echo "║    💰 Current wallet balance: $wallet_balance$balance_spacing║"
-    echo "║                                                                ║"
-    echo "║  LYNX COMMANDS:                                                ║"
-    echo "║    lyl [lines] [-f]       - View Lynx debug log (default 30)   ║"
-    echo "║    lyv                    - Show Lynx version                  ║"
-    echo "║    lyr [-d]               - Restart Lynx (-d to purge debug)   ║"
-    echo "║    lyc [-e]               - View/edit Lynx conf (-e to edit)   ║"
-    echo "║    gbi                    - Get blockchain info                ║"
-    echo "║    hel [keyword]          - Show Lynx help (keyword search)    ║"
-    echo "║                                                                ║"
-    echo "║  WALLET COMMANDS:                                              ║"
-    echo "║    gba                    - Get wallet balances                ║"
-    echo "║    gna                    - Generate new address               ║"
-    echo "║    lag                    - List address groupings             ║"
-    echo "║    sta [address] [amount] - Send to address                    ║"
-    echo "║    swe [address]          - Sweep a wallet                     ║"
-    echo "║    bac                    - Manual wallet backup               ║"
-    echo "║    lba                    - List backup directory contents     ║"
-    echo "║                                                                ║"
-    echo "║  SYSTEM COMMANDS:                                              ║"
-    echo "║    lss                    - Check Lynx service status          ║"
-    echo "║    jou [lines] [-f]       - View install logs (default 30)     ║"
-    echo "║    upd                    - Update Lynx to latest release      ║"
-    echo "║    usp [port]             - Change SSH port                    ║"
-    echo "║    wdi                    - Change to Lynx working directory   ║"
-    echo "║    ipt                    - List iptables rules                ║"
-    echo "║                                                                ║"
-    echo "║  USEFUL COMMANDS:                                              ║"
-    echo "║    htop                   - Monitor system resources           ║"
-    echo "║    h                      - Show this help message again       ║"
-    echo "║                                                                ║"
-    echo "║  📚 Complete project documentation: https://docs.getlynx.io/   ║"
-    echo "║  💾 Store files permanently: https://clevver.org/              ║"
-    echo "║  🔍 Blockchain explorer: https://explorer.getlynx.io/          ║"
-    echo "║  📈 Trade Lynx: https://freixlite.com/market/LYNX/LTC          ║"
-    echo "║  🔢 Lynx Version: $lynx_version$version_spacing║"
-    echo "╚════════════════════════════════════════════════════════════════╝"
+# Function to display wallet value and LYNX price information
+executePriceCommand() {
+    echo ""
+    WorkingDirectory=/var/lib/lynx
+
+    # Get current wallet balance
+    wallet_balance=$(lynx-cli getbalance 2>/dev/null || echo "0")
+    if [ -z "$wallet_balance" ]; then
+        wallet_balance="0"
+    fi
+
+    # Fetch LYNX price from API with random endpoint selection and fallback
+    price_usd=""
+    api_endpoints=(
+        "https://api-one.ewm-cx.info/api/v1/price/getPriceByCoin?symbol=LYNX"
+        "https://api-two.ewm-cx.net/api/v1/price/getPriceByCoin?symbol=LYNX"
+    )
+
+    # Randomly select which endpoint to try first (0 or 1)
+    first_index=$((RANDOM % 2))
+    second_index=$((1 - first_index))
+
+    # Try the randomly selected endpoint first
+    api_response=$(curl -s --max-time 3 "${api_endpoints[$first_index]}" 2>/dev/null)
+    if [ -n "$api_response" ]; then
+        # Extract priceUSD from JSON using awk (no jq dependency)
+        extracted_price=$(echo "$api_response" | awk -F'"priceUSD":"' '{print $2}' | awk -F'"' '{print $1}')
+        # Only use the extracted price if it's not empty
+        if [ -n "$extracted_price" ] && [ "$extracted_price" != "" ]; then
+            price_usd="$extracted_price"
+        fi
+    fi
+
+    # If first endpoint failed or returned invalid price, try the backup endpoint
+    if [ -z "$price_usd" ] || [ "$price_usd" = "" ]; then
+        api_response=$(curl -s --max-time 3 "${api_endpoints[$second_index]}" 2>/dev/null)
+        if [ -n "$api_response" ]; then
+            # Extract priceUSD from JSON using awk (no jq dependency)
+            extracted_price=$(echo "$api_response" | awk -F'"priceUSD":"' '{print $2}' | awk -F'"' '{print $1}')
+            # Only use the extracted price if it's not empty
+            if [ -n "$extracted_price" ] && [ "$extracted_price" != "" ]; then
+                price_usd="$extracted_price"
+            fi
+        fi
+    fi
+
+    # Default to 0 if both endpoints failed
+    if [ -z "$price_usd" ] || [ "$price_usd" = "" ]; then
+        price_usd="0.00000000"
+    fi
+
+    # Count stakes won in the last 24 hours
+    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ)
+    stakes_won_24h=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '
+        {
+            # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
+            timestamp = substr($0, 1, 20) "Z"
+            if (timestamp >= cutoff) {
+                count++
+            }
+        }
+        END { print count+0 }')
+    if [ -z "$stakes_won_24h" ] || [ "$stakes_won_24h" = "" ]; then
+        stakes_won_24h="0"
+    fi
+
+    # Count stakes won in the last 7 days
+    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ)
+    stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '
+        {
+            # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
+            timestamp = substr($0, 1, 20) "Z"
+            if (timestamp >= cutoff) {
+                count++
+            }
+        }
+        END { print count+0 }')
+    if [ -z "$stakes_won_7d" ] || [ "$stakes_won_7d" = "" ]; then
+        stakes_won_7d="0"
+    fi
+
+    # Function to format USD with 2 decimals and comma separators
+    format_usd() {
+        local value=$1
+        # Format to 2 decimal places first
+        local formatted=$(awk "BEGIN {printf \"%.2f\", $value}" 2>/dev/null || echo "0.00")
+        # Split into integer and decimal parts
+        local int_part=$(echo "$formatted" | cut -d. -f1)
+        local dec_part=$(echo "$formatted" | cut -d. -f2)
+        # Add comma separators to integer part only
+        local int_with_commas=$(echo "$int_part" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1,\2/;ta')
+        # Combine integer and decimal parts
+        echo "${int_with_commas}.${dec_part}"
+    }
+
+    # Calculate wallet value in USD
+    wallet_value_raw=$(awk "BEGIN {printf \"%.2f\", $wallet_balance * $price_usd}" 2>/dev/null || echo "0.00")
+    wallet_value_usd=$(format_usd "$wallet_value_raw")
+
+    # Calculate staking yield in USD (each stake = 1 LYNX)
+    staking_yield_24h_raw=$(awk "BEGIN {printf \"%.2f\", $stakes_won_24h * $price_usd}" 2>/dev/null || echo "0.00")
+    staking_yield_24h_usd=$(format_usd "$staking_yield_24h_raw")
+
+    staking_yield_7d_raw=$(awk "BEGIN {printf \"%.2f\", $stakes_won_7d * $price_usd}" 2>/dev/null || echo "0.00")
+    staking_yield_7d_usd=$(format_usd "$staking_yield_7d_raw")
+
+    # Calculate estimated monthly yield (7-day * 4)
+    estimated_monthly_stakes=$((stakes_won_7d * 4))
+    staking_yield_monthly_raw=$(awk "BEGIN {printf \"%.2f\", $staking_yield_7d_raw * 4}" 2>/dev/null || echo "0.00")
+    staking_yield_monthly_usd=$(format_usd "$staking_yield_monthly_raw")
+
+    # Calculate prices for different LYNX amounts
+    price_1_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 1 * $price_usd}" 2>/dev/null || echo "0.00")
+    price_1_lynx=$(format_usd "$price_1_lynx_raw")
+
+    price_10_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 10 * $price_usd}" 2>/dev/null || echo "0.00")
+    price_10_lynx=$(format_usd "$price_10_lynx_raw")
+
+    price_100_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 100 * $price_usd}" 2>/dev/null || echo "0.00")
+    price_100_lynx=$(format_usd "$price_100_lynx_raw")
+
+    price_1000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 1000 * $price_usd}" 2>/dev/null || echo "0.00")
+    price_1000_lynx=$(format_usd "$price_1000_lynx_raw")
+
+    price_10000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 10000 * $price_usd}" 2>/dev/null || echo "0.00")
+    price_10000_lynx=$(format_usd "$price_10000_lynx_raw")
+
+    price_100000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 100000 * $price_usd}" 2>/dev/null || echo "0.00")
+    price_100000_lynx=$(format_usd "$price_100000_lynx_raw")
+
+    price_1000000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 1000000 * $price_usd}" 2>/dev/null || echo "0.00")
+    price_1000000_lynx=$(format_usd "$price_1000000_lynx_raw")
+
+    price_10000000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 10000000 * $price_usd}" 2>/dev/null || echo "0.00")
+    price_10000000_lynx=$(format_usd "$price_10000000_lynx_raw")
+
+    price_100000000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 100000000 * $price_usd}" 2>/dev/null || echo "0.00")
+    price_100000000_lynx=$(format_usd "$price_100000000_lynx_raw")
+
+    echo "  PRICE INFORMATION:"
+    echo "    💵 Wallet value (USD): \$$wallet_value_usd"
+    echo ""
+    echo "    🎯 Staking Yield (USD):"
+    echo "        24-hour yield:     \$$staking_yield_24h_usd ($stakes_won_24h stakes)"
+    echo "        7-day yield:       \$$staking_yield_7d_usd ($stakes_won_7d stakes)"
+    echo "        Estimated monthly: \$$staking_yield_monthly_usd (~$estimated_monthly_stakes stakes)"
+    echo ""
+    echo "    💲 LYNX Price List (USD):"
+    echo "        1 LYNX:            \$$price_1_lynx"
+    echo "        10 LYNX:           \$$price_10_lynx"
+    echo "        100 LYNX:          \$$price_100_lynx"
+    echo "        1,000 LYNX:        \$$price_1000_lynx"
+    echo "        10,000 LYNX:       \$$price_10000_lynx"
+    echo "        100,000 LYNX:      \$$price_100000_lynx"
+    echo "        1,000,000 LYNX:    \$$price_1000000_lynx"
+    echo "        10,000,000 LYNX:   \$$price_10000000_lynx"
+    echo "        100,000,000 LYNX:  \$$price_100000000_lynx"
     echo ""
 }
 
@@ -660,6 +777,9 @@ ca() { lynx-cli capacity; }
 #
 # This alias is a custom command to show the help message.
 h() { executeHelpCommand; }
+#
+# This alias is a custom command to show wallet value and LYNX price information.
+pri() { executePriceCommand; }
 #
 # This alias is a native Lynx command to backup the Lynx wallet.
 bac() { /usr/local/bin/backup.sh; }
@@ -1339,8 +1459,10 @@ startLynx() {
         sleep 5
         systemctl start lynx.service
         log "Lynx daemon started."
-        log "Disabling rc.local to prevent future install.sh downloads"
-        chmod -x /etc/rc.local
+        if [ -f /etc/rc.local ]; then
+            log "Disabling rc.local to prevent future install.sh downloads"
+            chmod -x /etc/rc.local
+        fi
         exit 0
     fi
 }
@@ -1517,8 +1639,10 @@ isBlockchainSyncComplete() {
         log "Blockchain sync complete. Stopping and disabling install.timer."
         systemctl stop install.timer
         systemctl disable install.timer
-        log "Disabling rc.local to prevent future install.sh downloads"
-        chmod -x /etc/rc.local
+        if [ -f /etc/rc.local ]; then
+            log "Disabling rc.local to prevent future install.sh downloads"
+            chmod -x /etc/rc.local
+        fi
         exit 0
     fi
 
