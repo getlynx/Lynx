@@ -62,8 +62,8 @@ set -euo pipefail
 #     gba    - Get wallet balances
 #     gna    - Generate new address
 #     lag    - List address groupings
-#     sta    - Send to address
-#     swe    - Sweep a wallet (send all funds)
+#     sta    - Send to address (sender pays the fee)
+#     swe    - Sweep a wallet (send all funds, recipient pays fee)
 #     bac    - Manual wallet backup
 #     lba    - List backup directory contents
 #     wdi    - Change to Lynx working directory
@@ -428,8 +428,8 @@ executeHelpCommand() {
     echo "    gba                    - Get wallet balances"
     echo "    gna                    - Generate new address"
     echo "    lag                    - List address groupings"
-    echo "    sta [address] [amount] - Send to address"
-    echo "    swe [address]          - Sweep a wallet"
+    echo "    sta [address] [amount] - Send to address (sender pays fee)"
+    echo "    swe [address]          - Sweep a wallet (receiver pays fee)"
     echo "    bac                    - Manual wallet backup"
     echo "    lba                    - List backup directory contents"
     echo "    pri                    - Show wallet value in USD"
@@ -507,32 +507,44 @@ executePriceCommand() {
     fi
 
     # Count stakes won in the last 24 hours
-    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ)
-    stakes_won_24h=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '
-        {
-            # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
-            timestamp = substr($0, 1, 20) "Z"
-            if (timestamp >= cutoff) {
-                count++
+    # Gracefully handle missing debug.log or no staking data
+    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
+    if [ -f "$WorkingDirectory/debug.log" ]; then
+        stakes_won_24h=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '
+            {
+                # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
+                timestamp = substr($0, 1, 20) "Z"
+                if (timestamp >= cutoff) {
+                    count++
+                }
             }
-        }
-        END { print count+0 }')
-    if [ -z "$stakes_won_24h" ] || [ "$stakes_won_24h" = "" ]; then
+            END { print count+0 }')
+    else
+        stakes_won_24h="0"
+    fi
+    # Ensure we have a valid number (default to 0 if empty or invalid)
+    if [ -z "$stakes_won_24h" ] || [ "$stakes_won_24h" = "" ] || ! [[ "$stakes_won_24h" =~ ^[0-9]+$ ]]; then
         stakes_won_24h="0"
     fi
 
     # Count stakes won in the last 7 days
-    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ)
-    stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '
-        {
-            # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
-            timestamp = substr($0, 1, 20) "Z"
-            if (timestamp >= cutoff) {
-                count++
+    # Gracefully handle missing debug.log or no staking data
+    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
+    if [ -f "$WorkingDirectory/debug.log" ]; then
+        stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '
+            {
+                # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
+                timestamp = substr($0, 1, 20) "Z"
+                if (timestamp >= cutoff) {
+                    count++
+                }
             }
-        }
-        END { print count+0 }')
-    if [ -z "$stakes_won_7d" ] || [ "$stakes_won_7d" = "" ]; then
+            END { print count+0 }')
+    else
+        stakes_won_7d="0"
+    fi
+    # Ensure we have a valid number (default to 0 if empty or invalid)
+    if [ -z "$stakes_won_7d" ] || [ "$stakes_won_7d" = "" ] || ! [[ "$stakes_won_7d" =~ ^[0-9]+$ ]]; then
         stakes_won_7d="0"
     fi
 
@@ -562,7 +574,8 @@ executePriceCommand() {
     staking_yield_7d_usd=$(format_usd "$staking_yield_7d_raw")
 
     # Calculate estimated monthly yield (7-day * 4)
-    estimated_monthly_stakes=$((stakes_won_7d * 4))
+    # Ensure safe arithmetic by defaulting to 0 if calculation fails
+    estimated_monthly_stakes=$((stakes_won_7d * 4)) 2>/dev/null || estimated_monthly_stakes=0
     staking_yield_monthly_raw=$(awk "BEGIN {printf \"%.2f\", $staking_yield_7d_raw * 4}" 2>/dev/null || echo "0.00")
     staking_yield_monthly_usd=$(format_usd "$staking_yield_monthly_raw")
 
