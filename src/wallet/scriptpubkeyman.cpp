@@ -18,6 +18,8 @@
 
 #include <optional>
 
+#include <core_io.h>
+
 namespace wallet {
 //! Value for the first BIP 32 hardened derivation. Can be used as a bit mask and as a value. See BIP 32 for more details.
 const uint32_t BIP32_HARDENED_KEY_LIMIT = 0x80000000;
@@ -95,6 +97,7 @@ bool HaveKeys(const std::vector<valtype>& pubkeys, const LegacyScriptPubKeyMan& 
 //! @param recurse_scripthash  whether to recurse into nested p2sh and p2wsh
 //!                            scripts or simply treat any script that has been
 //!                            stored in the keystore as spendable
+/*
 IsMineResult IsMineInner(const LegacyScriptPubKeyMan& keystore, const CScript& scriptPubKey, IsMineSigVersion sigversion, bool recurse_scripthash=true)
 {
     IsMineResult ret = IsMineResult::NO;
@@ -209,7 +212,152 @@ IsMineResult IsMineInner(const LegacyScriptPubKeyMan& keystore, const CScript& s
 }
 
 } // namespace
+*/
 
+IsMineResult IsMineInner(const LegacyScriptPubKeyMan& keystore, const CScript& scriptPubKey, IsMineSigVersion sigversion, bool recurse_scripthash=true)
+{
+    // LogPrintf("[PANTHER-TRACE] IsMineInner: called\n");
+    // LogPrintf("[PANTHER-TRACE] IsMineInner: Script asm: %s\n", ScriptToAsmStr(scriptPubKey).c_str());
+    // LogPrintf("[PANTHER-TRACE] IsMineInner: Script hex: %s\n", HexStr(scriptPubKey).c_str());
+    // LogPrintf("[PANTHER-TRACE] IsMineInner: sigversion=%d, recurse_scripthash=%d\n", (int)sigversion, (int)recurse_scripthash);
+
+    IsMineResult ret = IsMineResult::NO;
+
+    std::vector<valtype> vSolutions;
+    TxoutType whichType = Solver(scriptPubKey, vSolutions);
+    // LogPrintf("[PANTHER-TRACE] IsMineInner: Solver returned type=%d\n", (int)whichType);
+
+    CKeyID keyID;
+    switch (whichType) {
+    case TxoutType::NONSTANDARD:
+    case TxoutType::NULL_DATA:
+    case TxoutType::WITNESS_UNKNOWN:
+    case TxoutType::WITNESS_V1_TAPROOT:
+        // LogPrintf("[PANTHER-TRACE] IsMineInner: Non-spendable type\n");
+        break;
+    case TxoutType::PUBKEY:
+        keyID = CPubKey(vSolutions[0]).GetID();
+        // LogPrintf("[PANTHER-TRACE] IsMineInner: PUBKEY size=%zu\n", vSolutions[0].size());
+        if (!PermitsUncompressed(sigversion) && vSolutions[0].size() != 33) {
+            // LogPrintf("[PANTHER-TRACE] IsMineInner: PUBKEY invalid due to uncompressed key\n");
+            return IsMineResult::INVALID;
+        }
+        if (keystore.HaveKey(keyID)) {
+            ret = std::max(ret, IsMineResult::SPENDABLE);
+            // LogPrintf("[PANTHER-TRACE] IsMineInner: PUBKEY is mine -> SPENDABLE\n");
+        }
+        break;
+    case TxoutType::WITNESS_V0_KEYHASH:
+        // LogPrintf("[PANTHER-TRACE] IsMineInner: WITNESS_V0_KEYHASH\n");
+        if (sigversion == IsMineSigVersion::WITNESS_V0) {
+            // LogPrintf("[PANTHER-TRACE] IsMineInner: WITNESS_V0_KEYHASH invalid inside P2WSH\n");
+            return IsMineResult::INVALID;
+        }
+        if (sigversion == IsMineSigVersion::TOP && !keystore.HaveCScript(CScriptID(CScript() << OP_0 << vSolutions[0]))) {
+            // LogPrintf("[PANTHER-TRACE] IsMineInner: skipping bare witness output\n");
+            break;
+        }
+        ret = std::max(ret, IsMineInner(keystore, GetScriptForDestination(PKHash(uint160(vSolutions[0]))), IsMineSigVersion::WITNESS_V0));
+        // LogPrintf("[PANTHER-TRACE] IsMineInner: WITNESS_V0_KEYHASH recursive result=%d\n", (int)ret);
+        break;
+    case TxoutType::PUBKEYHASH:
+        
+// LogPrintf("[PANTHER-TRACE] IsMineInner: PUBKEYHASH \n");
+
+        keyID = CKeyID(uint160(vSolutions[0]));
+        if (!PermitsUncompressed(sigversion)) {
+
+// LogPrintf("[PANTHER-TRACE] IsMineInner: PUBKEYHASH !PermitsUncompressed\n");
+
+            CPubKey pubkey;            
+            if (keystore.GetPubKey(keyID, pubkey) && !pubkey.IsCompressed()) {
+                // LogPrintf("[PANTHER-TRACE] IsMineInner: PUBKEYHASH invalid due to uncompressed pubkey\n");
+                return IsMineResult::INVALID;
+            }
+        }
+// LogPrintf("[PANTHER-TRACE] IsMineInner: PUBKEYHASH keyID=%s\n", keyID.ToString().c_str());
+
+if (!keystore.HaveKey(keyID)) {
+    // LogPrintf("[PANTHER-TRACE] IsMineInner: PUBKEYHASH !keystore.HaveKey(keyID)\n");
+}
+
+        if (keystore.HaveKey(keyID)) {
+            ret = std::max(ret, IsMineResult::SPENDABLE);
+            // LogPrintf("[PANTHER-TRACE] IsMineInner: PUBKEYHASH is mine -> SPENDABLE\n");
+        }
+        break;
+    case TxoutType::SCRIPTHASH:
+    {
+        // LogPrintf("[PANTHER-TRACE] IsMineInner: SCRIPTHASH\n");
+        if (sigversion != IsMineSigVersion::TOP) {
+            // LogPrintf("[PANTHER-TRACE] IsMineInner: invalid SCRIPTHASH inside P2WSH or P2SH\n");
+            return IsMineResult::INVALID;
+        }
+        CScriptID scriptID = CScriptID(uint160(vSolutions[0]));
+        CScript subscript;
+        if (keystore.GetCScript(scriptID, subscript)) {
+            ret = std::max(ret, recurse_scripthash ? IsMineInner(keystore, subscript, IsMineSigVersion::P2SH) : IsMineResult::SPENDABLE);
+            // LogPrintf("[PANTHER-TRACE] IsMineInner: SCRIPTHASH recursive result=%d\n", (int)ret);
+        }
+        break;
+    }
+    case TxoutType::WITNESS_V0_SCRIPTHASH:
+    {
+        // 0LogPrintf("[PANTHER-TRACE] IsMineInner: WITNESS_V0_SCRIPTHASH\n");
+        if (sigversion == IsMineSigVersion::WITNESS_V0) {
+            // LogPrintf("[PANTHER-TRACE] IsMineInner: WITNESS_V0_SCRIPTHASH invalid inside P2WSH\n");
+            return IsMineResult::INVALID;
+        }
+        if (sigversion == IsMineSigVersion::TOP && !keystore.HaveCScript(CScriptID(CScript() << OP_0 << vSolutions[0]))) {
+            // LogPrintf("[PANTHER-TRACE] IsMineInner: skipping bare WITNESS_V0_SCRIPTHASH\n");
+            break;
+        }
+        CScriptID scriptID{RIPEMD160(vSolutions[0])};
+        CScript subscript;
+        if (keystore.GetCScript(scriptID, subscript)) {
+            ret = std::max(ret, recurse_scripthash ? IsMineInner(keystore, subscript, IsMineSigVersion::WITNESS_V0) : IsMineResult::SPENDABLE);
+            // LogPrintf("[PANTHER-TRACE] IsMineInner: WITNESS_V0_SCRIPTHASH recursive result=%d\n", (int)ret);
+        }
+        break;
+    }
+    case TxoutType::MULTISIG:
+    {
+        // LogPrintf("[PANTHER-TRACE] IsMineInner: MULTISIG\n");
+        if (sigversion == IsMineSigVersion::TOP) {
+            // LogPrintf("[PANTHER-TRACE] IsMineInner: skipping bare MULTISIG at TOP sigversion\n");
+            break;
+        }
+
+        std::vector<valtype> keys(vSolutions.begin()+1, vSolutions.begin()+vSolutions.size()-1);
+        if (!PermitsUncompressed(sigversion)) {
+            for (size_t i = 0; i < keys.size(); i++) {
+                if (keys[i].size() != 33) {
+                    // LogPrintf("[PANTHER-TRACE] IsMineInner: MULTISIG invalid due to uncompressed key\n");
+                    return IsMineResult::INVALID;
+                }
+            }
+        }
+        if (HaveKeys(keys, keystore)) {
+            ret = std::max(ret, IsMineResult::SPENDABLE);
+            // 0LogPrintf("[PANTHER-TRACE] IsMineInner: MULTISIG is mine -> SPENDABLE\n");
+        }
+        break;
+    }
+    } // no default case, so the compiler can warn about missing cases
+
+    if (ret == IsMineResult::NO && keystore.HaveWatchOnly(scriptPubKey)) {
+        ret = std::max(ret, IsMineResult::WATCH_ONLY);
+        // LogPrintf("[PANTHER-TRACE] IsMineInner: Script is WATCH_ONLY\n");
+    }
+
+    // LogPrintf("[PANTHER-TRACE] IsMineInner: final result=%d\n", (int)ret);
+    return ret;
+}
+
+} // namespace
+
+
+/*
 isminetype LegacyScriptPubKeyMan::IsMine(const CScript& script) const
 {
     switch (IsMineInner(*this, script, IsMineSigVersion::TOP)) {
@@ -223,6 +371,37 @@ isminetype LegacyScriptPubKeyMan::IsMine(const CScript& script) const
     }
     assert(false);
 }
+*/
+
+isminetype LegacyScriptPubKeyMan::IsMine(const CScript& script) const
+{
+    // LogPrintf("[PANTHER-TRACE] LegacyScriptPubKeyMan::IsMine called\n");
+    // LogPrintf("[PANTHER-TRACE] Script asm: %s\n", ScriptToAsmStr(script).c_str());
+    // LogPrintf("[PANTHER-TRACE] Script hex: %s\n", HexStr(script).c_str());
+
+    IsMineResult inner_result = IsMineInner(*this, script, IsMineSigVersion::TOP);
+
+    // Deep debug on result
+    switch (inner_result) {
+        case IsMineResult::INVALID:
+            // LogPrintf("[PANTHER-TRACE] IsMineInner returned INVALID -> ISMINE_NO\n");
+            return ISMINE_NO;
+        case IsMineResult::NO:
+            // LogPrintf("[PANTHER-TRACE] IsMineInner returned NO -> ISMINE_NO\n");
+            return ISMINE_NO;
+        case IsMineResult::WATCH_ONLY:
+            // LogPrintf("[PANTHER-TRACE] IsMineInner returned WATCH_ONLY -> ISMINE_WATCH_ONLY\n");
+            return ISMINE_WATCH_ONLY;
+        case IsMineResult::SPENDABLE:
+            // LogPrintf("[PANTHER-TRACE] IsMineInner returned SPENDABLE -> ISMINE_SPENDABLE\n");
+            return ISMINE_SPENDABLE;
+    }
+
+    // This should never happen
+    // LogPrintf("[PANTHER-TRACE] LegacyScriptPubKeyMan::IsMine reached assert(false)\n");
+    assert(false);
+}
+
 
 bool LegacyScriptPubKeyMan::CheckDecryptionKey(const CKeyingMaterial& master_key, bool accept_no_keys)
 {

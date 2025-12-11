@@ -16,6 +16,8 @@
 #include <exception>
 #include <optional>
 
+#define CURRENT_CHAIN_CONF CURRENT_CHAIN ".conf"
+
 namespace common {
 std::optional<ConfigError> InitConfig(ArgsManager& args, SettingsAbortFn settings_abort_fn)
 {
@@ -34,7 +36,8 @@ std::optional<ConfigError> InitConfig(ArgsManager& args, SettingsAbortFn setting
         // parse error, and specifying a datadir= location containing another
         // bitcoin.conf file just ignores the other file.)
         const fs::path orig_datadir_path{args.GetDataDirBase()};
-        const fs::path orig_config_path{AbsPathForConfigVal(args, args.GetPathArg("-conf", BITCOIN_CONF_FILENAME), /*net_specific=*/false)};
+        // const fs::path orig_config_path{AbsPathForConfigVal(args, args.GetPathArg("-conf", BITCOIN_CONF_FILENAME), /*net_specific=*/false)};
+        const fs::path orig_config_path{AbsPathForConfigVal(args, args.GetPathArg("-conf", CURRENT_CHAIN_CONF), /*net_specific=*/false)};
 
         std::string error;
         if (!args.ReadConfigFiles(error, true)) {
@@ -70,7 +73,8 @@ std::optional<ConfigError> InitConfig(ArgsManager& args, SettingsAbortFn setting
 
        // Show an error or warning if there is a bitcoin.conf file in the
         // datadir that is being ignored.
-        const fs::path base_config_path = base_path / BITCOIN_CONF_FILENAME;
+        // const fs::path base_config_path = base_path / BITCOIN_CONF_FILENAME;
+        const fs::path base_config_path = base_path / CURRENT_CHAIN_CONF;
         if (fs::exists(base_config_path) && !fs::equivalent(orig_config_path, base_config_path)) {
             const std::string cli_config_path = args.GetArg("-conf", "");
             const std::string config_source = cli_config_path.empty()
@@ -84,7 +88,8 @@ std::optional<ConfigError> InitConfig(ArgsManager& args, SettingsAbortFn setting
                 "includeconf= to include any other configuration files.\n"
                 "- Set allowignoredconf=1 option to treat this condition as a warning, not an error.",
                 fs::quoted(fs::PathToString(base_path)),
-                fs::quoted(BITCOIN_CONF_FILENAME),
+                // fs::quoted(BITCOIN_CONF_FILENAME),
+                fs::quoted(CURRENT_CHAIN_CONF),
                 fs::quoted(fs::PathToString(orig_config_path)),
                 config_source);
             if (args.GetBoolArg("-allowignoredconf", false)) {

@@ -3,6 +3,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+// #define PANTHER
+
 #ifndef BITCOIN_POLICY_FEERATE_H
 #define BITCOIN_POLICY_FEERATE_H
 
@@ -14,7 +16,21 @@
 #include <string>
 #include <type_traits>
 
-const std::string CURRENCY_UNIT = "LYNX"; // One formatted unit
+/*
+#ifdef LYNX    
+    const std::string CURRENCY_UNIT = "LYNX"; 
+#elif defined(PANTHER)
+    const std::string CURRENCY_UNIT = "PNTH"; 
+#endif
+*/
+
+constexpr char C0 = (CURRENT_CHAIN[0] >= 'a' && CURRENT_CHAIN[0] <= 'z') ? CURRENT_CHAIN[0]-'a'+'A' : CURRENT_CHAIN[0];
+constexpr char C1 = (CURRENT_CHAIN[1] >= 'a' && CURRENT_CHAIN[1] <= 'z') ? CURRENT_CHAIN[1]-'a'+'A' : CURRENT_CHAIN[1];
+constexpr char C2 = (CURRENT_CHAIN[2] >= 'a' && CURRENT_CHAIN[2] <= 'z') ? CURRENT_CHAIN[2]-'a'+'A' : CURRENT_CHAIN[2];
+constexpr char C3 = (CURRENT_CHAIN[3] >= 'a' && CURRENT_CHAIN[3] <= 'z') ? CURRENT_CHAIN[3]-'a'+'A' : CURRENT_CHAIN[3];
+
+const std::string CURRENCY_UNIT{C0, C1, C2, C3};
+
 const std::string CURRENCY_ATOM = "sat"; // One indivisible minimum value unit
 
 /* Used to determine type of fee estimation requested */

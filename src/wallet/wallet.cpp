@@ -49,6 +49,10 @@
 #include <assert.h>
 #include <optional>
 
+#include <logging.h>
+
+#include <core_io.h>
+
 using interfaces::FoundBlock;
 
 namespace wallet {
@@ -1185,6 +1189,11 @@ bool CWallet::LoadToWallet(const uint256& hash, const UpdateWalletTxFn& fill_wtx
 
 bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx, const SyncTxState& state, bool fUpdate, bool rescanning_old_block)
 {
+
+    // LogPrintf("[PANTHER-TRACE] AddToWalletIfInvolvingMe txid=%s\n", ptx->GetHash().ToString());
+
+
+
     const CTransaction& tx = *ptx;
     {
         AssertLockHeld(cs_wallet);
@@ -1213,7 +1222,17 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx, const SyncTxS
              */
 
             // loop though all outputs
+
+
+int i = 0;
+
             for (const CTxOut& txout: tx.vout) {
+
+
+// LogPrintf("[PANTHER-TRACE] AddToWalletIfInvolvingMe Checking vout %d: scriptPubKey %s\n", i, ScriptToAsmStr(txout.scriptPubKey));
+// LogPrintf("[PANTHER-TRACE] AddToWalletIfInvolvingMe Checking vout %d: scriptPubKey hex %s\n", i, HexStr(txout.scriptPubKey));
+
+
                 for (const auto& spk_man : GetScriptPubKeyMans(txout.scriptPubKey)) {
                     for (auto &dest : spk_man->MarkUnusedAddresses(txout.scriptPubKey)) {
                         // If internal flag is not defined try to infer it from the ScriptPubKeyMan
@@ -1232,6 +1251,9 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx, const SyncTxS
                         }
                     }
                 }
+
+i++;
+
             }
 
             // Block disconnection override an abandoned tx as unconfirmed
@@ -1617,13 +1639,52 @@ isminetype CWallet::IsMine(const CTxDestination& dest) const
     return IsMine(GetScriptForDestination(dest));
 }
 
+
+/*
 isminetype CWallet::IsMine(const CScript& script) const
 {
+
+
+    LogPrintf("[PANTHER-TRACE] ismine1 IsMine? scriptPubKey=%s\n", ScriptToAsmStr(script));
+    LogPrintf("[PANTHER-TRACE] ismine1 IsMine? scriptPubKey hex = %s\n", HexStr(script));
+
     AssertLockHeld(cs_wallet);
     isminetype result = ISMINE_NO;
     for (const auto& spk_man_pair : m_spk_managers) {
         result = std::max(result, spk_man_pair.second->IsMine(script));
     }
+
+ LogPrintf("[PANTHER-TRACE]  ismine1 Result=%d\n", result);
+
+    return result;
+}
+*/
+
+isminetype CWallet::IsMine(const CScript& script) const
+{
+    AssertLockHeld(cs_wallet);
+
+    // LogPrintf("[PANTHER-TRACE] ismine1 IsMine? scriptPubKey=%s\n", ScriptToAsmStr(script));
+    // LogPrintf("[PANTHER-TRACE] ismine1 IsMine? scriptPubKey hex=%s\n", HexStr(script));
+
+    isminetype result = ISMINE_NO;
+
+    int mgr_index = 0;
+    for (const auto& spk_man_pair : m_spk_managers) {
+        // add index so we can identify which manager this is
+        // LogPrintf("[PANTHER-TRACE]   Checking spk_man[%d] at %p\n", mgr_index, (void*)spk_man_pair.second.get());
+
+        isminetype mgr_result = spk_man_pair.second->IsMine(script);
+
+        // LogPrintf("[PANTHER-TRACE]   spk_man[%d] returned mgr_result=%d\n", mgr_index, mgr_result);
+
+        if (mgr_result > result)
+            result = mgr_result;
+
+        mgr_index++;
+    }
+
+    // LogPrintf("[PANTHER-TRACE]   Final ismine1 Result=%d\n", result);
     return result;
 }
 

@@ -11,13 +11,25 @@
 #include <string>
 #include <vector>
 
+// #define PANTHER
+
 /**
  * Name of client reported in the 'version' message. Report the same name
  * for both bitcoind and bitcoin-qt, to make it harder for attackers to
  * target servers or GUI users specifically.
  */
-const std::string CLIENT_NAME("Lynx");
 
+/*
+#ifdef LYNX    
+    const std::string CLIENT_NAME("Lynx");
+#elif defined(PANTHER)
+    const std::string CLIENT_NAME("Panther");
+#endif
+*/
+
+std::string CLIENT_NAME = CURRENT_CHAIN;
+
+static char _fix_client_name = (CLIENT_NAME[0] = std::toupper(CLIENT_NAME[0]), 0);
 
 #ifdef HAVE_BUILD_INFO
 #include <obj/build.h>

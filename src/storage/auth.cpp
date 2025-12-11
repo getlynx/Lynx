@@ -1133,8 +1133,18 @@ bool scan_blocks_for_authdata(ChainstateManager& chainman)
     // Set block span ( (12 blocks/hr) * (24 hr/day) * (365 day/yr) = 105,120 blocks/yr )
     uint32_t u32BlockSpan =  105120;
 
+    uint32_t u32Cutoff;
+
     // Set cutoff
-    uint32_t u32Cutoff =  intTipHeight - u32BlockSpan;
+    if (u32BlockSpan > intTipHeight) {
+
+        u32Cutoff = 1;
+
+    } else {
+
+        u32Cutoff =  intTipHeight - u32BlockSpan;
+
+    }
 
     // If cutoff is below pos start
     if (u32Cutoff < Params().GetConsensus().nUUIDBlockStart) {
@@ -1142,6 +1152,8 @@ bool scan_blocks_for_authdata(ChainstateManager& chainman)
         // Set cutoff to pos start
         u32Cutoff = Params().GetConsensus().nUUIDBlockStart;
     }
+
+LogPrint (BCLog::STORAGE, "u32Cutoff %d \n", u32Cutoff);
 
     // Scan most recent blockspan blocks
     for (uint32_t height = u32Cutoff; height < intTipHeight; height++) {
@@ -1327,8 +1339,18 @@ bool scan_blocks_for_blockuuiddata(ChainstateManager& chainman)
     // Set block span ( (12 blocks/hr) * (24 hr/day) * (365 day/yr) * (10 yr/decade) = 1,051,200 blocks/decade )
     uint32_t u32BlockSpan =  1051200;
 
+    uint32_t u32Cutoff;
+
     // Set cutoff
-    uint32_t u32Cutoff =  intTipHeight - u32BlockSpan;
+    if (u32BlockSpan > intTipHeight) {
+
+        u32Cutoff = 1;
+
+    } else {
+
+        u32Cutoff =  intTipHeight - u32BlockSpan;
+
+    }
 
     // If cutoff is below pos start
     if (u32Cutoff < Params().GetConsensus().nUUIDBlockStart) {
@@ -1480,8 +1502,18 @@ bool scan_blocks_for_blocktenantdata(ChainstateManager& chainman)
     // Set block span ( (12 blocks/hr) * (24 hr/day) * (365 day/yr) * (10 yr/decade) = 1,051,200 blocks/decade )
     uint32_t u32BlockSpan =  1051200;
 
+    uint32_t u32Cutoff;
+
     // Set cutoff
-    uint32_t u32Cutoff =  intTipHeight - u32BlockSpan;
+    if (u32BlockSpan > intTipHeight) {
+
+        u32Cutoff = 1;
+
+    } else {
+
+        u32Cutoff =  intTipHeight - u32BlockSpan;
+
+    }
 
     // If cutoff is below pos start
     if (u32Cutoff < Params().GetConsensus().nUUIDBlockStart) {

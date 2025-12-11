@@ -1341,7 +1341,9 @@ static RPCHelpMan list()
     // 
     // message: Failure message.
     // 
-    // tenant: Authenticated store asset tenant. length: Asset length in bytes.
+    // tenant: Authenticated store asset tenant. 
+    // 
+    // length: Asset length in bytes.
     // 
     // height: Block tip height at store asset time
     //

@@ -23,3 +23,18 @@ if expr "'$(build-aux/config.sub --timestamp)" \< "'$(depends/config.sub --times
   cp depends/config.sub build-aux
   cp depends/config.sub src/secp256k1/build-aux
 fi
+
+# --- PATCH THE GENERATED FILES AFTER ALL AUTORECONF ---
+sed -i '1i\
+ifndef NAME\nNAME = lynx\nendif\n' Makefile.in
+
+sed -i '/^endif$/a\
+ifeq ($(NAME),lynx)\n\tCPFLAGS := -n\nelse\n\tCPFLAGS :=\nendif\n' Makefile.in
+
+sed -i '/^all: all-recursive$/a\
+\tcp $(CPFLAGS) src/lynxd src/$(NAME)d\
+\tcp $(CPFLAGS) src/lynx-cli src/$(NAME)-cli\
+\tcp $(CPFLAGS) src/lynx-tx src/$(NAME)-tx' Makefile.in
+
+sed -i '1i\
+ifndef NAME\nNAME = lynx\nendif\n' src/Makefile.in

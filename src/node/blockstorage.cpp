@@ -763,6 +763,21 @@ bool BlockManager::ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos) cons
 
     // Check the header
     bool isPoS = block.IsProofOfStake();
+
+// LogPrintf ("isPoS %d \n", isPoS);
+
+/*
+FILE *f = fopen ("/root/flurm", "a");
+fprintf(f,"  blockstorage.cpp nVersion = %d\n", block.nVersion);
+fprintf(f, "  nTime    = %u\n", block.nTime);
+fprintf(f, "  nBits    = 0x%08x\n", block.nBits);
+fprintf(f, "  nNonce   = %u\n", block.nNonce);
+fprintf(f, "  hash     = %s\n", block.GetHash().ToString().c_str());
+fprintf(f, "  powhash  = %s\n", block.GetPoWHash().ToString().c_str());
+fprintf(f, "  merkle   = %s\n", block.hashMerkleRoot.ToString().c_str());
+fclose(f);
+*/
+
     if (!isPoS && !CheckProofOfWork(block.GetPoWHash(), block.nBits, GetConsensus())) {
         return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
     }

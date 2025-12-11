@@ -11,6 +11,8 @@
 #include <primitives/block.h>
 #include <uint256.h>
 
+#include <logging.h>
+
 const CBlockIndex* GetLastPoSBlockIndex(const CBlockIndex* pindex)
 {
     while (pindex && pindex->pprev && pindex->IsProofOfWork())
@@ -184,13 +186,31 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&
 
     bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
 
+// LogPrintf("bnTarget %s\n", bnTarget.GetHex().c_str());
+
+// LogPrintf("powLimit %s\n", UintToArith256(params.powLimit).GetHex().c_str());
+
     // Check range
-    if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit))
+    if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit)) {
+
+// LogPrintf ("range \n");
+
+// LogPrintf ("nBits %d \n", nBits);
+
         return false;
+    }
 
     // Check proof of work matches claimed amount
-    if (UintToArith256(hash) > bnTarget)
+    if (UintToArith256(hash) > bnTarget) {
+
+// LogPrintf ("hash %s \n", hash.GetHex().c_str());
+
+// LogPrintf ("target %s \n", bnTarget.GetHex().c_str());
+
+// LogPrintf ("not range \n");
+
         return false;
+    }
 
     return true;
 }

@@ -93,10 +93,23 @@
 
 #include <variant>
 
+#define CURRENT_CHAIN_CONF CURRENT_CHAIN ".conf"
+
+#define CURRENT_CHAIN_DATADIR "." CURRENT_CHAIN
+
 // Application startup time (used for uptime calculation)
 const int64_t nStartupTime = GetTime();
 
-const char * const BITCOIN_CONF_FILENAME = "lynx.conf";
+// #define PANTHER
+
+/*
+#ifdef LYNX    
+    const char * const BITCOIN_CONF_FILENAME = "lynx.conf";
+#elif defined(PANTHER
+    const char * const BITCOIN_CONF_FILENAME = "panther.conf";
+#endif
+*/
+
 const char * const BITCOIN_SETTINGS_FILENAME = "settings.json";
 
 ArgsManager gArgs;
@@ -769,7 +782,21 @@ fs::path GetDefaultDataDir()
     return pathRet / "Library/Application Support/Lynx";
 #else
     // Unix-like
+
+/*
+#ifdef LYNX    
     return pathRet / ".lynx";
+#elif defined(PANTHER)
+    return pathRet / ".panther";
+#endif
+*/
+
+    // return pathRet / ".panther";
+
+    LogPrintf ("CURRENT_CHAIN_DATADIR = %s\n", CURRENT_CHAIN_DATADIR);
+
+    return pathRet / CURRENT_CHAIN_DATADIR;
+
 #endif
 #endif
 }
@@ -885,11 +912,15 @@ ChainType ArgsManager::GetChainType() const
 
 bool ArgsManager::ReadConfigFiles(std::string& error, bool ignore_invalid_keys)
 {
+
+// CURRENT_CHAIN_CONF
+
     {
         LOCK(cs_args);
         m_settings.ro_config.clear();
         m_config_sections.clear();
-        m_config_path = AbsPathForConfigVal(*this, GetPathArg("-conf", BITCOIN_CONF_FILENAME), /*net_specific=*/false);
+        // m_config_path = AbsPathForConfigVal(*this, GetPathArg("-conf", BITCOIN_CONF_FILENAME), /*net_specific=*/false);
+        m_config_path = AbsPathForConfigVal(*this, GetPathArg("-conf", CURRENT_CHAIN_CONF), /*net_specific=*/false);
     }
 
     const auto conf_path{GetConfigFilePath()};

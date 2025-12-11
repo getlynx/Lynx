@@ -125,6 +125,12 @@ bool scan_blocks_for_pubkey (ChainstateManager& chainman, std::string& uuid)
 
     long lngCutoff = 3107495;
 
+    if (lngCutoff > tip_height) {
+
+        lngCutoff = 1700;
+
+    }
+
     // In reverse, skip POW blocks
     for (int height = (tip_height - 1); height > lngCutoff; height--) {
 
@@ -473,6 +479,12 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
 
     // Set cutoff to beginning of optional encryption
     long lngCutoff = 3107495;
+
+    if (lngCutoff > tip_height) {
+
+        lngCutoff = 1700;
+
+    }
 
     // Skip POW blocks in reverse
     for (int height = (tip_height - 1); height > lngCutoff; height--) {
@@ -880,6 +892,12 @@ bool scan_blocks_for_specific_uuid (ChainstateManager& icsmChainStateManager, st
 
     // Start of optional encryption functionality
     long lngCutoff = 3107495;
+
+    if (lngCutoff > intTipHeight) {
+
+        lngCutoff = 1700;
+
+    }
 
     // In reverse, skip POW blocks
     for (int height = (intTipHeight - 1); height > lngCutoff; height--) {
