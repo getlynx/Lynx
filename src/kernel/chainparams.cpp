@@ -266,10 +266,14 @@ LogPrintf ("spec.initauthuser %s \n", spec.initauthuser.c_str());
         consensus.nUUIDBlockStart = spec.uuidlastblock ;
 }
 
-consensus.fPowNoRetargeting = false;
+        consensus.fPowNoRetargeting = false;
         // consensus.lastPoWBlock = std::numeric_limits<int>::max();
-        // consensus.lastPoWBlock = 1500;
+
+if (std::string(CURRENT_CHAIN) == "lynx") {
         consensus.lastPoWBlock = 3085114;
+} else {
+        consensus.lastPoWBlock = 1500;
+}
         consensus.nPosTargetTimespan = 5 * 60;
         consensus.nPosTargetSpacing = 5 * 60;
         consensus.nStakeMinAge = 10 * 60;
