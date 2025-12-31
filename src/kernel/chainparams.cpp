@@ -268,8 +268,8 @@ LogPrintf ("spec.initauthuser %s \n", spec.initauthuser.c_str());
 
 consensus.fPowNoRetargeting = false;
         // consensus.lastPoWBlock = std::numeric_limits<int>::max();
-        consensus.lastPoWBlock = 1500;
-        // consensus.lastPoWBlock = 3085114;
+        // consensus.lastPoWBlock = 1500;
+        consensus.lastPoWBlock = 3085114;
         consensus.nPosTargetTimespan = 5 * 60;
         consensus.nPosTargetSpacing = 5 * 60;
         consensus.nStakeMinAge = 10 * 60;
