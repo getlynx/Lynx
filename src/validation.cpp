@@ -2461,7 +2461,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
                         // If auth chunk, rather than data chunk
                         if (is_opreturn_an_authdata (opreturn_out, error_level) || is_opreturn_a_blockuuiddata (opreturn_out, error_level) || is_opreturn_a_blocktenantdata (opreturn_out, error_level)) {
 
-                            
+LogPrint (BCLog::STORAGE, "is_opreturn_an_authdata from validation.cpp \n");                            
                             
                             if (is_opreturn_an_authdata (opreturn_out, error_level)) {
                             

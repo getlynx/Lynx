@@ -244,7 +244,9 @@ void perform_get_task(std::pair<std::string, std::string> get_info, int& error_l
     end = clock ();    
     build_time_taken = (double) (end - start) / CLOCKS_PER_SEC;
 
-    LogPrint (BCLog::STORAGE, "elapsed time perform_get_task scan %ld build %ld\n", scan_time_taken, build_time_taken);
+    // LogPrint (BCLog::STORAGE, "elapsed time perform_get_task scan %ld build %ld\n", scan_time_taken, build_time_taken);
+
+    LogPrint (BCLog::STORAGE, "elapsed time perform_get_task scan %f build %f\n", scan_time_taken, build_time_taken);
 
 }
 
@@ -304,6 +306,7 @@ void thread_storage_worker()
 
         // buffer for sprintf result
         char buffer[128];
+        // char buffer[1024];
         memset(buffer, 0, sizeof(buffer));
 
         // perform putqueue tasks
@@ -344,20 +347,31 @@ void thread_storage_worker()
                 getTask = workQueueGet.back();
             }
             perform_get_task(getTask, error_level);
+
             if (error_level != NO_ERROR) {
+
                 sprintf(buffer, "getTask %s, %s had error_level %s", getTask.first.c_str(), getTask.second.c_str(), error_level_string[error_level]);
                 std::string stringbuf = std::string(buffer);
                 add_result_text(stringbuf);
             } else {
-                sprintf(buffer, "getTask %s, %s completed successfully", getTask.first.c_str(), getTask.second.c_str());
-                std::string stringbuf = std::string(buffer);
+
+                // sprintf(buffer, "getTask %s, %s completed successfully", getTask.first.c_str(), getTask.second.c_str());
+
+                // std::string stringbuf = std::string(buffer);
+
+                std::string stringbuf = "getTask " + getTask.first + ", " + getTask.second + " completed successfully";
+
                 add_result_text(stringbuf);
+
             }
+
             {
                 LOCK(workQueueLock);
                 workQueueGet.pop_back();
             }
+
             set_storage_worker_status(WORKER_IDLE);
+
         }
 
         if (ShutdownRequested()) {
