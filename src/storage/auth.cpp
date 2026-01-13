@@ -1093,11 +1093,10 @@ bool check_mempool_for_authdata(const CTxMemPool& mempool)
 
     CTxMemPool::txiter it = mempool.mapTx.begin();
     while (it != mempool.mapTx.end()) {
-        if (!does_tx_have_authdata(it->GetTx())) {
-            continue;
-        } else {
+        if (does_tx_have_authdata(it->GetTx())) {
             return true;
         }
+        ++it;
     }
 
     return false;
