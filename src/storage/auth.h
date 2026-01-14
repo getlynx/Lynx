@@ -56,12 +56,12 @@ bool found_opreturn_in_blockuuiddata(const CScript& script_data, int& error_leve
 bool found_opreturn_in_blocktenantdata(const CScript& script_data, int& error_level, bool test_accept = false);
 bool compare_pubkey(const CScript& script_data, int& error_level, uint160 hash160);
 //bool found_opreturn_in_authdata2 (const CScript& script_data, int& error_level, bool test_accept = false);
-bool does_tx_have_authdata(const CTransaction& tx);
+bool does_tx_have_metadata(const CTransaction& tx, int type);
 bool scan_blocks_for_authdata(ChainstateManager& chainman);
 bool scan_blocks_for_blockuuiddata(ChainstateManager& chainman);
 bool scan_blocks_for_blocktenantdata(ChainstateManager& chainman);
 bool scan_blocks_for_specific_authdata(ChainstateManager& chainman, uint160 hash160);
-bool check_mempool_for_authdata(const CTxMemPool& mempool);
+bool check_mempool_for_metadata(const CTxMemPool& mempool, int type);
 bool generate_auth_payload(std::string& payload, int& type, uint32_t& time, std::string& hash);
 bool generate_blockuuid_payload(std::string& payload, int& type, uint32_t& time, std::string& uuid);
 bool generate_blocktenant_payload(std::string& payload, int& type, uint32_t& time, std::string& tenant);

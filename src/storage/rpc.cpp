@@ -168,12 +168,6 @@ bool check_mempool_for_customuuid (const CTxMemPool& mempool, std::string strCus
 
             }
 
-        // if (!does_tx_have_authdata(it->GetTx())) {
-            // continue;
-        // } else {
-            // return true;
-        // }
-
         }
 
         ++it;
@@ -2288,8 +2282,8 @@ static RPCHelpMan allow()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
-    if (check_mempool_for_authdata(mempool)) {
-        return std::string("authtx-in-mempool");
+    if (check_mempool_for_metadata(mempool, 1)) {
+        return std::string("allow-deny-tx-in-mempool");
     }
 
     UniValue ret(UniValue::VARR);
@@ -2395,10 +2389,10 @@ static RPCHelpMan blockuuid()
     // Blocked UUIDs are not fetched.
     //
 
-    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
-    // if (check_mempool_for_authdata(mempool)) {
-        // return std::string("authtx-in-mempool");
-    // }
+    const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    if (check_mempool_for_metadata(mempool, 2)) {
+        return std::string("block-unblock-uuid-tx-in-mempool");
+    }
 
     // Entry
     UniValue entry(UniValue::VOBJ);
@@ -2541,10 +2535,10 @@ static RPCHelpMan blocktenant()
 
 
 
-    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
-    // if (check_mempool_for_authdata(mempool)) {
-        // return std::string("authtx-in-mempool");
-    // }
+    const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    if (check_mempool_for_metadata(mempool, 3)) {
+        return std::string("block-unblock-tenant-tx-in-mempool");
+    }
 
     // Entry
     UniValue entry(UniValue::VOBJ);
@@ -2652,10 +2646,10 @@ static RPCHelpMan unblocktenant()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
-    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
-    // if (check_mempool_for_authdata(mempool)) {
-        // return std::string("authtx-in-mempool");
-    // }
+    const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    if (check_mempool_for_metadata(mempool, 3)) {
+        return std::string("block-unblock-tenant-tx-in-mempool");
+    }
 
     // Entry
     UniValue entry(UniValue::VOBJ);
@@ -2763,10 +2757,10 @@ static RPCHelpMan unblockuuid()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
-    // const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
-    // if (check_mempool_for_authdata(mempool)) {
-        // return std::string("authtx-in-mempool");
-    // }
+    const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    if (check_mempool_for_metadata(mempool, 2)) {
+        return std::string("block-unblock-uuid-tx-in-mempool");
+    }
 
     // Entry
     UniValue entry(UniValue::VOBJ);
@@ -2878,8 +2872,8 @@ static RPCHelpMan deny()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
-    if (check_mempool_for_authdata(mempool)) {
-        return std::string("authtx-in-mempool");
+    if (check_mempool_for_metadata(mempool, 1)) {
+        return std::string("allow-deny-tx-in-mempool");
     }
 
     std::string hash160 = request.params[0].get_str();
