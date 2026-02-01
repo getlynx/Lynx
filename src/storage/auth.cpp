@@ -1067,7 +1067,7 @@ bool compare_pubkey (const CScript& script_data, int& error_level, uint160 hash1
     return false;
 }
 
-bool does_tx_have_authdata(const CTransaction& tx)
+bool does_tx_have_metadata(const CTransaction& tx, int type)
 {
     for (unsigned int vout = 0; vout < tx.vout.size(); vout++) {
 
@@ -1075,10 +1075,29 @@ bool does_tx_have_authdata(const CTransaction& tx)
         if (opreturn_out.IsOpReturn()) {
 
             int error_level;
-            if (!found_opreturn_in_authdata(opreturn_out, error_level, true)) {
-                continue;
-            } else {
-                return true;
+
+            if (type == 1) {
+                if (!found_opreturn_in_authdata(opreturn_out, error_level, true)) {
+                    continue;
+                } else {
+                    return true;
+                }
+            }
+
+            if (type == 2) {
+                if (!found_opreturn_in_blockuuiddata(opreturn_out, error_level, true)) {
+                    continue;
+                } else {
+                    return true;
+                }
+            }
+
+            if (type == 3) {
+                if (!found_opreturn_in_blocktenantdata(opreturn_out, error_level, true)) {
+                    continue;
+                } else {
+                    return true;
+                }
             }
 
         }
@@ -1087,17 +1106,16 @@ bool does_tx_have_authdata(const CTransaction& tx)
     return false;
 }
 
-bool check_mempool_for_authdata(const CTxMemPool& mempool)
+bool check_mempool_for_metadata(const CTxMemPool& mempool, int type)
 {
     LOCK(mempool.cs);
 
     CTxMemPool::txiter it = mempool.mapTx.begin();
     while (it != mempool.mapTx.end()) {
-        if (!does_tx_have_authdata(it->GetTx())) {
-            continue;
-        } else {
+        if (does_tx_have_metadata(it->GetTx(), type)) {
             return true;
         }
+        ++it;
     }
 
     return false;
