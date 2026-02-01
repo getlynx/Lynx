@@ -19,6 +19,7 @@ RPCHelpMan walletpassphrase()
                 {
                     {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO, "The wallet passphrase"},
                     {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The time to keep the decryption key in seconds; capped at 100000000 (~3 years)."},
+                    {"staking_only", RPCArg::Type::BOOL, RPCArg::Default{false}, "Unlock wallet for staking only."},
                 },
                 RPCResult{RPCResult::Type::NONE, "", ""},
                 RPCExamples{
@@ -85,6 +86,7 @@ RPCHelpMan walletpassphrase()
 
         pwallet->nRelockTime = GetTime() + nSleepTime;
         relock_time = pwallet->nRelockTime;
+        pwallet->fWalletUnlockStakingOnly = request.params[2].isNull() ? false : request.params[2].get_bool();
     }
 
     // rpcRunLater must be called without cs_wallet held otherwise a deadlock
@@ -206,6 +208,7 @@ RPCHelpMan walletlock()
 
     pwallet->Lock();
     pwallet->nRelockTime = 0;
+    pwallet->fWalletUnlockStakingOnly = false;
 
     return UniValue::VNULL;
 },
