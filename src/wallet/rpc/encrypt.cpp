@@ -18,7 +18,7 @@ RPCHelpMan walletpassphrase()
             "time that overrides the old one.\n",
                 {
                     {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO, "The wallet passphrase"},
-                    {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The time to keep the decryption key in seconds; capped at 100000000 (~3 years)."},
+                    {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The time to keep the decryption key in seconds. Set to 0 for no automatic relock (the wallet stays unlocked until walletlock is called or the node is restarted). Positive values are capped at 100000000 (~3 years)."},
                     {"staking_only", RPCArg::Type::BOOL, RPCArg::Default{false}, "Unlock wallet for staking only."},
                 },
                 RPCResult{RPCResult::Type::NONE, "", ""},
@@ -84,29 +84,37 @@ RPCHelpMan walletpassphrase()
 
         pwallet->TopUpKeyPool();
 
-        pwallet->nRelockTime = GetTime() + nSleepTime;
+        // If timeout is 0, do not schedule an automatic relock (stays unlocked indefinitely)
+        if (nSleepTime == 0) {
+            pwallet->nRelockTime = 0;
+        } else {
+            pwallet->nRelockTime = GetTime() + nSleepTime;
+        }
         relock_time = pwallet->nRelockTime;
         pwallet->fWalletUnlockStakingOnly = request.params[2].isNull() ? false : request.params[2].get_bool();
     }
 
-    // rpcRunLater must be called without cs_wallet held otherwise a deadlock
-    // can occur. The deadlock would happen when RPCRunLater removes the
-    // previous timer (and waits for the callback to finish if already running)
-    // and the callback locks cs_wallet.
-    AssertLockNotHeld(wallet->cs_wallet);
-    // Keep a weak pointer to the wallet so that it is possible to unload the
-    // wallet before the following callback is called. If a valid shared pointer
-    // is acquired in the callback then the wallet is still loaded.
-    std::weak_ptr<CWallet> weak_wallet = wallet;
-    pwallet->chain().rpcRunLater(strprintf("lockwallet(%s)", pwallet->GetName()), [weak_wallet, relock_time] {
-        if (auto shared_wallet = weak_wallet.lock()) {
-            LOCK2(shared_wallet->m_relock_mutex, shared_wallet->cs_wallet);
-            // Skip if this is not the most recent rpcRunLater callback.
-            if (shared_wallet->nRelockTime != relock_time) return;
-            shared_wallet->Lock();
-            shared_wallet->nRelockTime = 0;
-        }
-    }, nSleepTime);
+    // Only schedule relock timer if timeout > 0
+    if (nSleepTime > 0) {
+        // rpcRunLater must be called without cs_wallet held otherwise a deadlock
+        // can occur. The deadlock would happen when RPCRunLater removes the
+        // previous timer (and waits for the callback to finish if already running)
+        // and the callback locks cs_wallet.
+        AssertLockNotHeld(wallet->cs_wallet);
+        // Keep a weak pointer to the wallet so that it is possible to unload the
+        // wallet before the following callback is called. If a valid shared pointer
+        // is acquired in the callback then the wallet is still loaded.
+        std::weak_ptr<CWallet> weak_wallet = wallet;
+        pwallet->chain().rpcRunLater(strprintf("lockwallet(%s)", pwallet->GetName()), [weak_wallet, relock_time] {
+            if (auto shared_wallet = weak_wallet.lock()) {
+                LOCK2(shared_wallet->m_relock_mutex, shared_wallet->cs_wallet);
+                // Skip if this is not the most recent rpcRunLater callback.
+                if (shared_wallet->nRelockTime != relock_time) return;
+                shared_wallet->Lock();
+                shared_wallet->nRelockTime = 0;
+            }
+        }, nSleepTime);
+    }
 
     return UniValue::VNULL;
 },
