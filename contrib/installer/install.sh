@@ -735,6 +735,12 @@ addAliasesToBashrcFile() {
     cat <<EOF >> "$BASHRC"
 $ALIAS_BLOCK_START
 #
+# Bail out immediately for non-interactive shells (SFTP, scp, rsync, etc.)
+case \$- in
+    *i*) ;;
+    *) return ;;
+esac
+#
 # This alias is a native Lynx command for getting wallet balances. Also provides a shorter undocumented version.
 gba() { lynx-cli getbalances; }
 gb() { gba; }
