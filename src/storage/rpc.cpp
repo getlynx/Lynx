@@ -2062,7 +2062,7 @@ static RPCHelpMan auth()
             if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
 
                 // message
-                unvEntry.pushKV("message", "You are authenticated as a tenant.");
+                unvEntry.pushKV("message", "Tenant authentication successful. Continued use of this service constitutes acceptance of the Terms of Service: https://docs.getlynx.io/clevver/clevver-terms-of-service-agreement");
 
             // Else not tenant    
             } else {                

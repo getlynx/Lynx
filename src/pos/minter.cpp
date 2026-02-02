@@ -425,9 +425,10 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
                 }
 
                 if (pwallet->IsLocked()) {
-                    LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Wallet [%s] is locked - cannot stake\n", nThreadID, pwallet->GetName());
+                    LogPrintAlways(BCLog::NONE, "ThreadStakeMiner[%d]: Wallet [%s] is locked - cannot stake. See https://docs.getlynx.io/lynx-administration/staking-only-wallet-lock\n", nThreadID, pwallet->GetName());
                     pwallet->m_is_staking = wallet::CWallet::NOT_STAKING_LOCKED;
-                    nWaitFor = std::min(nWaitFor, (size_t)30000);
+                    // nWaitFor = std::min(nWaitFor, (size_t)30000);
+                    nWaitFor = 300000;
                     continue;
                 }
                 reserve_balance = pwallet->nReserveBalance;
