@@ -15,27 +15,33 @@
 #include <storage/storage.h>
 #include <storage/worker.h>
 
-void add_auth_member(uint160 pubkeyhash);
-void add_blockuuid_member(std::string uuid);
+int number_of_managers ();
+// void add_auth_member(uint160 pubkeyhash);
+void add_auth_member(uint160 pubkeyhash, int role);
+void add_blockuuid_member(std::string uuid, std::string manager);
 void add_blocktenant_member(std::string uuid);
 void remove_auth_member(uint160 pubkeyhash);
-void remove_blockuuid_member(std::string uuid);
-void remove_blocktenant_member(std::string uuid);
+void remove_blockuuid_member(std::string uuid, std::string manager);
+void remove_blocktenant_member(std::string tenant, std::string manager);
 void build_auth_list(const Consensus::Params& params);
 void build_blockuuid_list(const Consensus::Params& params);
 void build_blocktenant_list(const Consensus::Params& params);
 bool is_auth_member(uint160 pubkeyhash);
+bool is_manager();
+bool is_manager(uint160 user);
 bool is_blockuuid_member(std::string uuid);
 bool is_blocktenant_member(std::string uuid);
 bool set_auth_user(std::string& privatewif);
-void copy_auth_list(std::vector<uint160>& tempList);
-void copy_blockuuid_list(std::vector<std::string>& tempList);
-void copy_blocktenant_list(std::vector<std::string>& tempList);
+// void copy_auth_list(std::vector<uint160>& tempList);
+void copy_auth_list(std::vector<std::pair<uint160, int>>& tempList);
+void copy_blockuuid_list(std::vector<std::pair<std::string, std::string>>& tempList);
+void copy_blocktenant_list(std::vector<std::pair<std::string, std::string>>& tempList);
 // bool is_signature_valid_chunk(std::string chunk);
 bool is_signature_valid_chunk (std::string chunk, int pintOffset);
-bool is_blockuuid_signature_valid_chunk (std::string chunk, int pintOffset);
-bool is_blocktenant_signature_valid_chunk (std::string chunk, int pintOffset);
+bool is_blockuuid_signature_valid_chunk (std::string chunk, int pintOffset, std::string& ostrPubkey);
+bool is_blocktenant_signature_valid_chunk (std::string chunk, int pintOffset, std::string& manager);
 bool is_signature_valid_raw(std::vector<unsigned char>& signature, uint256& hash);
+bool is_signature_valid_raw_special(std::vector<unsigned char>& signature, uint256& hash, std::string& strPubkey);
 // bool check_contextual_auth(std::string& chunk, int& error_level);
 bool check_contextual_blockuuid (std::string& chunk, int& error_level, int pintOffset);
 bool check_contextual_blocktenant (std::string& chunk, int& error_level, int pintOffset);

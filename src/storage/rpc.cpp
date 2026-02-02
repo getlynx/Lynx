@@ -355,7 +355,7 @@ if (strParameter4 == "1") {
     gstrJSONAssetStoreCharacters.clear();
     FILE* in = fopen("/root/dkdk", "rb");
     char buffer[200000];
-    fread(buffer, 1, 5, in);
+    int intReturn = fread(buffer, 1, 5, in);
     // fread(gchrJSONAssetStoreCharacters, 1, 5, in);
     fclose(in);
 
@@ -366,7 +366,7 @@ if (strParameter4 == "2") {
     gstrJSONAssetStoreCharacters.clear();
     FILE* in = fopen("/root/ben.jpg", "rb");
     char buffer[200000];
-    fread(buffer, 1, 169018, in);
+    int intReturn = fread(buffer, 1, 169018, in);
     // fread(gchrJSONAssetStoreCharacters, 1, 169018, in);
     fclose(in);
 
@@ -421,7 +421,8 @@ LogPrint (BCLog::STORAGE, "strParameter %d %d %d %d %d \n", strParameter1.size()
 
 
     // If manager
-    if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+    // if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+    if (is_manager()) {
 
         // Report and exit
         entry.pushKV("result", "failure");
@@ -1240,6 +1241,8 @@ static RPCHelpMan fetch()
 
                 if (is_blocktenant_member(ghshAuthenticatetenantPubkey.ToString())) {
 
+LogPrint (BCLog::STORAGE, "ghshAuthenticatetenantPubkey %s \n", ghshAuthenticatetenantPubkey.ToString());
+
                     // Report and exit
                     unvEntry.pushKV("result", "failure");
                     unvEntry.pushKV("message", "Blocked tenant: " + ghshAuthenticatetenantPubkey.ToString() + ".");
@@ -1393,9 +1396,10 @@ static RPCHelpMan list()
                 {
                     // Optional number of uuid's to return, defaults to all.
                     {"count", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Number of results to return (0 for all).  If omitted, shows most recent 10 results."},
-                }, {
+                }, 
+                {
 
-                    RPCResult{
+                    RPCResult {
                         RPCResult::Type::ARR, "", "", {{
                             RPCResult::Type::ARR, "", "", {{
                                 RPCResult::Type::OBJ, "", "", {
@@ -1714,7 +1718,9 @@ static RPCHelpMan tenants()
 {
     return RPCHelpMan{"tenants",
                 "\nDisplay the current list of data storage tenants.\n",
-                {},
+                {
+                    {"role", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Role:  missing: tenant, 1: manager "},
+                },
                 {
                     RPCResult{
                         RPCResult::Type::ARR, "", "",
@@ -1727,17 +1733,46 @@ static RPCHelpMan tenants()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
 
-    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    UniValue ret(UniValue::VARR);
+
+    // Initialize role
+    std::string strRole = "0";
+
+    // Integer role
+    int intRole;
+
+    // If optional parameter role
+    if (!request.params[0].isNull()) {
+
+        // Get role
+        strRole = request.params[0].get_str();
+
+    // End if optional parameter role
+    }
+
+    // Convert to integer     
+    intRole = stoi (strRole);
+
+    if (!is_manager()) {
         return std::string("Role-based restriction: Current role cannot perform this action");
     }
 
-    UniValue ret(UniValue::VARR);
-
+    /*
     std::vector<uint160> tempList;
     copy_auth_list(tempList);
     for (auto& l : tempList) {
         if (l.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
             ret.push_back(l.ToString());
+        }
+    }
+    */
+
+    std::vector<std::pair<uint160, int>> tempList;
+    copy_auth_list(tempList);
+    for (auto& l : tempList) {
+        // if (l.first.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+        if (l.second == intRole) {
+            ret.push_back(l.first.ToString());
         }
     }
 
@@ -1752,9 +1787,16 @@ static RPCHelpMan listblockeduuids()
                 "\nDisplay the current list of blocked UUIDs.\n",
                 {},
                 {
-                    RPCResult{
-                        RPCResult::Type::ARR, "", "",
-                        {{RPCResult::Type::STR, "", "A blocked UUID."}}},
+                    RPCResult {
+                        RPCResult::Type::ARR, "", "", {{
+                            RPCResult::Type::ARR, "", "", {{
+                                RPCResult::Type::OBJ, "", "", {
+                                    {RPCResult::Type::STR, "", "A blocked uuid."},
+                                    {RPCResult::Type::STR, "", "Blocking manager."},
+                                }},
+                            }},
+                        }
+                    },
                 },
                 RPCExamples{
                     HelpExampleCli("listblockeduuids", "")
@@ -1763,19 +1805,33 @@ static RPCHelpMan listblockeduuids()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
 
-    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    // if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    if (!is_manager()) {
         return std::string("Role-based restriction: Current role cannot perform this action");
     }
 
-    UniValue ret(UniValue::VARR);
+    // UniValue ret(UniValue::VARR);
 
-    std::vector<std::string> tempList;
+    UniValue unvResult0(UniValue::VOBJ);
+    UniValue unvResult1(UniValue::VARR);
+    UniValue unvResult2(UniValue::VARR);
+
+    std::vector<std::pair<std::string, std::string>> tempList;
     copy_blockuuid_list(tempList);
     for (auto& l : tempList) {
-        ret.push_back(l);
+        // ret.push_back(l);
+
+        unvResult0.pushKV("uuid", l.first);
+        unvResult0.pushKV("manager", l.second);
+
+        unvResult1.push_back (unvResult0);
+
     }
 
-    return ret;
+    unvResult2.push_back (unvResult1);
+
+    return unvResult1;
+
 },
     };
 }
@@ -1786,9 +1842,16 @@ static RPCHelpMan listblockedtenants()
                 "\nDisplay the current list of blocked tenants.\n",
                 {},
                 {
-                    RPCResult{
-                        RPCResult::Type::ARR, "", "",
-                        {{RPCResult::Type::STR, "", "A blocked tenant."}}},
+                    RPCResult {
+                        RPCResult::Type::ARR, "", "", {{
+                            RPCResult::Type::ARR, "", "", {{
+                                RPCResult::Type::OBJ, "", "", {
+                                    {RPCResult::Type::STR, "", "A blocked tenant."},
+                                    {RPCResult::Type::STR, "", "Blocking manager."},
+                                }},
+                            }},
+                        }
+                    },
                 },
                 RPCExamples{
                     HelpExampleCli("listblockedtenants", "")
@@ -1797,19 +1860,33 @@ static RPCHelpMan listblockedtenants()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
 
-    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    // if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    if (!is_manager()) {
         return std::string("Role-based restriction: Current role cannot perform this action");
     }
 
-    UniValue ret(UniValue::VARR);
+    // UniValue ret(UniValue::VARR);
 
-    std::vector<std::string> tempList;
+    // Output data structures
+    UniValue unvResult0(UniValue::VOBJ);
+    UniValue unvResult1(UniValue::VARR);
+    UniValue unvResult2(UniValue::VARR);
+
+    std::vector<std::pair<std::string, std::string>> tempList;
     copy_blocktenant_list(tempList);
     for (auto& l : tempList) {
-        ret.push_back(l);
+        // ret.push_back(l.first);
+
+        unvResult0.pushKV("tenant", l.first);
+        unvResult0.pushKV("manager", l.second);
+
+        unvResult1.push_back (unvResult0);
+
     }
 
-    return ret;
+    unvResult2.push_back (unvResult1);
+
+    return unvResult1;
 },
     };
 }
@@ -1934,7 +2011,7 @@ static RPCHelpMan auth()
         // Set staking status to disabled
         strStakingStatus = "disabled";
 
-    // Else not if staking disbled
+    // Else not if staking disabled
     } else {
 
         // Set staking status to enabled
@@ -2059,7 +2136,8 @@ static RPCHelpMan auth()
             unvEntry.pushKV("result", "success");
 
             // If tenant
-            if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+            // if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+            if (!is_manager()) {
 
                 // message
                 unvEntry.pushKV("message", "You are authenticated as a tenant.");
@@ -2078,7 +2156,8 @@ static RPCHelpMan auth()
             uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1024;
 
             // If manager
-            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            // if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            if (is_manager ()) {
 
                 // Zero capacity
                 u32Capacity = 0;
@@ -2106,7 +2185,8 @@ static RPCHelpMan auth()
             std::string strFormattedCurrentTime(chrFormattedCurrentTime);
 
             // If manager
-            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            // if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            if (is_manager ()) {
 
                 // Lose session start time
                 strFormattedCurrentTime = "n/a";
@@ -2133,7 +2213,8 @@ static RPCHelpMan auth()
             std::string strFormattedSessionEndTime(chrFormattedSessionEndTime);
 
             // If manager
-            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            // if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            if (is_manager ()) {
 
                 // Lose session end time
                 strFormattedSessionEndTime = "n/a";
@@ -2149,7 +2230,8 @@ static RPCHelpMan auth()
             const int intTipHeight = chnActiveChain.Height();          
             
             // If manager
-            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            // if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            if (is_manager ()) {
 
                 // Lose session start block
                 unvEntry.pushKV("sessionstartblock", 0);
@@ -2160,7 +2242,8 @@ static RPCHelpMan auth()
             }
 
             // If manager
-            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            // if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            if (is_manager ()) {
 
                 // Lose session end block
                 unvEntry.pushKV("sessionendblock", 0);
@@ -2171,7 +2254,8 @@ static RPCHelpMan auth()
             }
 
             // If manager
-            if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            // if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+            if (is_manager ()) {
 
                 // stakingstatus
                 unvEntry.pushKV("stakingstatus", strStakingStatus);
@@ -2269,6 +2353,7 @@ static RPCHelpMan allow()
                 "\nAdd a new data storage tenant.\n",
                 {
                     {"hash160", RPCArg::Type::STR, RPCArg::Optional::NO, "A new tenant key to be allowed to store data."},
+                    {"role", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Role:  missing: tenant, 1: manager "},
                 },
                 RPCResult{
                     RPCResult::Type::ARR, "", "",
@@ -2296,10 +2381,28 @@ static RPCHelpMan allow()
     }
     uint160 hash = uint160S(hash160);
 
+    // Initialize role
+    std::string strRole = "0";
+
+    // Integer role
+    int intRole;
+
+    // If optional parameter role
+    if (!request.params[1].isNull()) {
+
+        // Get role
+        strRole = request.params[1].get_str();
+
+    // End if optional parameter role
+    }
+
+    // Convert to integer     
+    intRole = stoi (strRole);
+
     // are we authenticated
     if (is_auth_member(authUser)) {
 
-        if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+        if ((authUser.ToString() != Params().GetConsensus().initAuthUser.ToString() && intRole == 1) || (!is_manager())) {
             ret.push_back("Role-based restriction: Current role cannot perform this action");
             return ret;
             // return std::string("Role-based restriction: Current role cannot perform this action");
@@ -2310,7 +2413,8 @@ static RPCHelpMan allow()
         CMutableTransaction tx;
         std::string opreturn_payload;
 
-        type = 0;
+        // type = 0;
+        type = 2 * intRole;
         time = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
 
         // LogPrint (BCLog::STORAGE, "\n");
@@ -2407,7 +2511,8 @@ static RPCHelpMan blockuuid()
     int intUUIDInvalidityType;
 
     // If not authenticated as manager
-    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    // if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    if (!is_manager()) {
 
         entry.pushKV("result", "failure");
         entry.pushKV("message", "Not authenticated as manager");
@@ -2560,7 +2665,8 @@ static RPCHelpMan blocktenant()
     }
 
     // If not authenticated as manager
-    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    // if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    if (!is_manager()) {
 
         entry.pushKV("result", "failure");
         entry.pushKV("message", "Not authenticated as manager");
@@ -2621,7 +2727,7 @@ static RPCHelpMan unblocktenant()
     return RPCHelpMan{"unblocktenant",
                 "\nUnblock tenant from fetch.\n",
                 {
-                    {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "Tenant pubkey to be unblocked."},
+                    {"tenant", RPCArg::Type::STR, RPCArg::Optional::NO, "Tenant pubkey to be unblocked."},
                 },
 
 
@@ -2671,7 +2777,8 @@ static RPCHelpMan unblocktenant()
     }
 
     // If not authenticated as manager
-    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    // if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    if (!is_manager()) {
 
         entry.pushKV("result", "failure");
         entry.pushKV("message", "Not authenticated as manager");
@@ -2775,7 +2882,8 @@ static RPCHelpMan unblockuuid()
     int intUUIDInvalidityType;
 
     // If not authenticated as manager
-    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    // if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    if (!is_manager()) {
 
         entry.pushKV("result", "failure");
         entry.pushKV("message", "Not authenticated as manager");
@@ -2885,7 +2993,7 @@ static RPCHelpMan deny()
     // are we authenticated
     if (is_auth_member(authUser)) {
 
-        if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+        if ( (!is_manager()) || (is_manager(hash) && authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) ) {
             return std::string("Role-based restriction: Current role cannot perform this action");
         }
 

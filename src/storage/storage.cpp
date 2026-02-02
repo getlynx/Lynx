@@ -437,7 +437,8 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
     std::string strUUID;
 
     // If authenticatedc user is not manager
-    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    // if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+    if (!is_manager()) {
 
         // Set is tenant
         intIsTenant = 1;
