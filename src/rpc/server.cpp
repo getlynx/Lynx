@@ -141,7 +141,8 @@ std::string CRPCTable::help(const std::string& strCommand, const JSONRPCRequest&
                     // if (authUser.ToString() != "2eba8c3d9038b739d4b2a85fa40eb91648ee2366") {
                     // if (authUser.ToString() != "ee78c09ab25ea0f5df7112968ce6592019dd9401") {
                     // if (authUser.ToString() != "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d") {
-                    if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+                    // if (authUser.ToString() != Params().GetConsensus().initAuthUser.ToString()) {
+                    if (!is_manager()) {
 
                         if (strHelp.substr(0,8) != "unblockt" && strHelp.substr(0,6) != "blockt" && strHelp.substr(0,8) != "unblocku" && strHelp.substr(0,6) != "blocku" && strHelp.substr(0,5) != "allow" && strHelp.substr(0,8) != "fetchall" && strHelp.substr(0,4) != "deny" && strHelp.substr(0,7) != "tenants" && strHelp.substr(0,16) != "listblockeduuids" && strHelp.substr(0,18) != "listblockedtenants" && strHelp.substr(0,8) != "capacity") {
                             strRet += strHelp + "\n";

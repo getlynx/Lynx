@@ -26,83 +26,131 @@ uint32_t gu32AuthenticationTime;
 std::string authUserKey;
 
 RecursiveMutex authListLock;
-std::vector<uint160> authList;
+// std::vector<uint160> authList;
+std::vector<std::pair<uint160, int>> authList;
 
 RecursiveMutex blockuuidListLock;
-std::vector<std::string> blockuuidList;
+std::vector<std::pair<std::string, std::string>> blockuuidList;
 
 RecursiveMutex blocktenantListLock;
-std::vector<std::string> blocktenantList;
+// std::vector<std::string> blocktenantList;
+std::vector<std::pair<std::string, std::string>> blocktenantList;
 
 uint32_t gu32BlockHeight;
 
-void add_auth_member(uint160 pubkeyhash)
+int number_of_managers () {
+
+    int count = 0;
+
+    LOCK(authListLock);
+    for (auto& l : authList) {
+        if (l.second == 1) {
+            count++;
+        }
+    }
+
+    return count;
+
+}
+
+// void add_auth_member(uint160 pubkeyhash)
+void add_auth_member(uint160 pubkeyhash, int role)
 {
     LOCK(authListLock);
     for (auto& l : authList) {
-        if (l == pubkeyhash) {
+        // if (l == pubkeyhash) {
+        if (l.first == pubkeyhash) {
             return;
         }
     }
-    authList.push_back(pubkeyhash);
+    // authList.push_back(pubkeyhash);
+    authList.emplace_back (pubkeyhash, role);
 }
 
-void add_blockuuid_member(std::string uuid)
+void add_blockuuid_member(std::string uuid, std::string manager)
 {
     LOCK(blockuuidListLock);
     for (auto& l : blockuuidList) {
-        if (l == uuid) {
+        if (l.first == uuid && l.second == manager) {
             return;
         }
     }
-    blockuuidList.push_back(uuid);
+    blockuuidList.emplace_back(uuid, manager);
 }
 
-void add_blocktenant_member(std::string tenant)
+void add_blocktenant_member(std::string tenant, std::string manager)
 {
     LOCK(blocktenantListLock);
     for (auto& l : blocktenantList) {
-        if (l == tenant) {
+        if (l.first == tenant && l.second == manager) {
             return;
         }
     }
-    blocktenantList.push_back(tenant);
+    blocktenantList.emplace_back(tenant, manager);
 }
 
 void remove_auth_member(uint160 pubkeyhash)
 {
     LOCK(authListLock);
-    std::vector<uint160> tempList;
+    // std::vector<uint160> tempList;
+    std::vector<std::pair<uint160, int>> tempList;
     for (auto& l : authList) {
-        if (l != pubkeyhash) {
+        // if (l != pubkeyhash) {
+        if (l.first != pubkeyhash) {
             tempList.push_back(l);
         }
     }
     authList = tempList;
 }
 
-void remove_blockuuid_member(std::string uuid)
+void remove_blockuuid_member(std::string uuid, std::string manager)
 {
     LOCK(blockuuidListLock);
-    std::vector<std::string> tempList;
+    std::vector<std::pair<std::string, std::string>> tempList;
     for (auto& l : blockuuidList) {
-        if (l != uuid) {
+        if (l.first != uuid || l.second != manager) {
             tempList.push_back(l);
         }
     }
     blockuuidList = tempList;
 }
 
-void remove_blocktenant_member(std::string tenant)
+void remove_blocktenant_member(std::string tenant, std::string manager)
 {
     LOCK(blocktenantListLock);
-    std::vector<std::string> tempList;
+    std::vector<std::pair<std::string, std::string>> tempList;
     for (auto& l : blocktenantList) {
-        if (l != tenant) {
+        if (l.first != tenant || l.second != manager) {
+        // if (l.first != tenant) {
             tempList.push_back(l);
         }
     }
     blocktenantList = tempList;
+}
+
+// Check for manager
+bool is_manager()
+{
+    LOCK(authListLock);
+    for (auto& l : authList) {
+        // if (l == pubkeyhash) {
+        if (l.first == authUser && l.second == 1) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Check for manager
+bool is_manager(uint160 user)
+{
+    LOCK(authListLock);
+    for (auto& l : authList) {
+        if (l.first == user && l.second == 1) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // Check for file storage authorization
@@ -110,7 +158,8 @@ bool is_auth_member(uint160 pubkeyhash)
 {
     LOCK(authListLock);
     for (auto& l : authList) {
-        if (l == pubkeyhash) {
+        // if (l == pubkeyhash) {
+        if (l.first == pubkeyhash) {
             return true;
         }
     }
@@ -120,32 +169,49 @@ bool is_auth_member(uint160 pubkeyhash)
 // Check for blocked uuid
 bool is_blockuuid_member(std::string uuid)
 {
+
+int count = 0;
+
     LOCK(blockuuidListLock);
     for (auto& l : blockuuidList) {
 
-        LogPrint (BCLog::STORAGE, "l uuid %s %s \n", l, uuid);
+        LogPrint (BCLog::STORAGE, "l uuid %s %s \n", l.first, uuid);
         LogPrint (BCLog::STORAGE, "\n");
 
-    if (l.substr(0,8) == uuid.substr(0,8)) {
-            return true;
+    if (l.first.substr(0,8) == uuid.substr(0,8)) {
+            count++;
         }
     }
+
+if (count >= (number_of_managers() + 1) / 2) {
+    return true;
+}
+
     return false;
 }
 
 // Check for blocked tenant
 bool is_blocktenant_member(std::string tenant)
 {
+
+int count = 0;
+
     LOCK(blocktenantListLock);
     for (auto& l : blocktenantList) {
 
-        LogPrint (BCLog::STORAGE, "l tenant %s %s \n", l, tenant);
+        LogPrint (BCLog::STORAGE, "l tenant %s %s \n", l.first, tenant);
         LogPrint (BCLog::STORAGE, "\n");
 
-    if (l == tenant) {
-            return true;
-        }
+if (l.first == tenant) {
+    count++;
+}
+
     }
+
+if (count >= (number_of_managers() + 1) / 2) {
+    return true;
+}
+
     return false;
 }
 
@@ -206,7 +272,8 @@ void build_auth_list(const Consensus::Params& params)
         return;
     }
 
-    authList.push_back(params.initAuthUser);
+    // authList.push_back(params.initAuthUser);
+    authList.emplace_back(params.initAuthUser, 1);
     authTime = params.initAuthTime;
 }
 
@@ -230,19 +297,19 @@ void build_blocktenant_list(const Consensus::Params& params)
     blocktenantTime = params.initAuthTime;
 }
 
-void copy_auth_list(std::vector<uint160>& tempList)
+void copy_auth_list(std::vector<std::pair<uint160, int>>& tempList)
 {
     LOCK(authListLock);
     tempList = authList;
 }
 
-void copy_blockuuid_list(std::vector<std::string>& tempList)
+void copy_blockuuid_list(std::vector<std::pair<std::string, std::string>>& tempList)
 {
     LOCK(blockuuidListLock);
     tempList = blockuuidList;
 }
 
-void copy_blocktenant_list(std::vector<std::string>& tempList)
+void copy_blocktenant_list(std::vector<std::pair<std::string, std::string>>& tempList)
 {
     LOCK(blocktenantListLock);
     tempList = blocktenantList;
@@ -263,6 +330,29 @@ bool is_signature_valid_raw(std::vector<unsigned char>& signature, uint256& hash
     if (!is_auth_member(hash160)) {
         return false;
     }
+
+LogPrint (BCLog::STORAGE, "signature pubkey %s \n", hash160.ToString());
+
+    return true;
+}
+
+bool is_signature_valid_raw_special(std::vector<unsigned char>& signature, uint256& hash, std::string& strPubkey)
+{
+    if (signature.empty()) {
+        return false;
+    }
+
+    CPubKey pubkey;
+    if (!pubkey.RecoverCompact(hash, signature)) {
+        return false;
+    }
+
+    uint160 hash160(Hash160(pubkey));
+    if (!is_auth_member(hash160)) {
+        return false;
+    }
+
+    strPubkey = hash160.ToString();
 
     return true;
 }
@@ -306,7 +396,7 @@ bool is_signature_valid_chunk (std::string chunk, int pintOffset)
     return true;
 }
 
-bool is_blockuuid_signature_valid_chunk (std::string chunk, int pintOffset)
+bool is_blockuuid_signature_valid_chunk (std::string chunk, int pintOffset, std::string& ostrPubkey)
 {
     uint256 checkhash;
     std::string signature;
@@ -318,14 +408,15 @@ bool is_blockuuid_signature_valid_chunk (std::string chunk, int pintOffset)
     vchsig = ParseHex(signature);
     sha256_hash_bin(&chunk.c_str()[pintOffset], (char*)&checkhash, (OPBLOCKUUID_MAGICLEN*2) + (OPBLOCKUUID_OPERATIONLEN*2) + (OPBLOCKUUID_TIMELEN*2) + (OPBLOCKUUID_UUIDLEN*2));
 
-    if (!is_signature_valid_raw(vchsig, checkhash)) {
+    // if (!is_signature_valid_raw(vchsig, checkhash)) {
+    if (!is_signature_valid_raw_special(vchsig, checkhash, ostrPubkey)) {
         return false;
     }
 
     return true;
 }
 
-bool is_blocktenant_signature_valid_chunk (std::string chunk, int pintOffset)
+bool is_blocktenant_signature_valid_chunk (std::string chunk, int pintOffset, std::string& ostrPubkey)
 {
     uint256 checkhash;
     std::string signature;
@@ -337,9 +428,12 @@ bool is_blocktenant_signature_valid_chunk (std::string chunk, int pintOffset)
     vchsig = ParseHex(signature);
     sha256_hash_bin(&chunk.c_str()[pintOffset], (char*)&checkhash, (OPBLOCKTENANT_MAGICLEN*2) + (OPBLOCKTENANT_OPERATIONLEN*2) + (OPBLOCKTENANT_TIMELEN*2) + (OPBLOCKTENANT_TENANTLEN*2));
 
-    if (!is_signature_valid_raw(vchsig, checkhash)) {
+    // if (!is_signature_valid_raw(vchsig, checkhash)) {
+    if (!is_signature_valid_raw_special(vchsig, checkhash, ostrPubkey)) {
         return false;
     }
+
+LogPrint (BCLog::STORAGE, "signature pubkey %s \n", ostrPubkey);
 
     return true;
 }
@@ -558,7 +652,8 @@ bool process_auth_chunk (std::string& chunk, int& , int pintOffset)
 
     // delauth or addauth
     get_operation_from_auth (chunk, operation, pintOffset);
-    if (operation != OPAUTH_ADDUSER && operation != OPAUTH_DELUSER) {
+    // if (operation != OPAUTH_ADDUSER && operation != OPAUTH_DELUSER) {
+    if (operation != OPAUTH_ADDUSER && operation != OPAUTH_DELUSER && operation != OPAUTH_ADDMANAGER && operation != OPAUTH_DELMANAGER) {
         //LogPrintf("%s - failed at get_operation_from_auth2\n", __func__);
         return false;
     }
@@ -597,8 +692,12 @@ bool process_auth_chunk (std::string& chunk, int& , int pintOffset)
 
     // addauth or delauth
     if (operation == OPAUTH_ADDUSER) {
-        add_auth_member(uint160S(hash));
-    } else if (operation == OPAUTH_DELUSER) {
+        // add_auth_member(uint160S(hash));
+        add_auth_member(uint160S(hash), 0);
+    } else if (operation == OPAUTH_ADDMANAGER) {
+        add_auth_member(uint160S(hash), 1);
+    // } else if (operation == OPAUTH_DELUSER) {
+    } else if (operation == OPAUTH_DELUSER || operation == OPAUTH_DELMANAGER) {
         remove_auth_member(uint160S(hash));
     } else {
         return false;
@@ -609,7 +708,7 @@ bool process_auth_chunk (std::string& chunk, int& , int pintOffset)
     // if ((operation == OPAUTH_DELUSER) && (uint160S(hash).ToString() == "ee78c09ab25ea0f5df7112968ce6592019dd9401")) {
     // if ((operation == OPAUTH_DELUSER) && (uint160S(hash).ToString() == "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d")) {
     if ((operation == OPAUTH_DELUSER) && (uint160S(hash).ToString() == Params().GetConsensus().initAuthUser.ToString())) {
-        add_auth_member(uint160S(hash));
+        add_auth_member(uint160S(hash), 1);
     }    
 
     return true;
@@ -633,10 +732,11 @@ bool process_blockuuid_chunk (std::string& chunk, int& , int pintOffset)
     // Snag uuid
     get_uuid_from_blockuuid (chunk, uuid, pintOffset);
 
-    // if (!is_signature_valid_chunk(chunk)) {
-    
     // Validate signature
-    if (!is_blockuuid_signature_valid_chunk (chunk, pintOffset)) {
+
+    std::string manager;
+ 
+    if (!is_blockuuid_signature_valid_chunk (chunk, pintOffset, manager)) {
         //LogPrintf("%s - failed at is_signature_valid_chunk2\n", __func__);
         return false;
     }
@@ -662,9 +762,9 @@ bool process_blockuuid_chunk (std::string& chunk, int& , int pintOffset)
 
     // blockuuid or unblockuuid
     if (operation == OPBLOCKUUID_BLOCKUUID) {
-        add_blockuuid_member(uuid);
+        add_blockuuid_member(uuid, manager);
     } else if (operation == OPBLOCKUUID_UNBLOCKUUID) {
-        remove_blockuuid_member(uuid);
+        remove_blockuuid_member(uuid, manager);
     } else {
         return false;
     }
@@ -673,7 +773,7 @@ bool process_blockuuid_chunk (std::string& chunk, int& , int pintOffset)
 }
 
 // blocktenant or unblocktenant
-bool process_blocktenant_chunk (std::string& chunk, int& , int pintOffset)
+bool process_blocktenant_chunk (std::string& chunk, int& error_level, int pintOffset)
 {
     std::string tenant, operation;
     // get_operation_from_auth(chunk, operation);
@@ -692,8 +792,10 @@ bool process_blocktenant_chunk (std::string& chunk, int& , int pintOffset)
 
     // if (!is_signature_valid_chunk(chunk)) {
     
+    std::string manager;
+
     // Validate signature
-    if (!is_blocktenant_signature_valid_chunk (chunk, pintOffset)) {
+    if (!is_blocktenant_signature_valid_chunk (chunk, pintOffset, manager)) {
         //LogPrintf("%s - failed at is_signature_valid_chunk2\n", __func__);
         return false;
     }
@@ -719,9 +821,15 @@ bool process_blocktenant_chunk (std::string& chunk, int& , int pintOffset)
 
     // blocktenant or unblocktenant
     if (operation == OPBLOCKTENANT_BLOCKTENANT) {
-        add_blocktenant_member(tenant);
+
+LogPrint (BCLog::STORAGE, "add_blocktenant_member tenant %s manager %s \n", tenant, manager);
+
+        add_blocktenant_member(tenant, manager);
     } else if (operation == OPBLOCKTENANT_UNBLOCKTENANT) {
-        remove_blocktenant_member(tenant);
+
+LogPrint (BCLog::STORAGE, "remove_blocktenant_member tenant %s manager %s \n", tenant, manager);
+
+        remove_blocktenant_member(tenant, manager);
     } else {
         return false;
     }
@@ -1749,7 +1857,24 @@ bool generate_auth_payload(std::string& payload, int& type, uint32_t& time, std:
     payload.clear();
 
     payload += OPAUTH_MAGIC;
-    payload += type == 0 ? OPAUTH_ADDUSER : OPAUTH_DELUSER;
+
+if (type == 0) {
+    payload += OPAUTH_ADDUSER;
+}
+
+if (type == 1) {
+    payload += OPAUTH_DELUSER;
+}
+
+if (type == 2) {
+    payload += OPAUTH_ADDMANAGER;
+}
+
+if (type == 3) {
+    payload += OPAUTH_DELMANAGER;
+}
+
+
     payload += unixtime_to_hexstring(time);
     payload += hash;
 

@@ -26,6 +26,8 @@ const int OPAUTH_SIGHASHLEN = 32;
 //! const bytearray present in file
 const std::string OPAUTH_ADDUSER = "00";
 const std::string OPAUTH_DELUSER = "01";
+const std::string OPAUTH_ADDMANAGER = "02";
+const std::string OPAUTH_DELMANAGER = "03";
 
 // Auth data
 const std::string OPAUTH_MAGIC = "6c796e6b";
