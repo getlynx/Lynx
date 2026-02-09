@@ -49,6 +49,8 @@ using node::NodeContext;
 using node::RegenerateCommitments;
 using node::UpdateTime;
 
+extern bool gblnDisableStaking;
+
 /**
  * Return average network hashes per second based on the last 'lookup' blocks,
  * or from the last difficulty change if 'lookup' is nonpositive.
@@ -1101,7 +1103,8 @@ static RPCHelpMan setstaking()
                 "\nReturns an object that can be toggled to enable or disable staking.\n"
                 "\n\n",
                 {
-                    {"status", RPCArg::Type::BOOL, RPCArg::Optional::NO, "The status of staking thread."}
+                    // {"status", RPCArg::Type::BOOL, RPCArg::Optional::NO, "The status of staking thread."}
+                    {"status", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "The status of staking thread."}
                 },
                 RPCResult{
                     RPCResult::Type::STR, "", "True or false"},
@@ -1111,6 +1114,8 @@ static RPCHelpMan setstaking()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
+
+    /*
     bool action = request.params[0].isNull() ? false : request.params[0].get_bool();
     if (action) {
         stakeman_request_start();
@@ -1118,6 +1123,31 @@ static RPCHelpMan setstaking()
         stakeman_request_stop();
     }
     return action ? std::string("true") : std::string("false");
+    */
+
+if (request.params[0].isNull()) {
+
+    return gblnDisableStaking ? std::string("false") : std::string("true");
+
+} else {
+
+    bool action = request.params[0].get_bool();
+    
+    if (action) {
+
+gblnDisableStaking = false;  
+
+        stakeman_request_start();
+    } else {
+
+gblnDisableStaking = true;  
+
+        stakeman_request_stop();
+    }
+    return action ? std::string("true") : std::string("false");
+
+}
+
 },
     };
 }
