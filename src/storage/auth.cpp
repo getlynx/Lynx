@@ -1283,6 +1283,7 @@ LogPrint (BCLog::STORAGE, "u32Cutoff %d \n", u32Cutoff);
 
     // Scan most recent blockspan blocks
     for (uint32_t height = u32Cutoff; height < intTipHeight; height++) {
+    // for (uint32_t height = u32Cutoff; height <= intTipHeight; height++) {
 
 gu32BlockHeight = height;        
 
