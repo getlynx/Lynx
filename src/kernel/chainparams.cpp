@@ -244,9 +244,9 @@ LogPrintf ("CURRENT_CHAIN chainparams.cpp %s \n", CURRENT_CHAIN);
 
 // if (std::string(CURRENT_CHAIN) != "lynx") {
 
-    spec = LoadChainSpec(std::string("/root/.") + CURRENT_CHAIN + "/chainspecs.txt", CURRENT_CHAIN);
+    // spec = LoadChainSpec(std::string("/root/.") + CURRENT_CHAIN + "/chainspecs.txt", CURRENT_CHAIN);
 
-    LogPrintf ("spec.nDefaultPort %d \n", spec.nDefaultPort[CURRENT_CHAIN]);
+    // LogPrintf ("spec.nDefaultPort %d \n", spec.nDefaultPort[CURRENT_CHAIN]);
 
 spec.nDefaultPort["lynx"] = 22566;
 
