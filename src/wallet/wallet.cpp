@@ -1071,6 +1071,9 @@ CWalletTx* CWallet::AddToWallet(CTransactionRef tx, const TxState& state, const 
         }
     }
 
+    // Mark inactive coinbase/coinstake transactions and their descendants as abandoned
+    //if ((wtx.IsCoinBase() || wtx.IsCoinStake()) && wtx.isInactive()) {
+
     // Mark inactive coinbase transactions and their descendants as abandoned
     if (wtx.IsCoinBase() && wtx.isInactive()) {
         std::vector<CWalletTx*> txs{&wtx};
@@ -1753,11 +1756,12 @@ bool CWallet::CanGetAddresses(bool internal) const
 
 void CWallet::AbandonOrphanedCoinstakes()
 {
+    //LOCK(cs_wallet);
     for (std::pair<const uint256, CWalletTx>& item : mapWallet) {
         const uint256& wtxid = item.first;
         CWalletTx& wtx = item.second;
         assert(wtx.GetHash() == wtxid);
-    if (GetTxDepthInMainChain(wtx) == 0 && !wtx.isAbandoned() && wtx.IsCoinStake()) {
+        if (GetTxDepthInMainChain(wtx) == 0 && !wtx.isAbandoned() && wtx.IsCoinStake()) {
             LogPrint(BCLog::WALLETDB, "Abandoning coinstake wtx %s\n", wtx.GetHash().ToString());
             if (!AbandonTransaction(wtxid)) {
                 LogPrint(BCLog::WALLETDB, "Failed to abandon coinstake tx %s\n", wtx.GetHash().ToString());
