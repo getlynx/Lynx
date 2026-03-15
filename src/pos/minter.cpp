@@ -401,7 +401,7 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
         LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Beginning wallet iteration (wallets [%d] to [%d])\n", nThreadID, nStart, nEnd-1);
         for (size_t i = nStart; i < nEnd; ++i) {
 
-CBlockIndex* pindexPrev = chainman->ActiveChain().Tip();
+// CBlockIndex* pindexPrev = chainman->ActiveChain().Tip();
 
             auto pwallet = vpwallets[i];
             LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Processing wallet [%d]: %s\n", nThreadID, i, pwallet->GetName());
@@ -473,10 +473,10 @@ CBlockIndex* pindexPrev = chainman->ActiveChain().Tip();
             if (SignBlock(*pblock, chainman->ActiveChain().Tip(), pwallet.get(), nBestHeight + 1, nSearchTime, chainman->ActiveChainstate())) {
                 LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Block signed successfully, checking stake validity\n", nThreadID);
 
-if (pindexPrev != chainman->ActiveChain().Tip()) {
-    LogPrint(BCLog::POS, "tip changed \n");
-    continue;
-}
+// if (pindexPrev != chainman->ActiveChain().Tip()) {
+    // LogPrint(BCLog::POS, "tip changed \n");
+    // continue;
+// }
 
                 if (CheckStake(*chainman, pblock)) {
                     nTimeLastStake = GetTime();
