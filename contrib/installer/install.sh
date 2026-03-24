@@ -5,6 +5,16 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 set -euo pipefail
 
+# Parse command-line arguments
+chain_name=""
+update_mode=""
+for arg in "$@"; do
+    case "$arg" in
+        --chain=*) chain_name="${arg#--chain=}" ;;
+        update)    update_mode="update" ;;
+    esac
+done
+
 ################################################################################
 # LYNX NODE BUILDER SCRIPT
 ################################################################################
@@ -132,6 +142,8 @@ set -euo pipefail
 #   - MAINTENANCE: Runs every 12 minutes via systemd timer
 #   - SYNC MONITORING: Checks blockchain sync status and manages daemon
 #   - UPDATE MODE: Updates Lynx to latest release (use 'update' argument)
+#   - CHAIN FILTER: Specify --chain=<name> to download binaries for a specific
+#     chain. If no binary matches, the script exits gracefully.
 #
 # PERFORMANCE OPTIMIZATIONS:
 #   - Stakes counting: Uses debug.log parsing with timestamp filtering
@@ -1342,11 +1354,23 @@ getCompatibleBinary() {
     # Detect architecture
     ARCH="$(uname -m)"
     log "Searching for compatible binary for $os_name $os_version ($ARCH)..."
+
+    # Pre-filter release assets by chain name if specified
+    if [ -n "$chain_name" ]; then
+        log "Filtering binaries for chain: $chain_name"
+        filtered_urls=$(echo "$release_info" | grep "browser_download_url" | grep -i "$chain_name" || true)
+        if [ -z "$filtered_urls" ]; then
+            log "No binary found for chain '$chain_name'. This chain may not have been built yet. For assistance, please visit our Discord server: https://discord.gg/6jUaNeV2Uy"
+            return 1
+        fi
+    else
+        filtered_urls=$(echo "$release_info" | grep "browser_download_url")
+    fi
+
     # Select the correct asset based on OS family, version, and architecture
     if [ "$os_family" = "debian" ]; then
         if [[ "$ARCH" == "aarch64" || "$ARCH" == arm* ]]; then
-            download_url=$(echo "$release_info" | \
-                grep "browser_download_url" | \
+            download_url=$(echo "$filtered_urls" | \
                 grep -iE "debian|ubuntu|ol" | \
                 grep -i "$os_version" | \
                 grep -iE "\\.zip" | \
@@ -1354,8 +1378,7 @@ getCompatibleBinary() {
                 head -n 1 | \
                 cut -d '"' -f 4)
         else
-            download_url=$(echo "$release_info" | \
-                grep "browser_download_url" | \
+            download_url=$(echo "$filtered_urls" | \
                 grep -iE "debian|ubuntu|ol" | \
                 grep -i "$os_version" | \
                 grep -iE "\\.zip" | \
@@ -1365,8 +1388,7 @@ getCompatibleBinary() {
         fi
     elif [ "$os_family" = "redhat" ]; then
         if [[ "$ARCH" == "aarch64" || "$ARCH" == arm* ]]; then
-            download_url=$(echo "$release_info" | \
-                grep "browser_download_url" | \
+            download_url=$(echo "$filtered_urls" | \
                 grep -iE "rhel|centos|fedora|redhat|rocky|almalinux|ol" | \
                 grep -i "$os_major_version" | \
                 grep -iE "\\.zip" | \
@@ -1374,8 +1396,7 @@ getCompatibleBinary() {
                 head -n 1 | \
                 cut -d '"' -f 4)
         else
-            download_url=$(echo "$release_info" | \
-                grep "browser_download_url" | \
+            download_url=$(echo "$filtered_urls" | \
                 grep -iE "rhel|centos|fedora|redhat|rocky|almalinux|ol" | \
                 grep -i "$os_major_version" | \
                 grep -iE "\\.zip" | \
@@ -1387,6 +1408,10 @@ getCompatibleBinary() {
         log "Unsupported OS family for binary selection: $os_family"
     fi
     if [ -z "$download_url" ]; then
+        if [ -n "$chain_name" ]; then
+            log "No binary found for chain '$chain_name' on $os_name $os_version ($ARCH). This chain may not have been built yet. For assistance, please visit our Discord server: https://discord.gg/6jUaNeV2Uy"
+            return 1
+        fi
         log "No suitable binary found for $os_name $os_version ($ARCH). Please check GitHub releases manually."
     fi
     local filename=$(basename "$download_url")
@@ -1458,7 +1483,7 @@ startLynx() {
         log "Attempting to reinstall Lynx binary..."
 
         # Download the most recent compatible Lynx binary from GitHub Releases
-        getCompatibleBinary
+        getCompatibleBinary || true
 
         if [ ! -f "/usr/local/bin/lynxd" ]; then
             log "ERROR: Lynx binary installation failed. Cannot start service."
@@ -1618,7 +1643,7 @@ EOF
 }
 
 # If called with 'update', run only the update process
-if [[ "${1:-}" == "update" ]]; then
+if [[ "$update_mode" == "update" ]]; then
 
     # Check if running as root
     isRootUser
@@ -1633,7 +1658,10 @@ if [[ "${1:-}" == "update" ]]; then
     setTimeZone
 
     # Download the most recent compatible Lynx binary from GitHub Releases
-    getCompatibleBinary
+    if ! getCompatibleBinary; then
+        log "Binary download failed. Exiting."
+        exit 1
+    fi
 
     exit 0
 fi
@@ -1719,7 +1747,10 @@ createFirewallServiceUnit
 createAuthorizedKeyDefaults
 
 # Download the most recent compatible Lynx binary from GitHub Releases
-getCompatibleBinary
+if ! getCompatibleBinary; then
+    log "Binary download failed. Cannot proceed with installation."
+    exit 1
+fi
 
 # Create lynx.service systemd unit file
 createLynxServiceUnit
