@@ -15,6 +15,23 @@ for arg in "$@"; do
     esac
 done
 
+# Derive chain-specific names (default to lynx if no chain specified)
+effective_chain_raw="${chain_name:-lynx}"
+chain_lower=$(echo "$effective_chain_raw" | tr '[:upper:]' '[:lower:]')
+effective_chain="$(echo "$chain_lower" | sed 's/./\U&/')"
+daemon_name="${chain_lower}d"
+cli_name="${chain_lower}-cli"
+tx_name="${chain_lower}-tx"
+service_name="${chain_lower}.service"
+conf_name="${chain_lower}.conf"
+
+# Set assumevalid flag only for the default Lynx chain
+if [ "$chain_lower" = "lynx" ]; then
+    assumevalid_flag=" -assumevalid=485bea987c62039d365a9458b6df2e3ef679054f2bd6e016877f783652912cfb"
+else
+    assumevalid_flag=""
+fi
+
 ################################################################################
 # LYNX NODE BUILDER SCRIPT
 ################################################################################
@@ -295,22 +312,21 @@ packageInstallAndUpdate() {
 }
 
 # Set the working directory variable for use throughout the script
-WorkingDirectory=/var/lib/lynx
+WorkingDirectory=/var/lib/${chain_lower}
 
 # Only show wait message if this is a fresh installation
 if [ ! -d "$WorkingDirectory" ]; then
     echo "Please wait 10 seconds while the script runs..."
 fi
 
-# Create the Lynx data directory with proper permissions
+# Create the data directory with proper permissions
 mkdir -p $WorkingDirectory
 chown root:root $WorkingDirectory
 chmod 755 $WorkingDirectory
 
 # Create symbolic link for backward compatibility with legacy configurations
-# This ensures that any scripts or tools expecting ~/.lynx will still work
-if [ ! -e /root/.lynx ]; then
-    ln -sf $WorkingDirectory /root/.lynx
+if [ ! -e /root/.${chain_lower} ]; then
+    ln -sf $WorkingDirectory /root/.${chain_lower}
 fi
 
 # Get system uptime in seconds for conditional logging
@@ -320,7 +336,8 @@ log_threshold_seconds=21600
 
 # Create a nicely formatted command list bashrc file
 createCommandListConsole() {
-    cat <<'EOF'
+    local chain_upper=$(echo "${effective_chain}" | tr '[:lower:]' '[:upper:]')
+    cat <<'CMDEOF' | sed "s|WorkingDirectory=/var/lib/lynx|WorkingDirectory=${WorkingDirectory}|g; s|lynx-cli|${cli_name}|g; s|lynx\.conf|${conf_name}|g" | sed "/http/!{ s|LYNX|${chain_upper}|g; s|Lynx|${effective_chain}|g; }"
 # Function to display Lynx aliases in a nicely formatted MOTD
 executeHelpCommand() {
     echo ""
@@ -428,13 +445,13 @@ executeHelpCommand() {
     echo "    🔄 Immature transactions (< 31 confirmations): $immature_utxos"
     echo "    💰 Current wallet balance: $wallet_balance"
     echo ""
-    echo "  LYNX COMMANDS:"
-    echo "    lyl [lines] [-f]       - View Lynx debug log (default 30)"
-    echo "    lyv                    - Show Lynx version"
-    echo "    lyr [-d]               - Restart Lynx (-d to purge debug)"
-    echo "    lyc [-e]               - View/edit Lynx conf (-e to edit)"
+    echo "  DAEMON COMMANDS:"
+    echo "    lyl [lines] [-f]       - View daemon debug log (default 30)"
+    echo "    lyv                    - Show daemon version"
+    echo "    lyr [-d]               - Restart daemon (-d to purge debug)"
+    echo "    lyc [-e]               - View/edit daemon conf (-e to edit)"
     echo "    gbi                    - Get blockchain info"
-    echo "    hel [keyword]          - Show Lynx help (keyword search)"
+    echo "    hel [keyword]          - Show daemon help (keyword search)"
     echo ""
     echo "  WALLET COMMANDS:"
     echo "    gba                    - Get wallet balances"
@@ -447,11 +464,11 @@ executeHelpCommand() {
     echo "    pri                    - Show wallet value in USD"
     echo ""
     echo "  SYSTEM COMMANDS:"
-    echo "    lss                    - Check Lynx service status"
+    echo "    lss                    - Check systemd service status"
     echo "    jou [lines] [-f]       - View install logs (default 30)"
-    echo "    upd                    - Update Lynx to latest release"
+    echo "    upd                    - Update daemon to latest release"
     echo "    usp [port]             - Change SSH port"
-    echo "    wdi                    - Change to Lynx working directory"
+    echo "    wdi                    - Change to daemon working directory"
     echo "    ipt                    - List iptables rules"
     echo ""
     echo "  USEFUL COMMANDS:"
@@ -729,7 +746,7 @@ update_ssh_port() {
         echo "Reboot cancelled. You can manually reboot later with: reboot"
     fi
 }
-EOF
+CMDEOF
 }
 
 # Add useful aliases and MOTD to /root/.bashrc
@@ -753,28 +770,28 @@ case \$- in
     *) return ;;
 esac
 #
-# This alias is a native Lynx command for getting wallet balances. Also provides a shorter undocumented version.
-gba() { lynx-cli getbalances; }
+# This alias is a native $effective_chain command for getting wallet balances. Also provides a shorter undocumented version.
+gba() { $cli_name getbalances; }
 gb() { gba; }
 #
-# This alias is a native Lynx command for generating a new addresses. Also provides a shorter undocumented version.
-gna() { lynx-cli getnewaddress; }
+# This alias is a native command for getting a new address. Also provides a shorter undocumented version.
+gna() { $cli_name getnewaddress; }
 gn() { gna; }
 #
-# This alias is a custom alias for changing to the Lynx working directory. Also provides a shorter undocumented version.
+# This alias is a custom alias for changing to the working directory. Also provides a shorter undocumented version.
 wdi() { cd $WorkingDirectory && ls -lh; }
 wd() { wdi; }
 #
-# This alias is a native Lynx command to list funded addresses in the current wallet. Also provides a shorter undocumented version.
-lag() { lynx-cli listaddressgroupings; }
+# This alias is a native command to list funded addresses in the current wallet. Also provides a shorter undocumented version.
+lag() { $cli_name listaddressgroupings; }
 la() { lag; }
 #
-# This alias is a native Lynx command to show the Lynx version. Also provides a shorter undocumented version.
-lyv() { lynx-cli -version; }
+# This alias is a native command to show the version. Also provides a shorter undocumented version.
+lyv() { $cli_name -version; }
 lv() { lyv; }
 #
-# This alias is a native Lynx command to get current blockchain info. Also provides a shorter undocumented version.
-gbi() { lynx-cli getblockchaininfo; }
+# This alias is a native command to get current blockchain info. Also provides a shorter undocumented version.
+gbi() { $cli_name getblockchaininfo; }
 gi() { gbi; }
 #
 # This alias is a custom command to view current iptables rules. The fire alias is an undocumented version that allows you to edit the firewall script.
@@ -784,27 +801,27 @@ fire() { nano /usr/local/bin/firewall.sh && echo "Applying firewall changes..." 
 # This alias is a custom command to update the SSH port in both the sshd and iptables rules. Prompts to reboot the device to apply the changes.
 usp() { update_ssh_port "\$1"; }
 #
-# This alias is a custom command to view the Lynx debug log. The -f flag allows you to follow the log in real-time. The number of lines can be specified with the first argument. Also provides a shorter undocumented version.
+# This alias is a custom command to view the $effective_chain debug log. The -f flag allows you to follow the log in real-time. The number of lines can be specified with the first argument. Also provides a shorter undocumented version.
 lyl() { if [ "\$1" = "-f" ]; then tail -f "$WorkingDirectory/debug.log"; elif [ "\$2" = "-f" ]; then tail -n \${1:-30} -f "$WorkingDirectory/debug.log"; else tail -n \${1:-30} "$WorkingDirectory/debug.log"; fi; }
 #
-# This alias is a custom command to view the Lynx config file. The -e flag allows you to edit the config file. Also provides a shorter undocumented version.
-lyc() { if [ "\$1" = "-e" ]; then nano "$WorkingDirectory/lynx.conf" && read -p "Restart Lynx daemon to apply config changes? (y/N): " confirm && if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then lyr; else echo "Lynx daemon not restarted."; fi; else cat "$WorkingDirectory/lynx.conf"; fi; }
+# This alias is a custom command to view the $effective_chain config file. The -e flag allows you to edit the config file. Also provides a shorter undocumented version.
+lyc() { if [ "\$1" = "-e" ]; then nano "$WorkingDirectory/$conf_name" && read -p "Restart daemon to apply config changes? (y/N): " confirm && if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then lyr; else echo "Daemon not restarted."; fi; else cat "$WorkingDirectory/$conf_name"; fi; }
 lc() { lyc "\$@"; }
 #
-# This alias is a custom command to restart the Lynx daemon. The -d flag allows you to purge the debug log. Also provides a shorter undocumented version.
-lyr() { if [ "\$1" = "-d" ]; then echo "If you delete the debug log, the Staking results in Node Status will reset."; read -p "Do you want to continue? (y/N): " confirm; if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then systemctl stop lynx && rm -rf "$WorkingDirectory/debug.log" && systemctl start lynx; else echo "Operation cancelled."; fi; else systemctl restart lynx; fi; }
+# This alias is a custom command to restart the $effective_chain daemon. The -d flag allows you to purge the debug log. Also provides a shorter undocumented version.
+lyr() { if [ "\$1" = "-d" ]; then echo "If you delete the debug log, the Staking results in Node Status will reset."; read -p "Do you want to continue? (y/N): " confirm; if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then systemctl stop $chain_lower && rm -rf "$WorkingDirectory/debug.log" && systemctl start $chain_lower; else echo "Operation cancelled."; fi; else systemctl restart $chain_lower; fi; }
 lr() { lyr "\$@"; }
 #
-# This alias is a native Lynx command to send funds to an address. Also provides a shorter undocumented version.
-sta() { lynx-cli sendtoaddress "\$1" "\$2"; }
+# This alias is a native $effective_chain command to send funds to an address. Also provides a shorter undocumented version.
+sta() { $cli_name sendtoaddress "\$1" "\$2"; }
 sa() { sta "\$@"; }
 #
 # This alias is a custom command to sweep all funds to an address. It will empty the wallet of all coins and dust and the recipient pays the transaction fee. A great way to move funds between wallets in full. Also provides a shorter undocumented version.
-swe() { lynx-cli sendtoaddress "\$1" "\$(lynx-cli getbalance)" "" "" true; }
+swe() { $cli_name sendtoaddress "\$1" "\$($cli_name getbalance)" "" "" true; }
 sw() { swe "\$@"; }
 #
-# This undocumented alias is a native Lynx command to get local node Lynx storage capacity info.
-ca() { lynx-cli capacity; }
+# This undocumented alias is a native command to get local node storage capacity info.
+ca() { $cli_name capacity; }
 #
 # This alias is a custom command to show the help message.
 h() { executeHelpCommand; }
@@ -812,20 +829,20 @@ h() { executeHelpCommand; }
 # This alias is a custom command to show wallet value and LYNX price information.
 pri() { executePriceCommand; }
 #
-# This alias is a native Lynx command to backup the Lynx wallet.
+# This alias is a native $effective_chain command to backup the $effective_chain wallet.
 bac() { /usr/local/bin/backup.sh; }
-lba() { cd /var/lib/lynx-backup && ls -lh; }
+lba() { cd /var/lib/${chain_lower}-backup && ls -lh; }
 #
 # This alias is a custom command to view the install logs. The -f flag allows you to follow the logs in real-time. The number of lines can be specified with the first argument. Also provides a shorter undocumented version.
 jou() { if [ "\$1" = "-f" ]; then journalctl -t install.sh -f; elif [ "\$2" = "-f" ]; then journalctl -t install.sh -n \${1:-30} -f; else journalctl -t install.sh -n \${1:-30}; fi; }
 jo() { jou "\$@"; }
 #
-# This alias is a native Lynx command to show help for a keyword. Also provides a shorter undocumented version.
-hel() { if [ -n "\$1" ]; then lynx-cli help | grep -i "\$1"; else lynx-cli help; fi; }
+# This alias is a native $effective_chain command to show help for a keyword. Also provides a shorter undocumented version.
+hel() { if [ -n "\$1" ]; then $cli_name help | grep -i "\$1"; else $cli_name help; fi; }
 he() { hel "\$@"; }
 #
-# This alias is a custom command to show the status of the Lynx daemon. A command to show the status of the nginx daemon is also provided, if installed.
-lss() { systemctl status lynx; }
+# This alias is a custom command to show the status of the $effective_chain service. A command to show the status of the nginx daemon is also provided, if installed.
+lss() { systemctl status $chain_lower; }
 nss() { systemctl status nginx; }
 #
 # This undocumented alias is a custom command to edit the SSH keys file.
@@ -835,7 +852,7 @@ shh() { nano /root/.ssh/authorized_keys && read -p "Restart SSH daemon to apply 
 pas() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "\$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "\$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "\$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "\$ssh_config"; echo "\$new_setting" >> "\$ssh_config"; if [ "\$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; } # Toggle password authentication in SSH config
 #
 # This alias is a custom command to update the install script. It will only run the update processes from the /usr/local/bin/install.sh file.
-upd() { /usr/local/bin/install.sh update; }
+upd() { /usr/local/bin/install.sh update${chain_name:+ --chain=$chain_name}; }
 #
 $(createCommandListConsole)
 #
@@ -875,7 +892,7 @@ Documentation=https://getlynx.io/
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/install.sh
+ExecStart=/usr/local/bin/install.sh${chain_name:+ --chain=$chain_name}
 StandardOutput=journal
 StandardError=journal
 Environment=HOME=/root
@@ -942,10 +959,10 @@ EOF
             log "Not a RHEL-based system - skipping"
         fi
 
-        log "Installation of Lynx has begun. The device will reboot in 5 seconds. Please wait..."
+        log "Installation of ${effective_chain} has begun. The device will reboot in 5 seconds. Please wait..."
         echo ""
         echo ""
-        echo "Installation of Lynx has begun. The device will reboot in 5 seconds. Please wait..."
+        echo "Installation of ${effective_chain} has begun. The device will reboot in 5 seconds. Please wait..."
         echo ""
         echo ""
         sleep 5
@@ -969,19 +986,19 @@ EOF
 
 # Create wallet backup service and timer
 createWalletBackupServiceUnit() {
-    log "Creating /etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer."
+    log "Creating /etc/systemd/system/${chain_lower}-wallet-backup.service and ${chain_lower}-wallet-backup.timer."
 
     # Stop and disable the timer before recreating it to avoid conflicts
-    systemctl stop lynx-wallet-backup.timer 2>/dev/null || true
-    systemctl disable lynx-wallet-backup.timer 2>/dev/null || true
+    systemctl stop ${chain_lower}-wallet-backup.timer 2>/dev/null || true
+    systemctl disable ${chain_lower}-wallet-backup.timer 2>/dev/null || true
 
     # Create backup directory
-    mkdir -p /var/lib/lynx-backup
-    chown root:root /var/lib/lynx-backup
-    chmod 700 /var/lib/lynx-backup
+    mkdir -p /var/lib/${chain_lower}-backup
+    chown root:root /var/lib/${chain_lower}-backup
+    chmod 700 /var/lib/${chain_lower}-backup
 
     # Create the backup script
-    cat <<'EOF' > /usr/local/bin/backup.sh
+    cat <<'BACKUPEOF' | sed "s|/var/lib/lynx-backup|/var/lib/${chain_lower}-backup|g; s|/var/lib/lynx|${WorkingDirectory}|g; s|lynx-cli|${cli_name}|g; s|lynx\.conf|${conf_name}|g; s|--quiet lynx;|--quiet ${chain_lower};|g; s|Lynx|${effective_chain}|g" > /usr/local/bin/backup.sh
 #!/bin/bash
 
 # Lynx Wallet Backup Script
@@ -1073,17 +1090,17 @@ else
     log "Failed to create wallet backup"
     exit 1
 fi
-EOF
+BACKUPEOF
 
     # Make the backup script executable
     chmod +x /usr/local/bin/backup.sh
     chown root:root /usr/local/bin/backup.sh
 
-            cat <<EOF > /etc/systemd/system/lynx-wallet-backup.service
+            cat <<EOF > /etc/systemd/system/${chain_lower}-wallet-backup.service
 [Unit]
-Description=Backup Lynx wallet every 60 minutes
+Description=Backup ${effective_chain} wallet every 60 minutes
 Documentation=https://getlynx.io/
-After=lynx.service
+After=${service_name}
 
 [Service]
 Type=oneshot
@@ -1094,29 +1111,29 @@ Environment=HOME=$WorkingDirectory
 WorkingDirectory=$WorkingDirectory
 User=root
 Group=root
-# Ensure the service can access lynx-cli and the wallet
+# Ensure the service can access ${cli_name} and the wallet
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 EOF
 
-         cat <<EOF > /etc/systemd/system/lynx-wallet-backup.timer
+         cat <<EOF > /etc/systemd/system/${chain_lower}-wallet-backup.timer
 [Unit]
-Description=Backup Lynx wallet every 60 minutes
+Description=Backup ${effective_chain} wallet every 60 minutes
 Documentation=https://getlynx.io/
 
 [Timer]
 OnBootSec=15min
 OnUnitActiveSec=60min
 AccuracySec=5m
-Unit=lynx-wallet-backup.service
+Unit=${chain_lower}-wallet-backup.service
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 EOF
      systemctl daemon-reload
-     systemctl enable lynx-wallet-backup.timer
-     systemctl start lynx-wallet-backup.timer
-     log "/etc/systemd/system/lynx-wallet-backup.service and lynx-wallet-backup.timer created, enabled, and started."
+     systemctl enable ${chain_lower}-wallet-backup.timer
+     systemctl start ${chain_lower}-wallet-backup.timer
+     log "/etc/systemd/system/${chain_lower}-wallet-backup.service and ${chain_lower}-wallet-backup.timer created, enabled, and started."
 }
 
 # Check and update swap to at least 4GB if less than 3GB
@@ -1213,12 +1230,12 @@ expandSwap() {
 }
 
 # Detect OS details for binary selection
-# Sets os_name, os_version, os_major_version for use in Lynx binary selection
-# This function is called before downloading or updating Lynx
+# Sets os_name, os_version, os_major_version for use in binary selection
+# This function is called before downloading or updating
 # It sources /etc/os-release and parses the relevant fields
 # Example: os_name=debian, os_version=11, os_major_version=11
 # Combined function to detect OS family and detailed information
-# This helps select the correct Lynx release asset for the system
+# This helps select the correct release asset for the system
 getSystemDetails() {
     log "Detecting OS information..."
 
@@ -1289,12 +1306,17 @@ configureLocale() {
             fi
         fi
 
-        # Check if locale is already generated
-        if locale -a 2>/dev/null | grep -q "^$preferredLocale$"; then
+        # Generate the locale — always attempt if not available
+        if locale -a 2>/dev/null | grep -q "^en_US.utf8$"; then
             log "Locale $preferredLocale already generated. Skipping generation."
         else
             log "Generating locale $preferredLocale..."
-            locale-gen "$preferredLocale" >/dev/null 2>&1 || log "Failed to generate locale"
+            locale-gen "$preferredLocale" 2>&1 | systemd-cat -t install.sh || true
+            # Fallback: install locales-all if locale-gen didn't produce the locale
+            if ! locale -a 2>/dev/null | grep -q "^en_US.utf8$"; then
+                log "locale-gen failed, installing locales-all as fallback..."
+                apt-get install -y locales-all >/dev/null 2>&1 || log "Failed to install locales-all"
+            fi
         fi
 
         # Check if system-wide locale is already set
@@ -1334,19 +1356,19 @@ configureLocale() {
     log "Locale configuration completed"
 }
 
-# Download the most recent compatible Lynx binary from GitHub Releases
+# Download the most recent compatible binary from GitHub Releases
 getCompatibleBinary() {
 
     # Detect OS details for asset selection
     getSystemDetails
 
-    # Gracefully stop Lynx if running
-    if systemctl is-active --quiet lynx.service; then
-        log "Stopping Lynx service..."
-        systemctl stop lynx.service || log "Failed to stop Lynx service. Continuing with update."
+    # Gracefully stop daemon if running
+    if systemctl is-active --quiet $service_name; then
+        log "Stopping $service_name..."
+        systemctl stop $service_name || log "Failed to stop $service_name. Continuing with update."
     fi
     # Download latest release info from GitHub
-    log "Querying GitHub API for latest Lynx release..."
+    log "Querying GitHub API for latest ${effective_chain} release..."
     release_info=$(curl -s https://api.github.com/repos/getlynx/Lynx/releases/latest)
     if [ $? -ne 0 ] || [ -z "$release_info" ]; then
         log "Failed to fetch release information from GitHub API"
@@ -1413,32 +1435,37 @@ getCompatibleBinary() {
             return 1
         fi
         log "No suitable binary found for $os_name $os_version ($ARCH). Please check GitHub releases manually."
+        return 1
     fi
     local filename=$(basename "$download_url")
     log "Downloading $filename to /root..."
     wget -q -O "/root/$filename" "$download_url" || log "Failed to download $filename"
-    # Extract only the Lynx binaries to /usr/local/bin
+    # Extract only the binaries to /usr/local/bin
     log "Extracting binaries to /usr/local/bin..."
-    unzip -o "/root/$filename" lynxd lynx-cli lynx-tx -d /usr/local/bin >/dev/null 2>&1 || log "Failed to extract binaries"
+    unzip -o "/root/$filename" $daemon_name $cli_name $tx_name -d /usr/local/bin >/dev/null 2>&1 || log "Failed to extract binaries"
     # Clean up the downloaded archive
     log "Cleaning up downloaded archive..."
     rm -f "/root/$filename"
     # Set correct permissions on the binaries
-    log "Setting permissions for Lynx binaries..."
-    chmod 755 /usr/local/bin/lynxd /usr/local/bin/lynx-cli /usr/local/bin/lynx-tx || log "Failed to set permissions"
-    # Restart the Lynx service
-    log "Restarting Lynx service..."
-    systemctl restart lynx.service || log "Failed to restart Lynx service"
-    log "Lynx has been updated to the latest release."
+    log "Setting permissions for binaries..."
+    chmod 755 /usr/local/bin/$daemon_name /usr/local/bin/$cli_name /usr/local/bin/$tx_name || log "Failed to set permissions"
+    # Restart the service if it exists
+    if [ -f "/etc/systemd/system/$service_name" ]; then
+        log "Restarting $service_name..."
+        systemctl restart $service_name || log "Failed to restart $service_name"
+    else
+        log "Service $service_name not yet created. Skipping restart."
+    fi
+    log "${effective_chain} has been updated to the latest release."
 }
 
-# Create lynx.service systemd unit file
+# Create systemd unit file for the chain daemon
 createLynxServiceUnit() {
-    if [ ! -f /etc/systemd/system/lynx.service ]; then
-        log "Creating /etc/systemd/system/lynx.service systemd unit file."
-        cat <<EOF > /etc/systemd/system/lynx.service
+    if [ ! -f /etc/systemd/system/$service_name ]; then
+        log "Creating /etc/systemd/system/$service_name systemd unit file."
+        cat <<EOF > /etc/systemd/system/$service_name
 [Unit]
-Description=Lynx Cryptocurrency Daemon
+Description=${effective_chain} Cryptocurrency Daemon
 Documentation=https://getlynx.io/
 After=network.target network-online.target
 Wants=network-online.target
@@ -1447,8 +1474,8 @@ Wants=network-online.target
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
-ExecStart=/usr/local/bin/lynxd -datadir=$WorkingDirectory -dbcache=2048 -assumevalid=485bea987c62039d365a9458b6df2e3ef679054f2bd6e016877f783652912cfb
-ExecStop=/usr/local/bin/lynx-cli -datadir=$WorkingDirectory stop
+ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory -dbcache=2048${assumevalid_flag}
+ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory stop
 Restart=on-failure
 RestartSec=30
 User=root
@@ -1466,43 +1493,43 @@ ProtectHome=true
 WantedBy=multi-user.target
 EOF
         systemctl daemon-reload
-        log "/etc/systemd/system/lynx.service created and systemd reloaded."
+        log "/etc/systemd/system/$service_name created and systemd reloaded."
     else
         # Only log if system has been running for 6 hours or less
         if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-            log "/etc/systemd/system/lynx.service already exists. Skipping creation."
+            log "/etc/systemd/system/$service_name already exists. Skipping creation."
         fi
     fi
 }
 
-# Check if lynx service is running, and start if not
+# Check if daemon service is running, and start if not
 startLynx() {
     # First verify the binary exists
-    if [ ! -f "/usr/local/bin/lynxd" ]; then
-        log "ERROR: Cannot start Lynx service - lynxd binary not found at /usr/local/bin/lynxd"
-        log "Attempting to reinstall Lynx binary..."
+    if [ ! -f "/usr/local/bin/$daemon_name" ]; then
+        log "ERROR: Cannot start service - $daemon_name binary not found at /usr/local/bin/$daemon_name"
+        log "Attempting to reinstall binary..."
 
-        # Download the most recent compatible Lynx binary from GitHub Releases
+        # Download the most recent compatible binary from GitHub Releases
         getCompatibleBinary || true
 
-        if [ ! -f "/usr/local/bin/lynxd" ]; then
-            log "ERROR: Lynx binary installation failed. Cannot start service."
+        if [ ! -f "/usr/local/bin/$daemon_name" ]; then
+            log "ERROR: Binary installation failed. Cannot start service."
             return 1
         fi
     fi
 
-    if pgrep -x "lynxd" >/dev/null; then
+    if pgrep -x "$daemon_name" >/dev/null; then
         # Only log if system has been running for 6 hours or less
         if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-            log "Lynx daemon is already running."
+            log "${effective_chain} daemon is already running."
         fi
         return
     else
-        log "Lynx daemon is not running. Attempting to start."
-        systemctl enable lynx.service
+        log "${effective_chain} daemon is not running. Attempting to start."
+        systemctl enable $service_name
         sleep 5
-        systemctl start lynx.service
-        log "Lynx daemon started."
+        systemctl start $service_name
+        log "${effective_chain} daemon started."
         if [ -f /etc/rc.local ]; then
             log "Disabling rc.local to prevent future install.sh downloads"
             chmod -x /etc/rc.local
@@ -1515,7 +1542,7 @@ startLynx() {
 createFirewallDefaults() {
 
     log "Creating firewall script at /usr/local/bin/firewall.sh..."
-    cat <<'EOF' > /usr/local/bin/firewall.sh
+    cat <<'FWEOF' | sed "s|Lynx|${effective_chain}|g" > /usr/local/bin/firewall.sh
 #!/bin/bash
 
 # Lynx Firewall Configuration Script
@@ -1545,7 +1572,7 @@ iptables -A INPUT -j DROP
 journalctl --vacuum-time=7d >/dev/null 2>&1
 
 log "Firewall rules applied at $(date)"
-EOF
+FWEOF
     chmod +x /usr/local/bin/firewall.sh
 }
 
@@ -1556,7 +1583,7 @@ createFirewallServiceUnit() {
     # Create the service unit
     cat <<EOF > /etc/systemd/system/firewall-restore.service
 [Unit]
-Description=Restore Lynx firewall rules
+Description=Restore ${effective_chain} firewall rules
 After=network.target
 
 [Service]
@@ -1570,7 +1597,7 @@ EOF
     log "Creating firewall restoration timer that triggers every 6 hours..."
     cat <<EOF > /etc/systemd/system/firewall-restore.timer
 [Unit]
-Description=Restore Lynx firewall rules every 6 hours
+Description=Restore ${effective_chain} firewall rules every 6 hours
 
 [Timer]
 OnBootSec=10sec
@@ -1657,7 +1684,7 @@ if [[ "$update_mode" == "update" ]]; then
     # Set the timezone to America/New_York
     setTimeZone
 
-    # Download the most recent compatible Lynx binary from GitHub Releases
+    # Download the most recent compatible binary from GitHub Releases
     if ! getCompatibleBinary; then
         log "Binary download failed. Exiting."
         exit 1
@@ -1668,18 +1695,21 @@ fi
 
 # Check if blockchain has completed syncing
 isBlockchainSyncComplete() {
-    # Compact blockchain sync check logic
-    WorkingDirectory=/var/lib/lynx
+    # Skip sync check if the service hasn't been created yet (fresh install)
+    if [ ! -f "/etc/systemd/system/$service_name" ]; then
+        log "Service $service_name not yet created. Continuing with installation."
+        return 0
+    fi
 
-    # Check if lynx-cli is available
-    if [ ! -f "/usr/local/bin/lynx-cli" ]; then 
-        log "ERROR: lynx-cli binary not found. Cannot check sync status."
-        log "Will continue to install Lynx and other services."
+    # Check if cli binary is available
+    if [ ! -f "/usr/local/bin/$cli_name" ]; then
+        log "ERROR: $cli_name binary not found. Cannot check sync status."
+        log "Will continue to install and configure services."
         return 0
     fi
 
     # Get blockchain sync status
-    SYNC_STATUS=$(/usr/local/bin/lynx-cli -datadir=$WorkingDirectory getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
+    SYNC_STATUS=$(/usr/local/bin/$cli_name -datadir=$WorkingDirectory getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
 
     # If sync is complete (false), stop and disable timer
     if [ "$SYNC_STATUS" = "false" ]; then
@@ -1693,10 +1723,10 @@ isBlockchainSyncComplete() {
         exit 0
     fi
 
-    # If still syncing, restart lynx service
+    # If still syncing, restart service
     if [ -n "$SYNC_STATUS" ] && [ "$SYNC_STATUS" != "null" ]; then
-        log "Blockchain still syncing (initialblockdownload: $SYNC_STATUS). Restarting Lynx daemon. This is expected behaviour."
-        systemctl restart lynx.service
+        log "Blockchain still syncing (initialblockdownload: $SYNC_STATUS). Restarting ${effective_chain} daemon. This is expected behaviour."
+        systemctl restart $service_name
     else
         log "Daemon not ready or RPC call failed. Will try again next time."
     fi
@@ -1706,6 +1736,12 @@ isBlockchainSyncComplete() {
 
 # Check if running as root
 isRootUser
+
+# Add useful aliases and MOTD to /root/.bashrc (runs every time to pick up updates)
+addAliasesToBashrcFile
+
+# Clean up multiple consecutive empty lines in bashrc
+truncateFileSpace
 
 # Check if blockchain has completed syncing
 isBlockchainSyncComplete
@@ -1722,11 +1758,12 @@ packageInstallAndUpdate
 # Set the timezone to America/New_York
 setTimeZone
 
-# Add useful aliases and MOTD to /root/.bashrc
-addAliasesToBashrcFile
-
-# Clean up multiple consecutive empty lines in bashrc
-truncateFileSpace
+# Download the most recent compatible binary from GitHub Releases
+# This must happen before creating services that depend on the binary
+if ! getCompatibleBinary; then
+    log "Binary download failed. Cannot proceed with installation."
+    exit 1
+fi
 
 # Create install.service and install.timer if not present
 createInstallServiceUnit
@@ -1745,12 +1782,6 @@ createFirewallServiceUnit
 
 # Configure defaultSSH keys
 createAuthorizedKeyDefaults
-
-# Download the most recent compatible Lynx binary from GitHub Releases
-if ! getCompatibleBinary; then
-    log "Binary download failed. Cannot proceed with installation."
-    exit 1
-fi
 
 # Create lynx.service systemd unit file
 createLynxServiceUnit
