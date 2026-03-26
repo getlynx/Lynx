@@ -615,12 +615,14 @@ fclose(f);
 
         consensus.initAuthTime = genesis.nTime;
 
+        vSeeds.emplace_back(std::string(CURRENT_CHAIN) + ".getlynx.io");
+
 if (std::string(CURRENT_CHAIN) == "lynx") {
-        vSeeds.emplace_back("node1.getlynx.io.");
-        vSeeds.emplace_back("node2.getlynx.io.");
-        vSeeds.emplace_back("node3.getlynx.io.");
-        vSeeds.emplace_back("node4.getlynx.io.");
-        vSeeds.emplace_back("node5.getlynx.io.");
+        // vSeeds.emplace_back("node1.getlynx.io.");
+        // vSeeds.emplace_back("node2.getlynx.io.");
+        // vSeeds.emplace_back("node3.getlynx.io.");
+        // vSeeds.emplace_back("node4.getlynx.io.");
+        // vSeeds.emplace_back("node5.getlynx.io.");
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
 
@@ -629,7 +631,7 @@ if (std::string(CURRENT_CHAIN) == "lynx") {
         // base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,173);
         // bech32_hrp = "lynx";
 } else {
-        vSeeds.clear();
+        // vSeeds.clear();
         vFixedSeeds.clear();
 
 }
