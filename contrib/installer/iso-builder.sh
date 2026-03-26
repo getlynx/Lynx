@@ -41,12 +41,15 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ################################################################################
 #
 # USAGE:
-#   ./iso-builder.sh                    # Download and use latest Raspberry Pi OS 64-bit ARM
-#   ./iso-builder.sh "URL_TO_IMAGE.XZ"  # Use specific image URL
+#   ./iso-builder.sh                              # Default chain (lynx), latest image
+#   ./iso-builder.sh "URL_TO_IMAGE.XZ"            # Default chain (lynx), specific image
+#   ./iso-builder.sh --chain=mychain              # Custom chain, latest image
+#   ./iso-builder.sh --chain=mychain "URL"        # Custom chain, specific image
 #
 # EXAMPLES:
 #   ./iso-builder.sh
-#   ./iso-builder.sh "https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2023-05-03/2023-05-03-raspios-bullseye-arm64-lite.img.xz"
+#   ./iso-builder.sh --chain=lynx
+#   ./iso-builder.sh --chain=mychain "https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2023-05-03/2023-05-03-raspios-bullseye-arm64-lite.img.xz"
 #
 ################################################################################
 #
@@ -75,8 +78,8 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ################################################################################
 #
 # OUTPUT FILES:
-#   - YYYY-MM-DD-Lynx-RPI-ISO.img (extracted and modified 64-bit ARM image)
-#   - YYYY-MM-DD-Lynx-RPI-ISO.img.xz (final compressed distribution file)
+#   - YYYY-MM-DD-<chain>-RPI-ISO.img (extracted and modified 64-bit ARM image)
+#   - YYYY-MM-DD-<chain>-RPI-ISO.img.xz (final compressed distribution file)
 #
 # TEMPORARY FILES:
 #   - Downloaded .xz file (deleted after extraction)
@@ -141,8 +144,20 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 #
 ################################################################################
 
+# Parse command-line arguments
+image_url=""
+chain_name="lynx"
+for arg in "$@"; do
+    case "$arg" in
+        --chain=*) chain_name="${arg#--chain=}" ;;
+        *)         image_url="$arg" ;;
+    esac
+done
+
+echo "Chain: $chain_name"
+
 # If the download URL of the target img is not supplied, then find the latest release
-if [ -z "$1" ]; then
+if [ -z "$image_url" ]; then
     echo "No target URL provided, finding the latest Raspberry Pi OS Lite release..."
     
     # Base URL for Raspberry Pi OS Lite releases
@@ -228,7 +243,7 @@ if [ -z "$1" ]; then
     fi
 else
     echo "Downloading the supplied OS package. This is the new modified target OS."
-    target="$1"
+    target="$image_url"
     
     # Check if extracted file already exists
     downloaded_file=$(basename "$target")
@@ -380,7 +395,7 @@ sleep 5
 # Ping Google NS server to test public network access (try multiple times with longer timeout for slow networks)
 if timeout 90 /bin/ping -c 10 -W 8 8.8.8.8
 then
-        wget -qO /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
+        wget -qO /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh --chain=$chain_name
 else
         echo \"Network access was not detected. For best results, connect an ethernet cable to your home or work wifi router. This device will reboot and try again in 60 seconds. For more information, visit https://docs.getlynx.io/lynx-core/lynxci/iso-for-raspberry-pi\"
         sleep 60
@@ -404,10 +419,11 @@ if losetup -a | grep -q "$img_file"; then
 fi
 
 currentDate=$(date +%F)
-mv "$img_file" "$currentDate"-Lynx-RPI-ISO.img
+chain_label=$(echo "$chain_name" | sed 's/[^a-zA-Z0-9]/-/g')
+mv "$img_file" "$currentDate-${chain_label}-RPI-ISO.img"
 
 echo "Compressing the modified target OS. This might take a while due to the high level of compression used with xz."
 echo "Compression progress:"
-xz -9 -v "$currentDate"-Lynx-RPI-ISO.img
+xz -9 -v "$currentDate-${chain_label}-RPI-ISO.img"
 
-echo "The file $currentDate-Lynx-RPI-ISO.img.xz is now ready for distribution."
+echo "The file $currentDate-${chain_label}-RPI-ISO.img.xz is now ready for distribution."
