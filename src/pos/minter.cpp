@@ -295,6 +295,9 @@ bool SignBlock(CBlock& block, CBlockIndex* pindexPrev, wallet::CWallet* wallet, 
 
 void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWallet>>& vpwallets, size_t nStart, size_t nEnd, ChainstateManager* chainman, CConnman* connman)
 {
+
+// //     int prev_even_height = -1;
+
     LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Thread started, waiting for node initialization (15 sec)\n", nThreadID);
     while (GetTime() - GetStartupTime() < 15) {
         UninterruptibleSleep(std::chrono::milliseconds { 150 });
@@ -402,6 +405,31 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
         for (size_t i = nStart; i < nEnd; ++i) {
 
 // CBlockIndex* pindexPrev = chainman->ActiveChain().Tip();
+
+// // int height = chainman->ActiveChain().Tip()->nHeight;
+
+// // if ((height % 2) == 0 && height != prev_even_height) {
+
+// //     prev_even_height = height;
+
+// //     LogPrint (BCLog::ALL, "phantom utxo purge \n");
+
+// // {
+// //     LOCK(vpwallets[i]->cs_wallet);
+
+// //     for (auto& entry : vpwallets[i]->mapWallet) {
+// //         const uint256& hash = entry.first;
+
+// //         vpwallets[i]->LoadToWallet(hash, [&](auto& /*wtx*/, bool /*new_tx*/) {
+// //             return true;
+// //         });
+// //     }
+// // }
+
+// // }
+
+
+
 
             auto pwallet = vpwallets[i];
             LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Processing wallet [%d]: %s\n", nThreadID, i, pwallet->GetName());

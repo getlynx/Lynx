@@ -562,6 +562,35 @@ RPCHelpMan listunspent()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
+
+
+
+
+
+
+
+std::shared_ptr<CWallet> pwallet0 = GetWalletForJSONRPCRequest(request);
+
+{
+    LOCK(pwallet0->cs_wallet);
+
+    for (auto& entry : pwallet0->mapWallet) {
+        const uint256& hash = entry.first;
+
+        pwallet0->LoadToWallet(hash, [&](CWalletTx& /*wtx*/, bool /*new_tx*/) {
+            return true;
+        });
+    }
+}
+
+return "test";
+
+
+
+
+
+
+
     const std::shared_ptr<const CWallet> pwallet = GetWalletForJSONRPCRequest(request);
     if (!pwallet) return UniValue::VNULL;
 
