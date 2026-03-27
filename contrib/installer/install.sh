@@ -1474,7 +1474,7 @@ Wants=network-online.target
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
-ExecStart=/usr/local/bin/$daemon_name -addresstype=bech32 -datadir=$WorkingDirectory -dbcache=2048${assumevalid_flag}
+ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory -dbcache=2048${assumevalid_flag}
 ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory stop
 Restart=on-failure
 RestartSec=30
@@ -1542,7 +1542,7 @@ startDaemon() {
 createFirewallDefaults() {
 
     log "Creating firewall script at /usr/local/bin/firewall.sh..."
-    cat <<'FWEOF' | sed "s|Lynx|${effective_chain}|g" > /usr/local/bin/firewall.sh
+    cat <<'FWEOF' | sed "s|Lynx|${effective_chain}|g; s|CLI_NAME_PLACEHOLDER|${cli_name}|g; s|DATADIR_PLACEHOLDER|${WorkingDirectory}|g" > /usr/local/bin/firewall.sh
 #!/bin/bash
 
 # Lynx Firewall Configuration Script
@@ -1552,6 +1552,18 @@ createFirewallDefaults() {
 log() {
     echo "$1" | systemd-cat -t firewall.sh 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] firewall.sh: $1" >&2
 }
+
+# Dynamically detect the P2P port from the daemon
+p2p_port=""
+if [ -f "/usr/local/bin/CLI_NAME_PLACEHOLDER" ]; then
+    p2p_port=$(/usr/local/bin/CLI_NAME_PLACEHOLDER -datadir=DATADIR_PLACEHOLDER getnetworkinfo 2>/dev/null | sed -n '/"localaddresses"/,/]/p' | grep '"port"' | head -1 | sed 's/[^0-9]//g')
+fi
+if [ -z "$p2p_port" ]; then
+    p2p_port="22566"
+    log "Could not detect P2P port from daemon, defaulting to $p2p_port"
+else
+    log "Detected P2P port from daemon: $p2p_port"
+fi
 
 iptables -F
 iptables -A INPUT -i lo -j ACCEPT
@@ -1565,7 +1577,7 @@ iptables -A INPUT -p tcp --dport 22 -j ACCEPT
 # RPC_PORT_START - This line will be updated by the rpc_port function
 # iptables -A INPUT -p tcp --dport 8332 -j ACCEPT # Lynx RPC port
 # RPC_PORT_END - This line will be updated by the rpc_port function
-iptables -A INPUT -p tcp --dport 22566 -j ACCEPT # Lynx P2P port (keep this open to let other nodes connect to you)
+iptables -A INPUT -p tcp --dport $p2p_port -j ACCEPT # Lynx P2P port (keep this open to let other nodes connect to you)
 iptables -A INPUT -j DROP
 
 # Purge the journal history to keep the drive trim
