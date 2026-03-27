@@ -25,7 +25,7 @@ tx_name="${chain_lower}-tx"
 service_name="${chain_lower}.service"
 conf_name="${chain_lower}.conf"
 
-# Set assumevalid flag only for the default Lynx chain
+# Set assumevalid flag only for the default chain
 if [ "$chain_lower" = "lynx" ]; then
     assumevalid_flag=" -assumevalid=485bea987c62039d365a9458b6df2e3ef679054f2bd6e016877f783652912cfb"
 else
@@ -43,8 +43,8 @@ fi
 #   efficiency and error handling.
 #
 # AUTHOR: Lynx Development Team
-# VERSION: 3.1
-# LAST UPDATED: 2025
+# VERSION: 3.2
+# LAST UPDATED: 2026-03-26
 # DOCUMENTATION: https://docs.getlynx.io/
 #
 ################################################################################
@@ -55,8 +55,8 @@ fi
 #   1. SYSTEM SETUP:
 #      - Creates systemd timer (install.timer) to run every 12 minutes
 #      - Sets up 4GB swap file if current swap is less than 3GB
-#      - Installs Lynx ARM binaries if not present
-#      - Creates systemd service (lynx.service) for the Lynx daemon
+#      - Installs respective daemon ARM/AMD binaries if not present
+#      - Creates systemd service ({chain}.service) for the respective daemon
 #      - Creates wallet backup service (lynx-wallet-backup.service) running every 60 minutes
 #      - Configures firewall rules and SSH security settings
 #
@@ -69,7 +69,7 @@ fi
 #      - Provides quick access to wallet commands, system monitoring, and logs
 #
 #   3. NODE MAINTENANCE:
-#      - Ensures Lynx daemon is running
+#      - Ensures daemon is running
 #      - Monitors blockchain synchronization status
 #      - Automatically restarts daemon during sync
 #      - Disables timer once sync is complete
@@ -96,19 +96,19 @@ fi
 #     wdi    - Change to Lynx working directory
 #
 #   LYNX COMMANDS:
-#     lyv    - Show Lynx version
-#     lyc    - View/edit Lynx config file (-e to edit)
-#     lyl    - View Lynx debug log (default 30 lines, -f for follow)
-#     lyr    - Restart Lynx daemon (-d to purge debug log)
+#     lyv    - Show respective daemon version
+#     lyc    - View/edit daemon config file (-e to edit)
+#     lyl    - View daemon debug log (default 30 lines, -f for follow)
+#     lyr    - Restart respective daemon (-d to purge debug log)
 #     gbi    - Get blockchain info
-#     hel    - Show Lynx help (with keyword search)
+#     hel    - Show daemon help (with keyword search)
 #
 #   SYSTEM COMMANDS:
-#     sst    - Check Lynx service status
+#     sst    - Check blockchain daemon service status
 #     jou    - View install logs (default 30 lines, -f for follow)
-#     upd    - Update Lynx to latest release
+#     upd    - Update blockchaindaemon to latest release
 #     usp    - Change SSH port
-#     wdi    - Change to Lynx working directory
+#     wdi    - Change to daemon working directory
 #     ipt    - List iptables rules (verbose)
 #
 #   USEFUL COMMANDS:
@@ -117,7 +117,7 @@ fi
 #
 #   HIDDEN/ADVANCED COMMANDS:
 #     fire   - Edit firewall script
-#     shh   - Edit SSH authorized keys
+#     shh    - Edit SSH authorized keys
 #     pass   - Toggle password authentication (on/off)
 #
 ################################################################################
@@ -1460,7 +1460,7 @@ getCompatibleBinary() {
 }
 
 # Create systemd unit file for the chain daemon
-createLynxServiceUnit() {
+createDaemonServiceUnit() {
     if [ ! -f /etc/systemd/system/$service_name ]; then
         log "Creating /etc/systemd/system/$service_name systemd unit file."
         cat <<EOF > /etc/systemd/system/$service_name
@@ -1503,7 +1503,7 @@ EOF
 }
 
 # Check if daemon service is running, and start if not
-startLynx() {
+startDaemon() {
     # First verify the binary exists
     if [ ! -f "/usr/local/bin/$daemon_name" ]; then
         log "ERROR: Cannot start service - $daemon_name binary not found at /usr/local/bin/$daemon_name"
@@ -1784,7 +1784,7 @@ createFirewallServiceUnit
 createAuthorizedKeyDefaults
 
 # Create lynx.service systemd unit file
-createLynxServiceUnit
+createDaemonServiceUnit
 
 # Check if lynx service is running, and start if not
-startLynx
+startDaemon
