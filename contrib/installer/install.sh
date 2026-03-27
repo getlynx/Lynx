@@ -1474,7 +1474,7 @@ Wants=network-online.target
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
-ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory -dbcache=2048${assumevalid_flag}
+ExecStart=/usr/local/bin/$daemon_name -addresstype=bech32 -datadir=$WorkingDirectory -dbcache=2048${assumevalid_flag}
 ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory stop
 Restart=on-failure
 RestartSec=30
