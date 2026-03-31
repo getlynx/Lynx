@@ -23,16 +23,19 @@ The node builder script. It automates the full lifecycle of a Lynx node on AMD a
 
 ```bash
 # One-line install (default Lynx chain)
-wget -4 -O /usr/local/bin/install.sh https://install.getlynx.io && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
-
+bash <(curl -sL install.getlynx.io)
+```
+```bash
 # Install a specific chain
-wget -4 -O /usr/local/bin/install.sh https://install.getlynx.io && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh --chain=mychain
-
+bash <(curl -sL install.getlynx.io) --chain=mychain
+```
+```bash
 # Update an existing node to the latest binary
-/usr/local/bin/install.sh update
-
+bash <(curl -sL install.getlynx.io) update
+```
+```bash
 # Update with a specific chain
-/usr/local/bin/install.sh update --chain=mychain
+bash <(curl -sL install.getlynx.io) update --chain=mychain
 ```
 
 **Supported platforms:**

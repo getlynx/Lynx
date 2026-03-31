@@ -142,15 +142,14 @@ fi
 #   This script is typically downloaded and executed by the Pi installer during
 #   the initial system setup. It can also be run manually on any architecture:
 #
-#   Or for a permanent installation (one command):
-#   wget -4 -O /usr/local/bin/install.sh https://install.getlynx.io && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
-#   or long url
-#   wget -4 -O /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
+#   Install (default Lynx chain):
+#   bash <(curl -sL install.getlynx.io)
 #
-#   Or for a permanent installation (separate steps):
-#   wget -4 -O /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh
-#   chmod +x /usr/local/bin/install.sh
-#   /usr/local/bin/install.sh 
+#   Install a specific chain:
+#   bash <(curl -sL install.getlynx.io) --chain=mychain
+#
+#   Update an existing node:
+#   bash <(curl -sL install.getlynx.io) update
 #
 ################################################################################
 #
