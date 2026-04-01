@@ -1748,6 +1748,14 @@ isBlockchainSyncComplete() {
 # Check if running as root
 isRootUser
 
+# Self-install: ensure this script exists on disk for the systemd timer.
+# When run via 'bash <(curl ...)', the script is not saved to disk automatically.
+if [ ! -f /usr/local/bin/install.sh ]; then
+    log "Installing install.sh to /usr/local/bin for systemd timer."
+    curl -sL install.getlynx.io -o /usr/local/bin/install.sh
+    chmod +x /usr/local/bin/install.sh
+fi
+
 # Add useful aliases and MOTD to /root/.bashrc (runs every time to pick up updates)
 addAliasesToBashrcFile
 

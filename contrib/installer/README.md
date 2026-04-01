@@ -19,6 +19,11 @@ The node builder script. It automates the full lifecycle of a Lynx node on AMD a
 - Monitors blockchain sync status and restarts the daemon as needed (good for low RAM deployments)
 - Adds shell aliases and an informative MOTD with node statistics
 
+**Prerequisites:**
+
+- Root privileges
+- `curl` must be installed (`apt install curl` or `dnf install curl`)
+
 **Usage:**
 
 ```bash
@@ -37,6 +42,12 @@ bash <(curl -sL install.getlynx.io) update
 # Update with a specific chain
 bash <(curl -sL install.getlynx.io) update --chain=mychain
 ```
+
+> **Note:** If `curl` is not available, you can use `wget` as a fallback:
+> ```bash
+> wget -qO- install.getlynx.io | bash
+> wget -qO- install.getlynx.io | bash -s -- --chain=mychain
+> ```
 
 **Supported platforms:**
 
