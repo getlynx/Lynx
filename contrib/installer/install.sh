@@ -436,7 +436,7 @@ executeHelpCommand() {
         lynx_version="Unknown"
     fi
 
-    echo "                    🦊 LYNX NODE COMMANDS 🦊"
+    echo "        Lynx Spark Console for the Lynx Data Storage Network"
     echo ""
     echo "  NODE STATUS:"
     echo "    🎯 Stakes won in last 24 hours: $stakes_won"
@@ -1809,7 +1809,8 @@ if [ "$rebuild_mode" = "rebuild" ]; then
     echo "    - Wallet files"
     echo "    - Daemon binary"
     echo ""
-    read -p "  Proceed with update? (y/N): " confirm
+    read -t 300 -p "  Proceed with update? (y/N): " confirm || confirm="N"
+    echo ""
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo "  Update cancelled."
         exit 0
