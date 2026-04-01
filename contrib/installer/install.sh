@@ -466,6 +466,7 @@ executeHelpCommand() {
     echo "    lss                    - Check systemd service status"
     echo "    jou [lines] [-f]       - View install logs (default 30)"
     echo "    upd                    - Update daemon to latest release"
+    echo "    reb                    - Rebuild node (re-download full installer)"
     echo "    usp [port]             - Change SSH port"
     echo "    wdi                    - Change to daemon working directory"
     echo "    ipt                    - List iptables rules"
@@ -852,6 +853,9 @@ pas() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "\$1" =
 #
 # This alias is a custom command to update the install script. It will only run the update processes from the /usr/local/bin/install.sh file.
 upd() { /usr/local/bin/install.sh update${chain_name:+ --chain=$chain_name}; }
+#
+# This alias re-downloads and runs the full installer to pick up changes to service files, timers, firewall rules, and aliases.
+reb() { bash <(curl -sL install.getlynx.io)${chain_name:+ --chain=$chain_name}; }
 #
 $(createCommandListConsole)
 #
@@ -1473,6 +1477,7 @@ Wants=network-online.target
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
+ExecStartPre=/usr/local/bin/firewall-boot.sh
 ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory -dbcache=2048${assumevalid_flag}
 ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory stop
 Restart=on-failure
@@ -1552,6 +1557,10 @@ log() {
     echo "$1" | systemd-cat -t firewall.sh 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] firewall.sh: $1" >&2
 }
 
+# Detect the SSH port from sshd_config (default 22)
+ssh_port=$(grep -E '^Port ' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}')
+ssh_port="${ssh_port:-22}"
+
 # Dynamically detect the P2P port from the daemon
 p2p_port=""
 if [ -f "/usr/local/bin/CLI_NAME_PLACEHOLDER" ]; then
@@ -1571,7 +1580,7 @@ iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 # iptables -A INPUT -p tcp --dport 443 -j ACCEPT
 # HTTPD_PORT_END - This line will be updated by the httpd_port function
 # SSH_PORT_START - This line will be updated by the ssh_port function
-iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p tcp --dport $ssh_port -j ACCEPT
 # SSH_PORT_END - This line will be updated by the ssh_port function
 # RPC_PORT_START - This line will be updated by the rpc_port function
 # iptables -A INPUT -p tcp --dport 8332 -j ACCEPT # Lynx RPC port
@@ -1584,7 +1593,35 @@ journalctl --vacuum-time=7d >/dev/null 2>&1
 
 log "Firewall rules applied at $(date)"
 FWEOF
+
+    log "Creating boot firewall script at /usr/local/bin/firewall-boot.sh..."
+    cat <<'BOOTFWEOF' | sed "s|Lynx|${effective_chain}|g" > /usr/local/bin/firewall-boot.sh
+#!/bin/bash
+
+# Lynx Boot Firewall Script
+# Applied on boot and daemon restart — opens the P2P port wide while
+# restricting SSH. The full firewall.sh runs on a timer to tighten rules
+# once the daemon is up and can report its actual port.
+
+log() {
+    echo "$1" | systemd-cat -t firewall-boot.sh 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] firewall-boot.sh: $1" >&2
+}
+
+# Detect the SSH port from sshd_config (default 22)
+ssh_port=$(grep -E '^Port ' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}')
+ssh_port="${ssh_port:-22}"
+
+iptables -F
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -p tcp --dport $ssh_port -j ACCEPT
+iptables -A INPUT -p tcp --dport 22566 -j ACCEPT  # Default Lynx P2P port
+iptables -A INPUT -j DROP
+
+log "Boot firewall applied — SSH port $ssh_port and P2P port 22566 open. Waiting for firewall.sh timer to refine rules."
+BOOTFWEOF
     chmod +x /usr/local/bin/firewall.sh
+    chmod +x /usr/local/bin/firewall-boot.sh
 }
 
 # Create a systemd service and timer unit to restore firewall rules every 6 hours
@@ -1605,13 +1642,13 @@ StandardError=journal
 EOF
 
     # Create the timer unit
-    log "Creating firewall restoration timer that triggers every 6 hours..."
+    log "Creating firewall restoration timer that triggers 3 minutes after boot and every 6 hours..."
     cat <<EOF > /etc/systemd/system/firewall-restore.timer
 [Unit]
-Description=Restore ${effective_chain} firewall rules every 6 hours
+Description=Restore ${effective_chain} firewall rules (3 min after boot, then every 6 hours)
 
 [Timer]
-OnBootSec=10sec
+OnBootSec=3min
 OnUnitActiveSec=6h
 Unit=firewall-restore.service
 
@@ -1621,10 +1658,10 @@ EOF
 
     log "Reloading systemd daemon for firewall timer..."
     systemctl daemon-reload || log "Failed to reload systemd daemon for firewall timer"
-    log "Enabling and starting firewall restoration timer (runs every 6 hours)..."
+    log "Enabling and starting firewall restoration timer (3 min after boot, then every 6 hours)..."
     systemctl enable firewall-restore.timer >/dev/null 2>&1 || log "Failed to enable firewall timer"
     systemctl start firewall-restore.timer >/dev/null 2>&1 || log "Failed to start firewall timer"
-    log "Firewall restoration timer created and started (runs every 6 hours)."
+    log "Firewall restoration timer created and started (3 min after boot, then every 6 hours)."
 }
 
 # Configure defaultSSH keys
