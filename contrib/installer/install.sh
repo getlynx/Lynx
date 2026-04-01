@@ -1138,7 +1138,7 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 EOF
-     systemctl daemon-reload
+     systemctl daemon-reload >/dev/null 2>&1
      systemctl enable ${chain_lower}-wallet-backup.timer >/dev/null 2>&1
      systemctl start ${chain_lower}-wallet-backup.timer >/dev/null 2>&1
      log "/etc/systemd/system/${chain_lower}-wallet-backup.service and ${chain_lower}-wallet-backup.timer created, enabled, and started."
