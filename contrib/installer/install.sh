@@ -8,10 +8,12 @@ set -euo pipefail
 # Parse command-line arguments
 chain_name=""
 update_mode=""
+rebuild_mode=""
 for arg in "$@"; do
     case "$arg" in
         --chain=*) chain_name="${arg#--chain=}" ;;
         update)    update_mode="update" ;;
+        rebuild)   rebuild_mode="rebuild" ;;
     esac
 done
 
@@ -855,7 +857,7 @@ pas() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "\$1" =
 upd() { /usr/local/bin/install.sh update${chain_name:+ --chain=$chain_name}; }
 #
 # This alias re-downloads and runs the full installer to pick up changes to service files, timers, firewall rules, and aliases.
-reb() { bash <(curl -sL install.getlynx.io)${chain_name:+ --chain=$chain_name}; }
+reb() { bash <(curl -sL install.getlynx.io) rebuild${chain_name:+ --chain=$chain_name}; }
 #
 $(createCommandListConsole)
 #
@@ -1762,11 +1764,15 @@ isBlockchainSyncComplete() {
     # If sync is complete (false), stop and disable timer
     if [ "$SYNC_STATUS" = "false" ]; then
         log "Blockchain sync complete. Stopping and disabling install.timer."
-        systemctl stop install.timer
-        systemctl disable install.timer
+        systemctl stop install.timer 2>/dev/null || true
+        systemctl disable install.timer 2>/dev/null || true
         if [ -f /etc/rc.local ]; then
             log "Disabling rc.local to prevent future install.sh downloads"
             chmod -x /etc/rc.local
+        fi
+        # During a rebuild, continue to update services/timers/aliases
+        if [ "$rebuild_mode" = "rebuild" ]; then
+            return 0
         fi
         exit 0
     fi
@@ -1779,6 +1785,10 @@ isBlockchainSyncComplete() {
         log "Daemon not ready or RPC call failed. Will try again next time."
     fi
 
+    # During a rebuild, continue to update services/timers/aliases
+    if [ "$rebuild_mode" = "rebuild" ]; then
+        return 0
+    fi
     exit 0
 }
 
@@ -1844,3 +1854,20 @@ createDaemonServiceUnit
 
 # Check if lynx service is running, and start if not
 startDaemon
+
+# Display completion message
+if [ "$rebuild_mode" = "rebuild" ]; then
+    echo ""
+    echo "  ${effective_chain} node rebuild complete!"
+    echo "  Updated: aliases, firewall rules, service files, and timers."
+    echo "  No reboot required. Run 'h' to see the latest commands."
+    echo ""
+    log "Rebuild complete for ${effective_chain}."
+else
+    echo ""
+    echo "  ${effective_chain} node installation complete!"
+    echo "  The daemon is starting and will begin syncing the blockchain."
+    echo "  Run 'h' to see available commands."
+    echo ""
+    log "Installation complete for ${effective_chain}."
+fi
