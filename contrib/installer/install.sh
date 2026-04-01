@@ -338,7 +338,7 @@ log_threshold_seconds=21600
 # Create a nicely formatted command list bashrc file
 createCommandListConsole() {
     local chain_upper=$(echo "${effective_chain}" | tr '[:lower:]' '[:upper:]')
-    cat <<'CMDEOF' | sed "s|WorkingDirectory=/var/lib/lynx|WorkingDirectory=${WorkingDirectory}|g; s|lynx-cli|${cli_name}|g; s|lynx\.conf|${conf_name}|g" | sed "/http/!{ s|LYNX|${chain_upper}|g; s|Lynx|${effective_chain}|g; }" | sed "s|LYNX_STATIC|Lynx|g"
+    cat <<'CMDEOF' | sed "s|WorkingDirectory=/var/lib/lynx|WorkingDirectory=${WorkingDirectory}|g; s|lynx-cli|${cli_name}|g; s|lynx\.conf|${conf_name}|g" | sed "/http/!{ s|LYNX|${chain_upper}|g; s|Lynx|${effective_chain}|g; }" | sed "s|ORIGINALCHAIN|Lynx|g; s|originalchain|lynx|g"
 # Function to display Lynx aliases in a nicely formatted MOTD
 executeHelpCommand() {
     echo ""
@@ -436,7 +436,7 @@ executeHelpCommand() {
         lynx_version="Unknown"
     fi
 
-    local title="Lynx Spark for the LYNX_STATIC Data Storage Network"
+    local title="Lynx Spark for the ORIGINALCHAIN Data Storage Network"
     local width=64
     local pad=$(( (width - ${#title}) / 2 ))
     printf "%*s%s\n" "$pad" "" "$title"
