@@ -35,18 +35,21 @@ else
 fi
 
 ################################################################################
-# LYNX NODE BUILDER SCRIPT
+# LYNX SPARK INSTALLER
 ################################################################################
 #
 # PURPOSE:
-#   This script automates the setup and maintenance of a Lynx cryptocurrency node
-#   on AMD and ARM-based systems (Raspberry Pi, ARM64 servers, etc.). It handles the
-#   complete lifecycle from initial setup to ongoing maintenance with improved
-#   efficiency and error handling.
+#   Spark is a single-daemon deployment for the Lynx Data Storage Network.
+#   This script automates the full lifecycle of a Spark on AMD and ARM-based
+#   systems (Raspberry Pi, ARM64 servers, etc.) — from initial setup to
+#   ongoing maintenance.
+#
+#   Spark runs one daemon on one machine. For managing multiple daemons from
+#   a single console, see Beacon (https://github.com/getlynx/Beacon).
 #
 # AUTHOR: Lynx Development Team
-# VERSION: 3.2
-# LAST UPDATED: 2026-03-26
+# VERSION: 4.0
+# LAST UPDATED: 2026-04-01
 # DOCUMENTATION: https://docs.getlynx.io/
 #
 ################################################################################
@@ -58,19 +61,19 @@ fi
 #      - Creates systemd timer (install.timer) to run every 12 minutes
 #      - Sets up 4GB swap file if current swap is less than 3GB
 #      - Installs respective daemon ARM/AMD binaries if not present
-#      - Creates systemd service ({chain}.service) for the respective daemon
-#      - Creates wallet backup service (lynx-wallet-backup.service) running every 60 minutes
+#      - Creates systemd service ({chain}.service) for the daemon
+#      - Creates wallet backup service running every 60 minutes
 #      - Configures firewall rules and SSH security settings
 #
-#   2. USER EXPERIENCE:
-#      - Adds convenient aliases to ~/.bashrc for common Lynx operations
-#      - Creates a beautiful MOTD (Message of the Day) with real-time node statistics
-#      - Shows staking performance metrics directly from wallet RPC (not log files)
+#   2. SPARK CONSOLE:
+#      - Adds convenient aliases to ~/.bashrc for common operations
+#      - Displays real-time daemon statistics on login
+#      - Shows staking performance metrics from wallet RPC
 #      - Displays 24-hour and 7-day yield rates based on network block time
 #      - Tracks immature stake rewards awaiting maturity
 #      - Provides quick access to wallet commands, system monitoring, and logs
 #
-#   3. NODE MAINTENANCE:
+#   3. DAEMON MAINTENANCE:
 #      - Ensures daemon is running
 #      - Monitors blockchain synchronization status
 #      - Automatically restarts daemon during sync
@@ -86,7 +89,7 @@ fi
 #
 ################################################################################
 #
-# ALIASES CREATED (type 'h' to see all):
+# SPARK CONSOLE COMMANDS (type 'h' to see all):
 #   WALLET COMMANDS:
 #     gba    - Get wallet balances
 #     gna    - Generate new address
@@ -95,32 +98,32 @@ fi
 #     swe    - Sweep a wallet (send all funds, recipient pays fee)
 #     bac    - Manual wallet backup
 #     lba    - List backup directory contents
-#     wdi    - Change to Lynx working directory
+#     wdi    - Change to daemon working directory
 #
-#   LYNX COMMANDS:
-#     lyv    - Show respective daemon version
+#   DAEMON COMMANDS:
+#     lyv    - Show daemon version
 #     lyc    - View/edit daemon config file (-e to edit)
 #     lyl    - View daemon debug log (default 30 lines, -f for follow)
-#     lyr    - Restart respective daemon (-d to purge debug log)
+#     lyr    - Restart daemon (-d to purge debug log)
 #     gbi    - Get blockchain info
 #     hel    - Show daemon help (with keyword search)
 #
 #   SYSTEM COMMANDS:
-#     sst    - Check blockchain daemon service status
+#     lss    - Check daemon service status
 #     jou    - View install logs (default 30 lines, -f for follow)
-#     upd    - Update blockchaindaemon to latest release
+#     upd    - Update daemon to latest release
+#     reb    - Update services, timers, firewall, and aliases
 #     usp    - Change SSH port
-#     wdi    - Change to daemon working directory
 #     ipt    - List iptables rules (verbose)
 #
 #   USEFUL COMMANDS:
-#     h      - Show help message and node statistics
+#     h      - Show Spark console and daemon statistics
 #     htop   - Monitor system resources
 #
 #   HIDDEN/ADVANCED COMMANDS:
 #     fire   - Edit firewall script
 #     shh    - Edit SSH authorized keys
-#     pass   - Toggle password authentication (on/off)
+#     pas    - Toggle password authentication (on/off)
 #
 ################################################################################
 #
@@ -129,11 +132,12 @@ fi
 #   - Debian/Ubuntu-based or RHEL system (Rocky, AlmaLinux, CentOS, Fedora)
 #   - Root privileges
 #   - Internet connection
+#   - curl
 #   - Minimum 4GB RAM recommended
 #
-# DEPENDENCIES:
+# DEPENDENCIES (installed automatically):
 #   - systemd
-#   - wget, curl, unzip, nano, htop, iptables
+#   - curl, unzip, nano, htop, iptables
 #   - fallocate, mkswap, swapon
 #   - systemd-cat (for system logging)
 #   - awk (for JSON parsing - no jq required)
@@ -141,17 +145,17 @@ fi
 ################################################################################
 #
 # INSTALLATION:
-#   This script is typically downloaded and executed by the Pi installer during
-#   the initial system setup. It can also be run manually on any architecture:
-#
-#   Install (default Lynx chain):
+#   Install a new Spark (default Lynx chain):
 #   bash <(curl -sL install.getlynx.io)
 #
-#   Install a specific chain:
+#   Install a Spark for a specific chain:
 #   bash <(curl -sL install.getlynx.io) --chain=mychain
 #
-#   Update an existing node:
+#   Update an existing Spark daemon:
 #   bash <(curl -sL install.getlynx.io) update
+#
+#   Rebuild Spark (update services, timers, firewall, aliases):
+#   reb
 #
 ################################################################################
 #
@@ -159,18 +163,10 @@ fi
 #   - INITIAL SETUP: Creates all necessary files and services
 #   - MAINTENANCE: Runs every 12 minutes via systemd timer
 #   - SYNC MONITORING: Checks blockchain sync status and manages daemon
-#   - UPDATE MODE: Updates Lynx to latest release (use 'update' argument)
+#   - UPDATE: Updates daemon to latest release (use 'update' argument)
+#   - REBUILD: Updates services, timers, and aliases (use 'rebuild' argument)
 #   - CHAIN FILTER: Specify --chain=<name> to download binaries for a specific
 #     chain. If no binary matches, the script exits gracefully.
-#
-# PERFORMANCE OPTIMIZATIONS:
-#   - Stakes counting: Uses debug.log parsing with timestamp filtering
-#   - Block counting: Uses fixed 5-minute block time instead of intensive RPC loops
-#   - Immature stakes: Uses listunspent with awk parsing (no jq dependency)
-#   - All metrics calculated in real-time from wallet and logs
-#   - Smart locale configuration (skips if already configured)
-#   - Efficient OS detection (single function call)
-#   - OS-specific service management for better reliability
 #
 # LOGGING:
 #   - All operations are logged to systemd journal
@@ -185,13 +181,14 @@ fi
 #   - Swap file has restricted permissions (600)
 #   - Strict bash settings (set -euo pipefail)
 #   - Firewall configuration with iptables
+#   - Boot firewall secures SSH while daemon starts
 #   - SSH security hardening options
 #   - Password authentication toggle functionality
 #
 ################################################################################
 #
 # TROUBLESHOOTING:
-#   - Check service status: systemctl status lynx
+#   - Check service status: lss (or systemctl status lynx)
 #   - View debug logs: lyl -f (or tail -f $WorkingDirectory/debug.log)
 #   - Check install logs: jou -f (or journalctl -t install.sh -f)
 #   - Restart daemon: lyr (or systemctl restart lynx)
@@ -202,9 +199,9 @@ fi
 ################################################################################
 #
 # NETWORK PORTS:
-#   - Lynx daemon typically uses port 22566 (configurable in lynx.conf)
-#   - RPC typically uses port 8332 (configurable in lynx.conf)
-#   - SSH port is configurable via usp command (default varies by system)
+#   - Daemon P2P port: 22566 (configurable in lynx.conf)
+#   - RPC port: 8332 (configurable in lynx.conf)
+#   - SSH port: configurable via usp command (default varies by system)
 #
 # FILES CREATED:
 #   - /etc/systemd/system/install.service
@@ -212,21 +209,13 @@ fi
 #   - /etc/systemd/system/lynx.service
 #   - /etc/systemd/system/lynx-wallet-backup.service
 #   - /etc/systemd/system/lynx-wallet-backup.timer
+#   - /etc/systemd/system/firewall-restore.service
+#   - /etc/systemd/system/firewall-restore.timer
 #   - /usr/local/bin/firewall.sh
+#   - /usr/local/bin/firewall-boot.sh
 #   - /usr/local/bin/backup.sh
 #   - /swapfile (if needed)
-#   - ~/.bashrc (aliases added)
-#
-################################################################################
-#
-# RECENT IMPROVEMENTS (v3.1):
-#   - Added OS-specific SSH service management (sshd vs ssh)
-#   - Enhanced SSH port change functionality with OS-aware restart commands
-#   - Added iptables alias (ipt) for firewall rule inspection
-#   - Improved conditional logic for RedHat vs Debian system handling
-#   - Updated MOTD to include new ipt command
-#   - Enhanced documentation with current alias list
-#   - Better error handling for service restarts
+#   - ~/.bashrc (Spark console aliases)
 #
 ################################################################################
 #
