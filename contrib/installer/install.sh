@@ -468,7 +468,7 @@ executeHelpCommand() {
     echo "    lss                    - Check systemd service status"
     echo "    jou [lines] [-f]       - View install logs (default 30)"
     echo "    upd                    - Update daemon to latest release"
-    echo "    reb                    - Rebuild node (re-download full installer)"
+    echo "    reb                    - Update services, timers, firewall, and aliases"
     echo "    usp [port]             - Change SSH port"
     echo "    wdi                    - Change to daemon working directory"
     echo "    ipt                    - List iptables rules"
@@ -1794,6 +1794,28 @@ isBlockchainSyncComplete() {
 
 # Check if running as root
 isRootUser
+
+# Rebuild confirmation prompt
+if [ "$rebuild_mode" = "rebuild" ]; then
+    echo ""
+    echo "  This will update the following components:"
+    echo "    - Shell aliases and help screen"
+    echo "    - Firewall scripts and rules"
+    echo "    - Systemd service files and timers"
+    echo "    - System packages"
+    echo ""
+    echo "  This will NOT touch:"
+    echo "    - Blockchain data"
+    echo "    - Wallet files"
+    echo "    - Daemon binary"
+    echo ""
+    read -p "  Proceed with update? (y/N): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "  Update cancelled."
+        exit 0
+    fi
+    echo ""
+fi
 
 # Self-install: always save the latest script to disk for the systemd timer.
 # When run via 'bash <(curl ...)', the script is not saved to disk automatically.
