@@ -436,7 +436,10 @@ executeHelpCommand() {
         lynx_version="Unknown"
     fi
 
-    echo "        Lynx Spark Console for the Lynx Data Storage Network"
+    local title="Lynx Spark Console for the Lynx Data Storage Network"
+    local width=64
+    local pad=$(( (width - ${#title}) / 2 ))
+    printf "%*s%s\n" "$pad" "" "$title"
     echo ""
     echo "  NODE STATUS:"
     echo "    🎯 Stakes won in last 24 hours: $stakes_won"
