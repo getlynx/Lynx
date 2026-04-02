@@ -1769,6 +1769,12 @@ if [[ "$update_mode" == "update" ]]; then
     # Check if running as root
     isRootUser
 
+    # Self-update: save the latest script to disk so future timer runs use it
+    log "Updating install.sh at /usr/local/bin for systemd timer."
+    curl -sL install.getlynx.io -o /usr/local/bin/install.sh.tmp
+    chmod +x /usr/local/bin/install.sh.tmp
+    mv /usr/local/bin/install.sh.tmp /usr/local/bin/install.sh
+
     # Ensure the daemon is running immediately (e.g. after a reboot)
     # before starting slow operations like package updates.
     if [ -f "/etc/systemd/system/$service_name" ] && ! systemctl is-active --quiet "$service_name"; then
