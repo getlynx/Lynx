@@ -1777,10 +1777,10 @@ if [[ "$update_mode" == "update" ]]; then
 
     # Ensure the daemon is running immediately (e.g. after a reboot)
     # before starting slow operations like package updates.
-    if [ -f "/etc/systemd/system/$service_name" ] && ! systemctl is-active --quiet "$service_name"; then
+    if [ -f "/etc/systemd/system/$service_name" ] && ! systemctl is-active --quiet "$service_name" && ! systemctl is-activating --quiet "$service_name" 2>/dev/null; then
         log "Enabling and starting $service_name..."
         systemctl enable "$service_name" >/dev/null 2>&1
-        systemctl start "$service_name"
+        systemctl start --no-block "$service_name"
     fi
 
     # Check sync status — if synced, disable the timer and exit.
