@@ -1815,9 +1815,13 @@ fi
 
 # Self-install: always save the latest script to disk for the systemd timer.
 # When run via 'bash <(curl ...)', the script is not saved to disk automatically.
+# Download to a temp file first, then atomically replace the running script.
+# Writing directly to /usr/local/bin/install.sh while bash is reading it can
+# corrupt the running process (the file offset shifts with the new contents).
 log "Updating install.sh at /usr/local/bin for systemd timer."
-curl -sL install.getlynx.io -o /usr/local/bin/install.sh
-chmod +x /usr/local/bin/install.sh
+curl -sL install.getlynx.io -o /usr/local/bin/install.sh.tmp
+chmod +x /usr/local/bin/install.sh.tmp
+mv /usr/local/bin/install.sh.tmp /usr/local/bin/install.sh
 
 # Add useful aliases and MOTD to /root/.bashrc (runs every time to pick up updates)
 addAliasesToBashrcFile
