@@ -306,7 +306,7 @@ WorkingDirectory=/var/lib/${chain_lower}
 
 # Only show wait message if this is a fresh installation
 if [ ! -d "$WorkingDirectory" ]; then
-    echo "Please wait 10 seconds while the script runs..."
+    echo "Please wait while the script runs..."
 fi
 
 # Create the data directory with proper permissions
