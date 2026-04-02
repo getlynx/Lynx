@@ -1720,6 +1720,14 @@ if [[ "$update_mode" == "update" ]]; then
     # Check if running as root
     isRootUser
 
+    # Ensure the daemon is running immediately (e.g. after a reboot)
+    # before starting slow operations like package updates.
+    if [ -f "/etc/systemd/system/$service_name" ] && ! systemctl is-active --quiet "$service_name"; then
+        log "Enabling and starting $service_name..."
+        systemctl enable "$service_name"
+        systemctl start "$service_name"
+    fi
+
     # Detect OS details early so they're available for all functions
     getSystemDetails
 
