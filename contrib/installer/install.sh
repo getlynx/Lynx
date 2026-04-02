@@ -1708,44 +1708,6 @@ EOF
     fi
 }
 
-# Auto-detect mode: if no explicit mode was given, check whether the service
-# already exists.  If it does, treat this as an update; otherwise do a full install.
-if [[ -z "$update_mode" ]] && [[ -z "$rebuild_mode" ]] && systemctl list-unit-files "$service_name" &>/dev/null && systemctl list-unit-files "$service_name" | grep -q "$service_name"; then
-    update_mode="update"
-fi
-
-# If running in update mode, run only the update process
-if [[ "$update_mode" == "update" ]]; then
-
-    # Check if running as root
-    isRootUser
-
-    # Ensure the daemon is running immediately (e.g. after a reboot)
-    # before starting slow operations like package updates.
-    if [ -f "/etc/systemd/system/$service_name" ] && ! systemctl is-active --quiet "$service_name"; then
-        log "Enabling and starting $service_name..."
-        systemctl enable "$service_name" >/dev/null 2>&1
-        systemctl start "$service_name"
-    fi
-
-    # Detect OS details early so they're available for all functions
-    getSystemDetails
-
-    # Update and upgrade system packages, install required tools
-    packageInstallAndUpdate
-
-    # Set the timezone to America/New_York
-    setTimeZone
-
-    # Download the most recent compatible binary from GitHub Releases
-    if ! getCompatibleBinary; then
-        log "Binary download failed. Exiting."
-        exit 1
-    fi
-
-    exit 0
-fi
-
 # Check if blockchain has completed syncing
 isBlockchainSyncComplete() {
     # Skip sync check if the service hasn't been created yet (fresh install)
@@ -1794,6 +1756,48 @@ isBlockchainSyncComplete() {
     fi
     exit 0
 }
+
+# Auto-detect mode: if no explicit mode was given, check whether the service
+# already exists.  If it does, treat this as an update; otherwise do a full install.
+if [[ -z "$update_mode" ]] && [[ -z "$rebuild_mode" ]] && systemctl list-unit-files "$service_name" &>/dev/null && systemctl list-unit-files "$service_name" | grep -q "$service_name"; then
+    update_mode="update"
+fi
+
+# If running in update mode, run only the update process
+if [[ "$update_mode" == "update" ]]; then
+
+    # Check if running as root
+    isRootUser
+
+    # Ensure the daemon is running immediately (e.g. after a reboot)
+    # before starting slow operations like package updates.
+    if [ -f "/etc/systemd/system/$service_name" ] && ! systemctl is-active --quiet "$service_name"; then
+        log "Enabling and starting $service_name..."
+        systemctl enable "$service_name" >/dev/null 2>&1
+        systemctl start "$service_name"
+    fi
+
+    # Check sync status — if synced, disable the timer and exit.
+    # If still syncing, continue with update to restart the daemon.
+    isBlockchainSyncComplete
+
+    # Detect OS details early so they're available for all functions
+    getSystemDetails
+
+    # Update and upgrade system packages, install required tools
+    packageInstallAndUpdate
+
+    # Set the timezone to America/New_York
+    setTimeZone
+
+    # Download the most recent compatible binary from GitHub Releases
+    if ! getCompatibleBinary; then
+        log "Binary download failed. Exiting."
+        exit 1
+    fi
+
+    exit 0
+fi
 
 # Check if running as root
 isRootUser
