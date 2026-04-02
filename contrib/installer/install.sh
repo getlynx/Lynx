@@ -1521,7 +1521,7 @@ startDaemon() {
         return
     else
         log "${effective_chain} daemon is not running. Attempting to start."
-        systemctl enable $service_name
+        systemctl enable $service_name >/dev/null 2>&1
         sleep 5
         systemctl start $service_name
         log "${effective_chain} daemon started."
@@ -1724,7 +1724,7 @@ if [[ "$update_mode" == "update" ]]; then
     # before starting slow operations like package updates.
     if [ -f "/etc/systemd/system/$service_name" ] && ! systemctl is-active --quiet "$service_name"; then
         log "Enabling and starting $service_name..."
-        systemctl enable "$service_name"
+        systemctl enable "$service_name" >/dev/null 2>&1
         systemctl start "$service_name"
     fi
 
