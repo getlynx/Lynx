@@ -1710,7 +1710,7 @@ EOF
 
 # Auto-detect mode: if no explicit mode was given, check whether the service
 # already exists.  If it does, treat this as an update; otherwise do a full install.
-if [[ -z "$update_mode" ]] && systemctl list-unit-files "$service_name" &>/dev/null && systemctl list-unit-files "$service_name" | grep -q "$service_name"; then
+if [[ -z "$update_mode" ]] && [[ -z "$rebuild_mode" ]] && systemctl list-unit-files "$service_name" &>/dev/null && systemctl list-unit-files "$service_name" | grep -q "$service_name"; then
     update_mode="update"
 fi
 
