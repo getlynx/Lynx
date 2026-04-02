@@ -843,7 +843,7 @@ shh() { nano /root/.ssh/authorized_keys && read -p "Restart SSH daemon to apply 
 pas() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "\$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "\$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "\$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "\$ssh_config"; echo "\$new_setting" >> "\$ssh_config"; if [ "\$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; } # Toggle password authentication in SSH config
 #
 # This alias is a custom command to install or update the daemon to the latest release. The script auto-detects whether to install or update.
-upd() { /usr/local/bin/install.sh${chain_name:+ --chain=$chain_name}; }
+upd() { bash <(curl -sL install.getlynx.io)${chain_name:+ --chain=$chain_name}; }
 #
 # This alias re-downloads and runs the full installer to pick up changes to service files, timers, firewall rules, and aliases.
 reb() { bash <(curl -sL install.getlynx.io) rebuild${chain_name:+ --chain=$chain_name}; }
