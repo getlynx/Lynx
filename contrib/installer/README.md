@@ -32,21 +32,15 @@ The Spark installer. It automates the full lifecycle of a single daemon on AMD a
 **Usage:**
 
 ```bash
-# Install a new Spark (default Lynx chain)
+# Install or update a Spark (default Lynx chain)
 bash <(curl -sL install.getlynx.io)
 ```
 ```bash
-# Install a Spark for a specific chain
+# Install or update a Spark for a specific chain
 bash <(curl -sL install.getlynx.io) --chain=mychain
 ```
-```bash
-# Update an existing Spark to the latest binary
-bash <(curl -sL install.getlynx.io) update
-```
-```bash
-# Update with a specific chain
-bash <(curl -sL install.getlynx.io) update --chain=mychain
-```
+
+The script auto-detects whether to perform a fresh install or an update. If the chain's systemd service already exists, it updates; otherwise, it runs a full installation.
 
 > **Note:** If `curl` is not available, you can use `wget` as a fallback:
 > ```bash
@@ -65,9 +59,9 @@ bash <(curl -sL install.getlynx.io) update --chain=mychain
 
 | Mode | Trigger | Description |
 |------|---------|-------------|
-| Initial Setup | First run (no existing services) | Full installation of all components |
+| Initial Setup | First run (no existing service) | Full installation of all components |
+| Update | Re-run when service already exists | Auto-detected — updates system packages and downloads the latest binary |
 | Maintenance | Systemd timer (every 12 minutes) | Checks sync status, restarts daemon if needed |
-| Update | `install.sh update` | Updates system packages and downloads the latest binary |
 | Rebuild | `reb` command | Updates services, timers, firewall rules, and aliases without touching blockchain data or wallet |
 
 ---

@@ -111,7 +111,7 @@ fi
 #   SYSTEM COMMANDS:
 #     lss    - Check daemon service status
 #     jou    - View install logs (default 30 lines, -f for follow)
-#     upd    - Update daemon to latest release
+#     upd    - Install or update daemon to latest release
 #     reb    - Update services, timers, firewall, and aliases
 #     usp    - Change SSH port
 #     ipt    - List iptables rules (verbose)
@@ -304,10 +304,7 @@ packageInstallAndUpdate() {
 # Set the working directory variable for use throughout the script
 WorkingDirectory=/var/lib/${chain_lower}
 
-# Only show wait message if this is a fresh installation
-if [ ! -d "$WorkingDirectory" ]; then
-    echo "Please wait while the script runs..."
-fi
+echo "Please wait while the script runs..."
 
 # Create the data directory with proper permissions
 mkdir -p $WorkingDirectory
@@ -459,7 +456,7 @@ executeHelpCommand() {
     echo "  SYSTEM COMMANDS:"
     echo "    lss                    - Check systemd service status"
     echo "    jou [lines] [-f]       - View install logs (default 30)"
-    echo "    upd                    - Update daemon to latest release"
+    echo "    upd                    - Install or update daemon to latest release"
     echo "    reb                    - Update services, timers, firewall, and aliases"
     echo "    usp [port]             - Change SSH port"
     echo "    wdi                    - Change to daemon working directory"
@@ -845,8 +842,8 @@ shh() { nano /root/.ssh/authorized_keys && read -p "Restart SSH daemon to apply 
 # This undocumented alias is a custom command to toggle password authentication in the SSH config. Allowed values are "off" or "on".
 pas() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "\$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "\$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "\$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "\$ssh_config"; echo "\$new_setting" >> "\$ssh_config"; if [ "\$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; } # Toggle password authentication in SSH config
 #
-# This alias is a custom command to update the install script. It will only run the update processes from the /usr/local/bin/install.sh file.
-upd() { /usr/local/bin/install.sh update${chain_name:+ --chain=$chain_name}; }
+# This alias is a custom command to install or update the daemon to the latest release. The script auto-detects whether to install or update.
+upd() { /usr/local/bin/install.sh${chain_name:+ --chain=$chain_name}; }
 #
 # This alias re-downloads and runs the full installer to pick up changes to service files, timers, firewall rules, and aliases.
 reb() { bash <(curl -sL install.getlynx.io) rebuild${chain_name:+ --chain=$chain_name}; }
@@ -1711,7 +1708,13 @@ EOF
     fi
 }
 
-# If called with 'update', run only the update process
+# Auto-detect mode: if no explicit mode was given, check whether the service
+# already exists.  If it does, treat this as an update; otherwise do a full install.
+if [[ -z "$update_mode" ]] && systemctl list-unit-files "$service_name" &>/dev/null && systemctl list-unit-files "$service_name" | grep -q "$service_name"; then
+    update_mode="update"
+fi
+
+# If running in update mode, run only the update process
 if [[ "$update_mode" == "update" ]]; then
 
     # Check if running as root
