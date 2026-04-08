@@ -304,6 +304,11 @@ packageInstallAndUpdate() {
 # Set the working directory variable for use throughout the script
 WorkingDirectory=/var/lib/${chain_lower}
 
+# Derive a unique loopback IP for this chain's RPC (range 127.0.0.2-254, reserving .1 for system)
+rpc_octet=$(printf '%s' "$chain_lower" | cksum | awk '{print ($1 % 253) + 2}')
+rpc_host="127.0.0.${rpc_octet}"
+cli_flags="-datadir=$WorkingDirectory -rpcconnect=$rpc_host"
+
 echo "Please wait while the script runs..."
 
 # Create the data directory with proper permissions
@@ -324,7 +329,7 @@ log_threshold_seconds=21600
 # Create a nicely formatted command list bashrc file
 createCommandListConsole() {
     local chain_upper=$(echo "${effective_chain}" | tr '[:lower:]' '[:upper:]')
-    cat <<'CMDEOF' | sed "s|WorkingDirectory=/var/lib/lynx|WorkingDirectory=${WorkingDirectory}|g; s|lynx-cli|${cli_name}|g; s|lynx\.conf|${conf_name}|g" | sed "/http/!{ s|LYNX|${chain_upper}|g; s|Lynx|${effective_chain}|g; }" | sed "s|ORIGINALCHAIN|Lynx|g; s|originalchain|lynx|g"
+    cat <<'CMDEOF' | sed "s|WorkingDirectory=/var/lib/lynx|WorkingDirectory=${WorkingDirectory}|g; s|lynx-cli|${cli_name} ${cli_flags}|g; s|lynx\.conf|${conf_name}|g" | sed "/http/!{ s|LYNX|${chain_upper}|g; s|Lynx|${effective_chain}|g; }" | sed "s|ORIGINALCHAIN|Lynx|g; s|originalchain|lynx|g"
 # Function to display Lynx aliases in a nicely formatted MOTD
 executeHelpCommand() {
     echo ""
@@ -762,11 +767,11 @@ case \$- in
 esac
 #
 # This alias is a native $effective_chain command for getting wallet balances. Also provides a shorter undocumented version.
-gba() { $cli_name getbalances; }
+gba() { $cli_name $cli_flags getbalances; }
 gb() { gba; }
 #
 # This alias is a native command for getting a new address. Also provides a shorter undocumented version.
-gna() { $cli_name getnewaddress; }
+gna() { $cli_name $cli_flags getnewaddress; }
 gn() { gna; }
 #
 # This alias is a custom alias for changing to the working directory. Also provides a shorter undocumented version.
@@ -774,15 +779,15 @@ wdi() { cd $WorkingDirectory && ls -lh; }
 wd() { wdi; }
 #
 # This alias is a native command to list funded addresses in the current wallet. Also provides a shorter undocumented version.
-lag() { $cli_name listaddressgroupings; }
+lag() { $cli_name $cli_flags listaddressgroupings; }
 la() { lag; }
 #
 # This alias is a native command to show the version. Also provides a shorter undocumented version.
-lyv() { $cli_name -version; }
+lyv() { $cli_name $cli_flags -version; }
 lv() { lyv; }
 #
 # This alias is a native command to get current blockchain info. Also provides a shorter undocumented version.
-gbi() { $cli_name getblockchaininfo; }
+gbi() { $cli_name $cli_flags getblockchaininfo; }
 gi() { gbi; }
 #
 # This alias is a custom command to view current iptables rules. The fire alias is an undocumented version that allows you to edit the firewall script.
@@ -804,15 +809,15 @@ lyr() { if [ "\$1" = "-d" ]; then echo "If you delete the debug log, the Staking
 lr() { lyr "\$@"; }
 #
 # This alias is a native $effective_chain command to send funds to an address. Also provides a shorter undocumented version.
-sta() { $cli_name sendtoaddress "\$1" "\$2"; }
+sta() { $cli_name $cli_flags sendtoaddress "\$1" "\$2"; }
 sa() { sta "\$@"; }
 #
 # This alias is a custom command to sweep all funds to an address. It will empty the wallet of all coins and dust and the recipient pays the transaction fee. A great way to move funds between wallets in full. Also provides a shorter undocumented version.
-swe() { $cli_name sendtoaddress "\$1" "\$($cli_name getbalance)" "" "" true; }
+swe() { $cli_name $cli_flags sendtoaddress "\$1" "\$($cli_name $cli_flags getbalance)" "" "" true; }
 sw() { swe "\$@"; }
 #
 # This undocumented alias is a native command to get local node storage capacity info.
-ca() { $cli_name capacity; }
+ca() { $cli_name $cli_flags capacity; }
 #
 # This alias is a custom command to show the help message.
 h() { executeHelpCommand; }
@@ -829,7 +834,7 @@ jou() { if [ "\$1" = "-f" ]; then journalctl -t install.sh -f; elif [ "\$2" = "-
 jo() { jou "\$@"; }
 #
 # This alias is a native $effective_chain command to show help for a keyword. Also provides a shorter undocumented version.
-hel() { if [ -n "\$1" ]; then $cli_name help | grep -i "\$1"; else $cli_name help; fi; }
+hel() { if [ -n "\$1" ]; then $cli_name $cli_flags help | grep -i "\$1"; else $cli_name $cli_flags help; fi; }
 he() { hel "\$@"; }
 #
 # This alias is a custom command to show the status of the $effective_chain service. A command to show the status of the nginx daemon is also provided, if installed.
@@ -872,6 +877,34 @@ truncateFileSpace() {
     sed -i '/^$/N;/^\n$/D' "$BASHRC"
 
     log "Cleaned up multiple empty lines in $BASHRC"
+}
+
+# Create the chain conf file with RPC settings if it doesn't already exist.
+# If it exists, read back rpcbind to respect any user edits.
+createConfFile() {
+    local conf_path="$WorkingDirectory/$conf_name"
+    if [ ! -f "$conf_path" ]; then
+        log "Creating $conf_path with RPC settings (rpcbind=${rpc_host})..."
+        cat <<CONFEOF > "$conf_path"
+server=1
+rpcbind=${rpc_host}
+rpcallowip=127.0.0.0/8
+CONFEOF
+        chmod 600 "$conf_path"
+        chown root:root "$conf_path"
+        log "$conf_path created successfully."
+    else
+        # Read rpcbind from existing conf if present (override derived value)
+        local existing_rpcbind
+        existing_rpcbind=$(grep -m1 '^rpcbind=' "$conf_path" 2>/dev/null | cut -d= -f2 | cut -d: -f1)
+        if [ -n "$existing_rpcbind" ]; then
+            rpc_host="$existing_rpcbind"
+            cli_flags="-datadir=$WorkingDirectory -rpcconnect=$rpc_host"
+            log "Read rpcbind=$rpc_host from existing $conf_path."
+        else
+            log "$conf_path exists but has no rpcbind setting. Using derived rpc_host=$rpc_host."
+        fi
+    fi
 }
 
 # Create install.service and install.timer if not present
@@ -992,7 +1025,7 @@ createWalletBackupServiceUnit() {
     chmod 700 /var/lib/${chain_lower}-backup
 
     # Create the backup script
-    cat <<'BACKUPEOF' | sed "s|/var/lib/lynx-backup|/var/lib/${chain_lower}-backup|g; s|/var/lib/lynx|${WorkingDirectory}|g; s|lynx-cli|${cli_name}|g; s|lynx\.conf|${conf_name}|g; s|--quiet lynx;|--quiet ${chain_lower};|g; s|Lynx|${effective_chain}|g" > /usr/local/bin/backup.sh
+    cat <<'BACKUPEOF' | sed "s|/var/lib/lynx-backup|/var/lib/${chain_lower}-backup|g; s|/var/lib/lynx|${WorkingDirectory}|g; s|lynx-cli|${cli_name} ${cli_flags}|g; s|lynx\.conf|${conf_name}|g; s|--quiet lynx;|--quiet ${chain_lower};|g; s|Lynx|${effective_chain}|g" > /usr/local/bin/backup.sh
 #!/bin/bash
 
 # Lynx Wallet Backup Script
@@ -1025,7 +1058,7 @@ fi
 
 # Create the backup
 log "Creating wallet backup: $BACKUP_FILE"
-if ! lynx-cli -conf=$WorkingDirectory/lynx.conf backupwallet "$BACKUP_FILE" 2>/dev/null; then
+if ! lynx-cli backupwallet "$BACKUP_FILE" 2>/dev/null; then
     log "Failed to create wallet backup. Daemon may not be running or ready."
     log "Exiting gracefully. Backup will be retried on next scheduled run."
     exit 0
@@ -1455,7 +1488,7 @@ getCompatibleBinary() {
 
 # Create systemd unit file for the chain daemon
 createDaemonServiceUnit() {
-    if [ ! -f /etc/systemd/system/$service_name ]; then
+    if [ ! -f /etc/systemd/system/$service_name ] || [ "$rebuild_mode" = "rebuild" ]; then
         log "Creating /etc/systemd/system/$service_name systemd unit file."
         cat <<EOF > /etc/systemd/system/$service_name
 [Unit]
@@ -1470,7 +1503,7 @@ ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
 ExecStartPre=/usr/local/bin/firewall-boot.sh
 ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory -dbcache=2048${assumevalid_flag}
-ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory stop
+ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory -rpcconnect=$rpc_host stop
 Restart=on-failure
 RestartSec=30
 User=root
@@ -1537,7 +1570,7 @@ startDaemon() {
 createFirewallDefaults() {
 
     log "Creating firewall script at /usr/local/bin/firewall.sh..."
-    cat <<'FWEOF' | sed "s|Lynx|${effective_chain}|g; s|CLI_NAME_PLACEHOLDER|${cli_name}|g; s|DATADIR_PLACEHOLDER|${WorkingDirectory}|g" > /usr/local/bin/firewall.sh
+    cat <<'FWEOF' | sed "s|Lynx|${effective_chain}|g; s|CLI_NAME_PLACEHOLDER|${cli_name}|g; s|DATADIR_PLACEHOLDER|${WorkingDirectory}|g; s|RPCCONNECT_PLACEHOLDER|${rpc_host}|g" > /usr/local/bin/firewall.sh
 #!/bin/bash
 
 # Lynx Firewall Configuration Script
@@ -1555,7 +1588,7 @@ ssh_port="${ssh_port:-22}"
 # Dynamically detect the P2P port from the daemon
 p2p_port=""
 if [ -f "/usr/local/bin/CLI_NAME_PLACEHOLDER" ]; then
-    p2p_port=$(/usr/local/bin/CLI_NAME_PLACEHOLDER -datadir=DATADIR_PLACEHOLDER getnetworkinfo 2>/dev/null | sed -n '/"localaddresses"/,/]/p' | grep '"port"' | head -1 | sed 's/[^0-9]//g')
+    p2p_port=$(/usr/local/bin/CLI_NAME_PLACEHOLDER -datadir=DATADIR_PLACEHOLDER -rpcconnect=RPCCONNECT_PLACEHOLDER getnetworkinfo 2>/dev/null | sed -n '/"localaddresses"/,/]/p' | grep '"port"' | head -1 | sed 's/[^0-9]//g')
 fi
 if [ -z "$p2p_port" ]; then
     p2p_port="22566"
@@ -1724,7 +1757,7 @@ isBlockchainSyncComplete() {
     fi
 
     # Get blockchain sync status
-    SYNC_STATUS=$(/usr/local/bin/$cli_name -datadir=$WorkingDirectory getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
+    SYNC_STATUS=$(/usr/local/bin/$cli_name -datadir=$WorkingDirectory -rpcconnect=$rpc_host getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
 
     # If sync is complete (false), stop and disable timer
     if [ "$SYNC_STATUS" = "false" ]; then
@@ -1886,6 +1919,9 @@ createFirewallServiceUnit
 
 # Configure defaultSSH keys
 createAuthorizedKeyDefaults
+
+# Create chain conf file with RPC settings (or read back existing rpcbind)
+createConfFile
 
 # Create lynx.service systemd unit file
 createDaemonServiceUnit
