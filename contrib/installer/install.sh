@@ -883,9 +883,18 @@ truncateFileSpace() {
 # derived per-chain loopback address, or read back the existing value.
 createConfFile() {
     local conf_path="$WorkingDirectory/$conf_name"
+    # On fresh installs the daemon may still be writing the conf file
     if [ ! -f "$conf_path" ]; then
-        log "$conf_path does not exist yet. Skipping conf patching."
-        return
+        log "Waiting for daemon to create $conf_path..."
+        local wait_count=0
+        while [ ! -f "$conf_path" ] && [ "$wait_count" -lt 30 ]; do
+            sleep 1
+            wait_count=$((wait_count + 1))
+        done
+        if [ ! -f "$conf_path" ]; then
+            log "$conf_path was not created after 30s. Skipping conf patching."
+            return
+        fi
     fi
 
     log "Checking RPC settings in $conf_path..."
@@ -1919,14 +1928,14 @@ createFirewallServiceUnit
 # Configure defaultSSH keys
 createAuthorizedKeyDefaults
 
-# Create chain conf file with RPC settings (or read back existing rpcbind)
-createConfFile
-
 # Create lynx.service systemd unit file
 createDaemonServiceUnit
 
 # Check if lynx service is running, and start if not
 startDaemon
+
+# Update RPC settings in conf file (must run after daemon creates defaults)
+createConfFile
 
 # Display completion message
 if [ "$rebuild_mode" = "rebuild" ]; then
