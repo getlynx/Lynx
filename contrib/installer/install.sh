@@ -879,40 +879,82 @@ truncateFileSpace() {
     log "Cleaned up multiple empty lines in $BASHRC"
 }
 
-# Update RPC bind/allow IPs in the existing chain conf file to use the
-# derived per-chain loopback address, or read back the existing value.
-createConfFile() {
+# Create a one-shot service and timer that patches the chain conf file
+# to use the derived per-chain loopback RPC address. Once the update is
+# confirmed the timer disables itself and never runs again.
+createConfPatchServiceUnit() {
+    local script_path="/usr/local/bin/${chain_lower}-rpcpatch.sh"
+    local service_unit="${chain_lower}-rpcpatch.service"
+    local timer_unit="${chain_lower}-rpcpatch.timer"
     local conf_path="$WorkingDirectory/$conf_name"
-    # On fresh installs the daemon may still be writing the conf file
-    if [ ! -f "$conf_path" ]; then
-        log "Waiting for daemon to create $conf_path..."
-        local wait_count=0
-        while [ ! -f "$conf_path" ] && [ "$wait_count" -lt 30 ]; do
-            sleep 1
-            wait_count=$((wait_count + 1))
-        done
-        if [ ! -f "$conf_path" ]; then
-            log "$conf_path was not created after 30s. Skipping conf patching."
-            return
-        fi
-    fi
 
-    log "Checking RPC settings in $conf_path..."
+    # Write the patch script
+    cat <<PATCHEOF > "$script_path"
+#!/bin/bash
+CONF="$conf_path"
+RPC_HOST="$rpc_host"
+SERVICE_NAME="$service_name"
+TIMER_UNIT="$timer_unit"
 
-    # Read existing rpcbind value if present
-    local existing_rpcbind
-    existing_rpcbind=$(grep -m1 '^main\.rpcbind=' "$conf_path" 2>/dev/null | cut -d= -f2)
-    if [ -n "$existing_rpcbind" ] && [ "$existing_rpcbind" != "127.0.0.1" ]; then
-        # Already customized — respect it
-        rpc_host="$existing_rpcbind"
-        cli_flags="-datadir=$WorkingDirectory -rpcconnect=$rpc_host"
-        log "Read main.rpcbind=$rpc_host from existing $conf_path."
-    else
-        # Still at default 127.0.0.1 — update to our derived address
-        sed -i "s|^main\.rpcbind=.*|main.rpcbind=${rpc_host}|" "$conf_path"
-        sed -i "s|^main\.rpcallowip=.*|main.rpcallowip=${rpc_host}|" "$conf_path"
-        log "Updated main.rpcbind and main.rpcallowip to ${rpc_host} in $conf_path."
-    fi
+# If the conf file doesn't exist yet, exit and let the timer retry
+if [ ! -f "\$CONF" ]; then
+    logger -t rpcpatch "Conf file \$CONF not found. Will retry."
+    exit 0
+fi
+
+# Check if rpcbind is already set to the target address
+CURRENT=\$(grep -m1 '^main\.rpcbind=' "\$CONF" 2>/dev/null | cut -d= -f2)
+if [ "\$CURRENT" = "\$RPC_HOST" ]; then
+    logger -t rpcpatch "main.rpcbind already set to \$RPC_HOST. Disabling timer."
+    systemctl stop "\$TIMER_UNIT" 2>/dev/null || true
+    systemctl disable "\$TIMER_UNIT" 2>/dev/null || true
+    exit 0
+fi
+
+# Patch the conf file
+sed -i "s|^main\.rpcbind=.*|main.rpcbind=\$RPC_HOST|" "\$CONF"
+sed -i "s|^main\.rpcallowip=.*|main.rpcallowip=\$RPC_HOST|" "\$CONF"
+logger -t rpcpatch "Updated main.rpcbind and main.rpcallowip to \$RPC_HOST in \$CONF."
+
+# Restart the daemon to pick up the new settings
+systemctl restart "\$SERVICE_NAME" 2>/dev/null || true
+logger -t rpcpatch "Restarted \$SERVICE_NAME."
+PATCHEOF
+    chmod 700 "$script_path"
+
+    # Create the systemd service unit
+    cat <<EOF > /etc/systemd/system/$service_unit
+[Unit]
+Description=Patch ${effective_chain} conf with per-chain RPC address
+Documentation=https://getlynx.io/
+
+[Service]
+Type=oneshot
+ExecStart=$script_path
+StandardOutput=journal
+StandardError=journal
+EOF
+
+    # Create the systemd timer unit
+    cat <<EOF > /etc/systemd/system/$timer_unit
+[Unit]
+Description=Run ${chain_lower}-rpcpatch every 1 minute until patched
+
+[Timer]
+OnBootSec=5sec
+OnUnitActiveSec=1min
+AccuracySec=5sec
+Unit=$service_unit
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable "$timer_unit" >/dev/null 2>&1
+    systemctl start "$timer_unit"
+    log "Created and started $timer_unit to patch RPC settings in $conf_path."
 }
 
 # Create install.service and install.timer if not present
@@ -1934,8 +1976,8 @@ createDaemonServiceUnit
 # Check if lynx service is running, and start if not
 startDaemon
 
-# Update RPC settings in conf file (must run after daemon creates defaults)
-createConfFile
+# Set up a timer to patch RPC settings in conf file once the daemon creates it
+createConfPatchServiceUnit
 
 # Display completion message
 if [ "$rebuild_mode" = "rebuild" ]; then
