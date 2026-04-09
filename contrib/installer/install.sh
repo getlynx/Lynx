@@ -1885,6 +1885,9 @@ if [[ "$update_mode" == "update" ]]; then
         exit 1
     fi
 
+    # Ensure the RPC patch timer is in place
+    createConfPatchServiceUnit
+
     exit 0
 fi
 
