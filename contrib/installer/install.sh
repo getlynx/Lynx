@@ -879,31 +879,30 @@ truncateFileSpace() {
     log "Cleaned up multiple empty lines in $BASHRC"
 }
 
-# Create the chain conf file with RPC settings if it doesn't already exist.
-# If it exists, read back rpcbind to respect any user edits.
+# Update RPC bind/allow IPs in the existing chain conf file to use the
+# derived per-chain loopback address, or read back the existing value.
 createConfFile() {
     local conf_path="$WorkingDirectory/$conf_name"
     if [ ! -f "$conf_path" ]; then
-        log "Creating $conf_path with RPC settings (rpcbind=${rpc_host})..."
-        cat <<CONFEOF > "$conf_path"
-server=1
-rpcbind=${rpc_host}
-rpcallowip=127.0.0.0/8
-CONFEOF
-        chmod 600 "$conf_path"
-        chown root:root "$conf_path"
-        log "$conf_path created successfully."
+        log "$conf_path does not exist yet. Skipping conf patching."
+        return
+    fi
+
+    log "Checking RPC settings in $conf_path..."
+
+    # Read existing rpcbind value if present
+    local existing_rpcbind
+    existing_rpcbind=$(grep -m1 '^main\.rpcbind=' "$conf_path" 2>/dev/null | cut -d= -f2)
+    if [ -n "$existing_rpcbind" ] && [ "$existing_rpcbind" != "127.0.0.1" ]; then
+        # Already customized — respect it
+        rpc_host="$existing_rpcbind"
+        cli_flags="-datadir=$WorkingDirectory -rpcconnect=$rpc_host"
+        log "Read main.rpcbind=$rpc_host from existing $conf_path."
     else
-        # Read rpcbind from existing conf if present (override derived value)
-        local existing_rpcbind
-        existing_rpcbind=$(grep -m1 '^rpcbind=' "$conf_path" 2>/dev/null | cut -d= -f2 | cut -d: -f1)
-        if [ -n "$existing_rpcbind" ]; then
-            rpc_host="$existing_rpcbind"
-            cli_flags="-datadir=$WorkingDirectory -rpcconnect=$rpc_host"
-            log "Read rpcbind=$rpc_host from existing $conf_path."
-        else
-            log "$conf_path exists but has no rpcbind setting. Using derived rpc_host=$rpc_host."
-        fi
+        # Still at default 127.0.0.1 — update to our derived address
+        sed -i "s|^main\.rpcbind=.*|main.rpcbind=${rpc_host}|" "$conf_path"
+        sed -i "s|^main\.rpcallowip=.*|main.rpcallowip=${rpc_host}|" "$conf_path"
+        log "Updated main.rpcbind and main.rpcallowip to ${rpc_host} in $conf_path."
     fi
 }
 
