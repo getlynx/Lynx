@@ -882,15 +882,14 @@ truncateFileSpace() {
     log "Cleaned up multiple empty lines in $BASHRC"
 }
 
-# Create a one-shot service and timer that patches the chain conf file
-# to use the derived per-chain loopback RPC address. Once the update is
-# confirmed the timer disables itself and never runs again.
-createConfPatchServiceUnit() {
-    local service_unit="${chain_lower}-rpcpatch.service"
-    local timer_unit="${chain_lower}-rpcpatch.timer"
+# Create a one-shot service and timer that fetches and runs patch_rpc_conf.sh
+# to set the per-chain loopback RPC address. The timer disables itself once done.
+patchRpcConf() {
+    local service_unit="${chain_lower}-patch-rpc-conf.service"
+    local timer_unit="${chain_lower}-patch-rpc-conf.timer"
     local conf_path="$WorkingDirectory/$conf_name"
 
-    # Create the systemd service unit (fetches and runs rpcpatch.sh remotely)
+    # Create the systemd service unit (fetches and runs patch_rpc_conf.sh remotely)
     cat <<EOF > /etc/systemd/system/$service_unit
 [Unit]
 Description=Patch ${effective_chain} conf with per-chain RPC address
@@ -898,7 +897,7 @@ Documentation=https://getlynx.io/
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/rpcpatch.sh | bash -s'
+ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_rpc_conf.sh | bash -s'
 Environment=CONF_PATH=$conf_path
 Environment=RPC_HOST=$rpc_host
 Environment=SERVICE_NAME=$service_name
@@ -910,7 +909,7 @@ EOF
     # Create the systemd timer unit
     cat <<EOF > /etc/systemd/system/$timer_unit
 [Unit]
-Description=Run ${chain_lower}-rpcpatch every 5 seconds until patched
+Description=Run ${chain_lower}-patch-rpc-conf every 5 seconds until patched
 
 [Timer]
 OnBootSec=5sec
@@ -1818,6 +1817,9 @@ if [[ -z "$update_mode" ]] && [[ -z "$rebuild_mode" ]] && systemctl list-unit-fi
     update_mode="update"
 fi
 
+# Ensure the RPC patch timer is in place (runs in all modes)
+patchRpcConf
+
 # If running in update mode, run only the update process
 if [[ "$update_mode" == "update" ]]; then
 
@@ -1856,9 +1858,6 @@ if [[ "$update_mode" == "update" ]]; then
         log "Binary download failed. Exiting."
         exit 1
     fi
-
-    # Ensure the RPC patch timer is in place
-    createConfPatchServiceUnit
 
     exit 0
 fi
@@ -1950,9 +1949,6 @@ createDaemonServiceUnit
 
 # Check if lynx service is running, and start if not
 startDaemon
-
-# Set up a timer to patch RPC settings in conf file once the daemon creates it
-createConfPatchServiceUnit
 
 # Display completion message
 if [ "$rebuild_mode" = "rebuild" ]; then
