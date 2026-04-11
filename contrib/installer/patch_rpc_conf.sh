@@ -25,27 +25,17 @@ if [ ! -f "$CONF_PATH" ]; then
     exit 0
 fi
 
-# Check if rpcbind is already set to the target address
-CURRENT=$(grep -m1 '^main\.rpcbind=' "$CONF_PATH" 2>/dev/null | cut -d= -f2)
-if [ "$CURRENT" = "$RPC_HOST" ]; then
-    logger -t patch_rpc_conf "main.rpcbind already set to $RPC_HOST. Disabling timer."
+# Check if any 127.0.0.1 addresses remain in rpcbind/rpcallowip lines
+if ! grep -q '127\.0\.0\.1' "$CONF_PATH" 2>/dev/null; then
+    logger -t patch_rpc_conf "No 127.0.0.1 addresses found in $CONF_PATH. Disabling timer."
     systemctl stop "$TIMER_UNIT" 2>/dev/null || true
     systemctl disable "$TIMER_UNIT" 2>/dev/null || true
     exit 0
 fi
 
-# Patch the conf file (substitute if present, append if missing)
-if grep -q '^main\.rpcbind=' "$CONF_PATH" 2>/dev/null; then
-    sed -i "s|^main\.rpcbind=.*|main.rpcbind=$RPC_HOST|" "$CONF_PATH"
-else
-    echo "main.rpcbind=$RPC_HOST" >> "$CONF_PATH"
-fi
-if grep -q '^main\.rpcallowip=' "$CONF_PATH" 2>/dev/null; then
-    sed -i "s|^main\.rpcallowip=.*|main.rpcallowip=$RPC_HOST|" "$CONF_PATH"
-else
-    echo "main.rpcallowip=$RPC_HOST" >> "$CONF_PATH"
-fi
-logger -t patch_rpc_conf "Updated main.rpcbind and main.rpcallowip to $RPC_HOST in $CONF_PATH."
+# Replace all 127.0.0.1 occurrences with the per-chain loopback IP
+sed -i "s|127\.0\.0\.1|$RPC_HOST|g" "$CONF_PATH"
+logger -t patch_rpc_conf "Replaced all 127.0.0.1 addresses with $RPC_HOST in $CONF_PATH."
 
 # Restart the daemon to pick up the new settings
 systemctl restart "$SERVICE_NAME" 2>/dev/null || true

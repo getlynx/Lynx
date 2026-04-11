@@ -212,10 +212,8 @@ fi
 #   - /etc/systemd/system/lynx.service
 #   - /etc/systemd/system/lynx-wallet-backup.service
 #   - /etc/systemd/system/lynx-wallet-backup.timer
-#   - /etc/systemd/system/firewall-restore.service
-#   - /etc/systemd/system/firewall-restore.timer
-#   - /usr/local/bin/firewall.sh
-#   - /usr/local/bin/firewall-boot.sh
+#   - /etc/systemd/system/lynx-patch-firewall.service
+#   - /etc/systemd/system/lynx-patch-firewall.timer
 #   - /usr/local/bin/backup.sh
 #   - /swapfile (if needed)
 #   - ~/.bashrc (Spark console aliases)
@@ -1522,7 +1520,6 @@ Wants=network-online.target
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
-ExecStartPre=/usr/local/bin/firewall-boot.sh
 ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory -dbcache=2048${assumevalid_flag}
 ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory -rpcconnect=$rpc_host stop
 Restart=on-failure
@@ -1587,126 +1584,69 @@ startDaemon() {
     fi
 }
 
-# Create and configure defaultfirewall rules
-createFirewallDefaults() {
+# Create a one-shot service with two timers for patch_firewall.sh:
+#   1. A fast-poll timer (every 5 sec) that self-disables once the daemon is ready
+#   2. A maintenance timer (every 6 hours) that keeps firewall rules correct permanently
+patchFirewall() {
+    local service_unit="${chain_lower}-patch-firewall.service"
+    local timer_unit="${chain_lower}-patch-firewall.timer"
+    local maint_timer_unit="${chain_lower}-patch-firewall-maint.timer"
 
-    log "Creating firewall script at /usr/local/bin/firewall.sh..."
-    cat <<'FWEOF' | sed "s|Lynx|${effective_chain}|g; s|CLI_NAME_PLACEHOLDER|${cli_name}|g; s|DATADIR_PLACEHOLDER|${WorkingDirectory}|g; s|RPCCONNECT_PLACEHOLDER|${rpc_host}|g" > /usr/local/bin/firewall.sh
-#!/bin/bash
-
-# Lynx Firewall Configuration Script
-# This script applies the standard firewall rules for Lynx nodes
-
-# Logging function
-log() {
-    echo "$1" | systemd-cat -t firewall.sh 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] firewall.sh: $1" >&2
-}
-
-# Detect the SSH port from sshd_config (default 22)
-ssh_port=$(grep -E '^Port ' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}')
-ssh_port="${ssh_port:-22}"
-
-# Dynamically detect the P2P port from the daemon
-p2p_port=""
-if [ -f "/usr/local/bin/CLI_NAME_PLACEHOLDER" ]; then
-    p2p_port=$(/usr/local/bin/CLI_NAME_PLACEHOLDER -datadir=DATADIR_PLACEHOLDER -rpcconnect=RPCCONNECT_PLACEHOLDER getnetworkinfo 2>/dev/null | sed -n '/"localaddresses"/,/]/p' | grep '"port"' | head -1 | sed 's/[^0-9]//g')
-fi
-if [ -z "$p2p_port" ]; then
-    p2p_port="22566"
-    log "Could not detect P2P port from daemon, defaulting to $p2p_port"
-else
-    log "Detected P2P port from daemon: $p2p_port"
-fi
-
-iptables -F
-iptables -A INPUT -i lo -j ACCEPT
-iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-# HTTPD_PORT_START - This line will be updated by the httpd_port function
-# iptables -A INPUT -p tcp --dport 443 -j ACCEPT
-# HTTPD_PORT_END - This line will be updated by the httpd_port function
-# SSH_PORT_START - This line will be updated by the ssh_port function
-iptables -A INPUT -p tcp --dport $ssh_port -j ACCEPT
-# SSH_PORT_END - This line will be updated by the ssh_port function
-# RPC_PORT_START - This line will be updated by the rpc_port function
-# iptables -A INPUT -p tcp --dport 8332 -j ACCEPT # Lynx RPC port
-# RPC_PORT_END - This line will be updated by the rpc_port function
-iptables -A INPUT -p tcp --dport $p2p_port -j ACCEPT # Lynx P2P port (keep this open to let other nodes connect to you)
-iptables -A INPUT -j DROP
-
-# Purge the journal history to keep the drive trim
-journalctl --vacuum-time=7d >/dev/null 2>&1
-
-log "Firewall rules applied at $(date)"
-FWEOF
-
-    log "Creating boot firewall script at /usr/local/bin/firewall-boot.sh..."
-    cat <<'BOOTFWEOF' | sed "s|Lynx|${effective_chain}|g" > /usr/local/bin/firewall-boot.sh
-#!/bin/bash
-
-# Lynx Boot Firewall Script
-# Applied on boot and daemon restart — opens the P2P port wide while
-# restricting SSH. The full firewall.sh runs on a timer to tighten rules
-# once the daemon is up and can report its actual port.
-
-log() {
-    echo "$1" | systemd-cat -t firewall-boot.sh 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] firewall-boot.sh: $1" >&2
-}
-
-# Detect the SSH port from sshd_config (default 22)
-ssh_port=$(grep -E '^Port ' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}')
-ssh_port="${ssh_port:-22}"
-
-iptables -F
-iptables -A INPUT -i lo -j ACCEPT
-iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -A INPUT -p tcp --dport $ssh_port -j ACCEPT
-iptables -A INPUT -p tcp --dport 22566 -j ACCEPT  # Default Lynx P2P port
-iptables -A INPUT -j DROP
-
-log "Boot firewall applied — SSH port $ssh_port and P2P port 22566 open. Waiting for firewall.sh timer to refine rules."
-BOOTFWEOF
-    chmod +x /usr/local/bin/firewall.sh
-    chmod +x /usr/local/bin/firewall-boot.sh
-}
-
-# Create a systemd service and timer unit to restore firewall rules every 6 hours
-createFirewallServiceUnit() {
-    log "Creating firewall restoration service that runs every 6 hours..."
-
-    # Create the service unit
-    cat <<EOF > /etc/systemd/system/firewall-restore.service
+    # Create the systemd service unit (fetches and runs patch_firewall.sh remotely)
+    cat <<EOF > /etc/systemd/system/$service_unit
 [Unit]
-Description=Restore ${effective_chain} firewall rules
+Description=Apply ${effective_chain} firewall rules
 After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/firewall.sh
+ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_firewall.sh | bash -s'
+Environment=CLI_PATH=/usr/local/bin/$cli_name
+Environment=DATADIR=$WorkingDirectory
+Environment=RPCCONNECT=$rpc_host
+Environment=CHAIN_NAME=$effective_chain
+Environment=TIMER_UNIT=$timer_unit
 StandardOutput=journal
 StandardError=journal
 EOF
 
-    # Create the timer unit
-    log "Creating firewall restoration timer that triggers 3 minutes after boot and every 6 hours..."
-    cat <<EOF > /etc/systemd/system/firewall-restore.timer
+    # Fast-poll timer: runs every 5 sec until firewall is applied, then self-disables
+    cat <<EOF > /etc/systemd/system/$timer_unit
 [Unit]
-Description=Restore ${effective_chain} firewall rules (3 min after boot, then every 6 hours)
+Description=Run ${chain_lower}-patch-firewall every 5 seconds until complete
 
 [Timer]
-OnBootSec=3min
-OnUnitActiveSec=6h
-Unit=firewall-restore.service
+OnBootSec=4sec
+OnUnitActiveSec=5sec
+AccuracySec=5sec
+Unit=$service_unit
+Persistent=false
 
 [Install]
 WantedBy=timers.target
 EOF
 
-    log "Reloading systemd daemon for firewall timer..."
-    systemctl daemon-reload || log "Failed to reload systemd daemon for firewall timer"
-    log "Enabling and starting firewall restoration timer (3 min after boot, then every 6 hours)..."
-    systemctl enable firewall-restore.timer >/dev/null 2>&1 || log "Failed to enable firewall timer"
-    systemctl start firewall-restore.timer >/dev/null 2>&1 || log "Failed to start firewall timer"
-    log "Firewall restoration timer created and started (3 min after boot, then every 6 hours)."
+    # Maintenance timer: reapplies firewall rules every 6 hours and after reboot
+    cat <<EOF > /etc/systemd/system/$maint_timer_unit
+[Unit]
+Description=Reapply ${chain_lower}-patch-firewall every 6 hours
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=6h
+Unit=$service_unit
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable "$timer_unit" >/dev/null 2>&1
+    systemctl start "$timer_unit"
+    systemctl enable "$maint_timer_unit" >/dev/null 2>&1
+    systemctl start "$maint_timer_unit"
+    log "Created and started $timer_unit and $maint_timer_unit for firewall rules."
 }
 
 # Configure defaultSSH keys
@@ -1935,11 +1875,8 @@ createWalletBackupServiceUnit
 # Check and update swap to at least 4GB if less than 3GB
 expandSwap
 
-# Create and configure defaultfirewall rules
-createFirewallDefaults
-
-# Create a systemd service and timer unit to restore firewall rules every 6 hours
-createFirewallServiceUnit
+# Create firewall service, timer, and boot wrapper
+patchFirewall
 
 # Configure defaultSSH keys
 createAuthorizedKeyDefaults
