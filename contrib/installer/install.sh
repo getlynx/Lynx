@@ -1757,8 +1757,9 @@ if [[ -z "$update_mode" ]] && [[ -z "$rebuild_mode" ]] && systemctl list-unit-fi
     update_mode="update"
 fi
 
-# Ensure the RPC patch timer is in place (runs in all modes)
+# Ensure patch timers are in place (runs in all modes)
 patchRpcConf
+patchFirewall
 
 # If running in update mode, run only the update process
 if [[ "$update_mode" == "update" ]]; then
@@ -1874,9 +1875,6 @@ createWalletBackupServiceUnit
 
 # Check and update swap to at least 4GB if less than 3GB
 expandSwap
-
-# Create firewall service, timer, and boot wrapper
-patchFirewall
 
 # Configure defaultSSH keys
 createAuthorizedKeyDefaults
