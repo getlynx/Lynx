@@ -946,11 +946,11 @@ EOF
     # Create the systemd timer unit
     cat <<EOF > /etc/systemd/system/$timer_unit
 [Unit]
-Description=Run ${chain_lower}-rpcpatch every 1 minute until patched
+Description=Run ${chain_lower}-rpcpatch every 5 seconds until patched
 
 [Timer]
 OnBootSec=5sec
-OnUnitActiveSec=1min
+OnUnitActiveSec=5sec
 AccuracySec=5sec
 Unit=$service_unit
 Persistent=false
