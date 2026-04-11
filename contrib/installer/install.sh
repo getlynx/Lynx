@@ -27,6 +27,9 @@ tx_name="${chain_lower}-tx"
 service_name="${chain_lower}.service"
 conf_name="${chain_lower}.conf"
 
+# Base URL for fetching external helper scripts at runtime
+SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/installer"
+
 # Set assumevalid flag only for the default chain
 if [ "$chain_lower" = "lynx" ]; then
     assumevalid_flag=" -assumevalid=485bea987c62039d365a9458b6df2e3ef679054f2bd6e016877f783652912cfb"
@@ -883,54 +886,11 @@ truncateFileSpace() {
 # to use the derived per-chain loopback RPC address. Once the update is
 # confirmed the timer disables itself and never runs again.
 createConfPatchServiceUnit() {
-    local script_path="/usr/local/bin/${chain_lower}-rpcpatch.sh"
     local service_unit="${chain_lower}-rpcpatch.service"
     local timer_unit="${chain_lower}-rpcpatch.timer"
     local conf_path="$WorkingDirectory/$conf_name"
 
-    # Write the patch script
-    cat <<PATCHEOF > "$script_path"
-#!/bin/bash
-CONF="$conf_path"
-RPC_HOST="$rpc_host"
-SERVICE_NAME="$service_name"
-TIMER_UNIT="$timer_unit"
-
-# If the conf file doesn't exist yet, exit and let the timer retry
-if [ ! -f "\$CONF" ]; then
-    logger -t rpcpatch "Conf file \$CONF not found. Will retry."
-    exit 0
-fi
-
-# Check if rpcbind is already set to the target address
-CURRENT=\$(grep -m1 '^main\.rpcbind=' "\$CONF" 2>/dev/null | cut -d= -f2)
-if [ "\$CURRENT" = "\$RPC_HOST" ]; then
-    logger -t rpcpatch "main.rpcbind already set to \$RPC_HOST. Disabling timer."
-    systemctl stop "\$TIMER_UNIT" 2>/dev/null || true
-    systemctl disable "\$TIMER_UNIT" 2>/dev/null || true
-    exit 0
-fi
-
-# Patch the conf file (substitute if present, append if missing)
-if grep -q '^main\.rpcbind=' "\$CONF" 2>/dev/null; then
-    sed -i "s|^main\.rpcbind=.*|main.rpcbind=\$RPC_HOST|" "\$CONF"
-else
-    echo "main.rpcbind=\$RPC_HOST" >> "\$CONF"
-fi
-if grep -q '^main\.rpcallowip=' "\$CONF" 2>/dev/null; then
-    sed -i "s|^main\.rpcallowip=.*|main.rpcallowip=\$RPC_HOST|" "\$CONF"
-else
-    echo "main.rpcallowip=\$RPC_HOST" >> "\$CONF"
-fi
-logger -t rpcpatch "Updated main.rpcbind and main.rpcallowip to \$RPC_HOST in \$CONF."
-
-# Restart the daemon to pick up the new settings
-systemctl restart "\$SERVICE_NAME" 2>/dev/null || true
-logger -t rpcpatch "Restarted \$SERVICE_NAME."
-PATCHEOF
-    chmod 700 "$script_path"
-
-    # Create the systemd service unit
+    # Create the systemd service unit (fetches and runs rpcpatch.sh remotely)
     cat <<EOF > /etc/systemd/system/$service_unit
 [Unit]
 Description=Patch ${effective_chain} conf with per-chain RPC address
@@ -938,7 +898,11 @@ Documentation=https://getlynx.io/
 
 [Service]
 Type=oneshot
-ExecStart=$script_path
+ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/rpcpatch.sh | bash -s'
+Environment=CONF_PATH=$conf_path
+Environment=RPC_HOST=$rpc_host
+Environment=SERVICE_NAME=$service_name
+Environment=TIMER_UNIT=$timer_unit
 StandardOutput=journal
 StandardError=journal
 EOF
