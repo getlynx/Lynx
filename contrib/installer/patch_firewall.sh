@@ -27,7 +27,7 @@ ssh_port="${ssh_port:-22}"
 # Dynamically detect the P2P port from the daemon
 p2p_port=""
 if [ -f "$CLI_PATH" ]; then
-    p2p_port=$("$CLI_PATH" -datadir="$DATADIR" -rpcconnect="$RPCCONNECT" getnetworkinfo 2>/dev/null | sed -n '/"localaddresses"/,/]/p' | grep '"port"' | head -1 | sed 's/[^0-9]//g')
+    p2p_port=$("$CLI_PATH" -datadir="$DATADIR" -rpcconnect="$RPCCONNECT" getnetworkinfo 2>/dev/null | sed -n '/"localaddresses"/,/]/p' | grep '"port"' | head -1 | sed 's/[^0-9]//g') || true
 fi
 
 # If the daemon isn't ready yet, exit and let the timer retry
