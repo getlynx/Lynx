@@ -21,7 +21,7 @@ for var in CLI_PATH DATADIR RPCCONNECT CHAIN_NAME TIMER_UNIT; do
 done
 
 # Detect the SSH port from sshd_config (default 22)
-ssh_port=$(grep -E '^Port ' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}')
+ssh_port=$(grep -E '^Port ' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}') || true
 ssh_port="${ssh_port:-22}"
 
 # Dynamically detect the P2P port from the daemon
