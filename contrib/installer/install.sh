@@ -911,9 +911,17 @@ if [ "\$CURRENT" = "\$RPC_HOST" ]; then
     exit 0
 fi
 
-# Patch the conf file
-sed -i "s|^main\.rpcbind=.*|main.rpcbind=\$RPC_HOST|" "\$CONF"
-sed -i "s|^main\.rpcallowip=.*|main.rpcallowip=\$RPC_HOST|" "\$CONF"
+# Patch the conf file (substitute if present, append if missing)
+if grep -q '^main\.rpcbind=' "\$CONF" 2>/dev/null; then
+    sed -i "s|^main\.rpcbind=.*|main.rpcbind=\$RPC_HOST|" "\$CONF"
+else
+    echo "main.rpcbind=\$RPC_HOST" >> "\$CONF"
+fi
+if grep -q '^main\.rpcallowip=' "\$CONF" 2>/dev/null; then
+    sed -i "s|^main\.rpcallowip=.*|main.rpcallowip=\$RPC_HOST|" "\$CONF"
+else
+    echo "main.rpcallowip=\$RPC_HOST" >> "\$CONF"
+fi
 logger -t rpcpatch "Updated main.rpcbind and main.rpcallowip to \$RPC_HOST in \$CONF."
 
 # Restart the daemon to pick up the new settings
