@@ -814,6 +814,11 @@ if [ -f /usr/local/bin/spark-current-chain.sh ]; then
     . /usr/local/bin/spark-current-chain.sh
 fi
 #
+# Wrapper functions for chain/c so the current shell picks up the new SPARK_* vars
+# (The script at /usr/local/bin/chain writes the file; we re-source to update env.)
+chain() { /usr/local/bin/chain "$@"; . /usr/local/bin/spark-current-chain.sh; }
+c()     { /usr/local/bin/chain "$@"; . /usr/local/bin/spark-current-chain.sh; }
+#
 # Helper: ensure a chain is selected before running an alias
 _spark_require_chain() {
     if [ -z "${SPARK_CHAIN:-}" ]; then
