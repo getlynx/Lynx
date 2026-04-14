@@ -1091,14 +1091,12 @@ update_ssh_port() {
         echo "ERROR: Invalid port number. Must be between 1 and 65535."
         return 1
     fi
-    local existing_ports
-    existing_ports=$(grep -o "dport [0-9]*" /usr/local/bin/firewall.sh 2>/dev/null | grep -o "[0-9]*" | sort -u)
-    if echo "$existing_ports" | grep -q "^${new_port}$"; then
-        echo "ERROR: Port $new_port is already in use in the firewall configuration."
-        return 1
-    fi
     current_port=$(grep "^#*Port" /etc/ssh/sshd_config | head -1 | sed 's/^#*Port[[:space:]]*//')
     [ -z "$current_port" ] && current_port="22"
+    if [ "$new_port" = "$current_port" ]; then
+        echo "SSH is already on port $new_port."
+        return 0
+    fi
     echo "Current SSH port: $current_port"
     echo "New SSH port: $new_port"
     echo ""
@@ -1108,12 +1106,14 @@ update_ssh_port() {
     [[ ! "$confirm" =~ ^[Yy]$ ]] && echo "Operation cancelled." && return 1
     echo "Updating sshd_config..."
     sed -i "s/^#*Port.*/Port $new_port/" /etc/ssh/sshd_config
-    echo "Updating firewall script..."
-    sed -i "/# SSH_PORT_START/,/# SSH_PORT_END/s/iptables -A INPUT -p tcp --dport [0-9]* -j ACCEPT/iptables -A INPUT -p tcp --dport $new_port -j ACCEPT/" /usr/local/bin/firewall.sh
-    echo "Applying firewall rules..."
-    /usr/local/bin/firewall.sh
-    sleep 2
-    /usr/local/bin/firewall.sh
+    echo "Updating SPARK firewall rules..."
+    (
+        flock -w 10 200 || { echo "ERROR: Could not acquire firewall lock."; return 1; }
+        # Swap the SSH ACCEPT rule in the SPARK parent chain
+        iptables -D SPARK -p tcp --dport "$current_port" -j ACCEPT 2>/dev/null || true
+        iptables -C SPARK -p tcp --dport "$new_port" -j ACCEPT 2>/dev/null || \
+            iptables -I SPARK 3 -p tcp --dport "$new_port" -j ACCEPT
+    ) 200>/var/lock/spark-iptables
     echo "Restarting SSH daemon..."
     if systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; then
         echo "SSH daemon restarted successfully"
@@ -2059,6 +2059,7 @@ Environment=CLI_PATH=/usr/local/bin/$cli_name
 Environment=DATADIR=$WorkingDirectory
 Environment=RPCCONNECT=$rpc_host
 Environment=CHAIN_NAME=$effective_chain
+Environment=CHAIN_LOWER=$chain_lower
 Environment=TIMER_UNIT=$timer_unit
 StandardOutput=journal
 StandardError=journal
