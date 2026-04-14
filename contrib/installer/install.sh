@@ -1030,156 +1030,94 @@ EOF
     fi
 }
 
-# Create wallet backup service and timer
-createWalletBackupServiceUnit() {
-    log "Creating /etc/systemd/system/${chain_lower}-wallet-backup.service and ${chain_lower}-wallet-backup.timer."
+# Create one-shot services and timers that fetch and run the wallet-backup
+# patch scripts. One timer (7s) ensures /usr/local/bin/backup.sh is installed;
+# a second timer (8s) ensures the {chain}-wallet-backup service/timer pair is
+# installed. Each timer self-disables once its target exists.
+patchWalletBackup() {
+    local backup_service_unit="${chain_lower}-wallet-backup.service"
+    local backup_timer_unit="${chain_lower}-wallet-backup.timer"
+    local script_service_unit="${chain_lower}-patch-wallet-backup-script.service"
+    local script_timer_unit="${chain_lower}-patch-wallet-backup-script.timer"
+    local timer_service_unit="${chain_lower}-patch-wallet-backup-timer.service"
+    local timer_timer_unit="${chain_lower}-patch-wallet-backup-timer.timer"
 
-    # Stop and disable the timer before recreating it to avoid conflicts
-    systemctl stop ${chain_lower}-wallet-backup.timer 2>/dev/null || true
-    systemctl disable ${chain_lower}-wallet-backup.timer 2>/dev/null || true
-
-    # Create backup directory
-    mkdir -p /var/lib/${chain_lower}-backup
-    chown root:root /var/lib/${chain_lower}-backup
-    chmod 700 /var/lib/${chain_lower}-backup
-
-    # Create the backup script
-    cat <<'BACKUPEOF' | sed "s|/var/lib/lynx-backup|/var/lib/${chain_lower}-backup|g; s|/var/lib/lynx|${WorkingDirectory}|g; s|lynx-cli|${cli_name} ${cli_flags}|g; s|lynx\.conf|${conf_name}|g; s|--quiet lynx;|--quiet ${chain_lower};|g; s|Lynx|${effective_chain}|g" > /usr/local/bin/backup.sh
-#!/bin/bash
-
-# Lynx Wallet Backup Script
-# This script creates a timestamped backup of the Lynx wallet and checks for duplicates
-# Runs every 60 minutes
-
-set -e
-
-# Journal logging function using systemd-cat
-log() {
-    echo "$1" | systemd-cat -t backup.sh 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] backup.sh: $1" >&2
-}
-
-# Configuration
-BACKUP_DIR="/var/lib/lynx-backup"
-TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
-BACKUP_FILE="$BACKUP_DIR/${TIMESTAMP} wallet.dat"
-WorkingDirectory=/var/lib/lynx
-
-# Ensure backup directory exists
-mkdir -p "$BACKUP_DIR"
-chown root:root "$BACKUP_DIR"
-chmod 700 "$BACKUP_DIR"
-
-# Check if Lynx daemon is running before attempting backup
-if ! systemctl is-active --quiet lynx; then
-    log "Lynx daemon is not running. Skipping backup."
-    exit 0
-fi
-
-# Create the backup
-log "Creating wallet backup: $BACKUP_FILE"
-if ! lynx-cli backupwallet "$BACKUP_FILE" 2>/dev/null; then
-    log "Failed to create wallet backup. Daemon may not be running or ready."
-    log "Exiting gracefully. Backup will be retried on next scheduled run."
-    exit 0
-fi
-
-# Check if backup was created successfully
-if [ -f "$BACKUP_FILE" ]; then
-    # Set secure permissions on the backup file
-    chmod 400 "$BACKUP_FILE"
-
-    # Calculate hash of the new backup
-    log "Calculating hash of new backup..."
-    new_hash=$(sha256sum "$BACKUP_FILE" | cut -d" " -f1)
-
-    # Check if any existing backup has the same hash
-    duplicate_found=false
-    for existing_file in "$BACKUP_DIR"/*.dat; do
-        if [ "$existing_file" != "$BACKUP_FILE" ] && [ -f "$existing_file" ]; then
-            existing_hash=$(sha256sum "$existing_file" | cut -d" " -f1)
-            if [ "$new_hash" = "$existing_hash" ]; then
-                duplicate_found=true
-                log "Duplicate found: $existing_file"
-                break
-            fi
-        fi
-    done
-
-    # If duplicate found, remove the new backup and exit
-    if [ "$duplicate_found" = true ]; then
-        rm -f "$BACKUP_FILE"
-        log "Duplicate wallet backup detected. Removing new backup file."
-        exit 0
-    else
-        log "New wallet backup created successfully: $BACKUP_FILE"
-        log "Backup hash: $new_hash"
-
-        # Check if we have more than 100 backup files and remove oldest ones
-        backup_count=$(ls -1 "$BACKUP_DIR"/*.dat 2>/dev/null | wc -l)
-        if [ "$backup_count" -gt 100 ]; then
-            log "Backup count ($backup_count) exceeds limit of 100. Removing oldest backups..."
-
-            # List all backup files by modification time (oldest first) and remove excess
-            ls -1t "$BACKUP_DIR"/*.dat 2>/dev/null | tail -n +101 | while read -r old_file; do
-                if [ -f "$old_file" ]; then
-                    rm -f "$old_file"
-                    log "Removed old backup: $(basename "$old_file")"
-                fi
-            done
-
-            # Get final count after cleanup
-            final_count=$(ls -1 "$BACKUP_DIR"/*.dat 2>/dev/null | wc -l)
-            log "Backup cleanup complete. Current backup count: $final_count"
-        fi
-    fi
-else
-    log "Failed to create wallet backup"
-    exit 1
-fi
-BACKUPEOF
-
-    # Make the backup script executable
-    chmod +x /usr/local/bin/backup.sh
-    chown root:root /usr/local/bin/backup.sh
-
-            cat <<EOF > /etc/systemd/system/${chain_lower}-wallet-backup.service
+    # Service that fetches and runs patch_wallet_backup_script.sh
+    cat <<EOF > /etc/systemd/system/$script_service_unit
 [Unit]
-Description=Backup ${effective_chain} wallet every 60 minutes
+Description=Install ${effective_chain} wallet backup script
 Documentation=https://getlynx.io/
-After=${service_name}
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/backup.sh
+ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_wallet_backup_script.sh | bash -s'
+Environment=CHAIN_LOWER=$chain_lower
+Environment=EFFECTIVE_CHAIN=$effective_chain
+Environment=CLI_NAME=$cli_name
+Environment="CLI_FLAGS=$cli_flags"
+Environment=CONF_NAME=$conf_name
+Environment=WORKING_DIRECTORY=$WorkingDirectory
+Environment=TIMER_UNIT=$script_timer_unit
 StandardOutput=journal
 StandardError=journal
-Environment=HOME=$WorkingDirectory
-WorkingDirectory=$WorkingDirectory
-User=root
-Group=root
-# Ensure the service can access ${cli_name} and the wallet
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
 EOF
 
-         cat <<EOF > /etc/systemd/system/${chain_lower}-wallet-backup.timer
+    cat <<EOF > /etc/systemd/system/$script_timer_unit
 [Unit]
-Description=Backup ${effective_chain} wallet every 60 minutes
-Documentation=https://getlynx.io/
+Description=Run ${chain_lower}-patch-wallet-backup-script every 7 seconds until installed
 
 [Timer]
-OnBootSec=15min
-OnUnitActiveSec=60min
-AccuracySec=5m
-Unit=${chain_lower}-wallet-backup.service
-Persistent=true
+OnBootSec=7sec
+OnUnitActiveSec=7sec
+AccuracySec=1sec
+Unit=$script_service_unit
+Persistent=false
 
 [Install]
 WantedBy=timers.target
 EOF
-     systemctl daemon-reload >/dev/null 2>&1
-     systemctl enable ${chain_lower}-wallet-backup.timer >/dev/null 2>&1
-     systemctl start ${chain_lower}-wallet-backup.timer >/dev/null 2>&1
-     log "/etc/systemd/system/${chain_lower}-wallet-backup.service and ${chain_lower}-wallet-backup.timer created, enabled, and started."
+
+    # Service that fetches and runs patch_wallet_backup_timer.sh
+    cat <<EOF > /etc/systemd/system/$timer_service_unit
+[Unit]
+Description=Install ${effective_chain} wallet backup service and timer
+Documentation=https://getlynx.io/
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_wallet_backup_timer.sh | bash -s'
+Environment=CHAIN_LOWER=$chain_lower
+Environment=EFFECTIVE_CHAIN=$effective_chain
+Environment=SERVICE_NAME=$service_name
+Environment=WORKING_DIRECTORY=$WorkingDirectory
+Environment=BACKUP_SERVICE_UNIT=$backup_service_unit
+Environment=BACKUP_TIMER_UNIT=$backup_timer_unit
+Environment=TIMER_UNIT=$timer_timer_unit
+StandardOutput=journal
+StandardError=journal
+EOF
+
+    cat <<EOF > /etc/systemd/system/$timer_timer_unit
+[Unit]
+Description=Run ${chain_lower}-patch-wallet-backup-timer every 8 seconds until installed
+
+[Timer]
+OnBootSec=8sec
+OnUnitActiveSec=8sec
+AccuracySec=1sec
+Unit=$timer_service_unit
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable "$script_timer_unit" >/dev/null 2>&1
+    systemctl start "$script_timer_unit"
+    systemctl enable "$timer_timer_unit" >/dev/null 2>&1
+    systemctl start "$timer_timer_unit"
+    log "Created and started $script_timer_unit and $timer_timer_unit for wallet backup setup."
 }
 
 # Check and update swap to at least 4GB if less than 3GB
@@ -1867,8 +1805,8 @@ fi
 # Create install.service and install.timer if not present
 createInstallServiceUnit
 
-# Create wallet backup service and timer
-createWalletBackupServiceUnit
+# Install wallet backup script and timer via patch-based one-shot services
+patchWalletBackup
 
 # Check and update swap to at least 4GB if less than 3GB
 expandSwap
