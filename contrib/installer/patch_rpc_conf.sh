@@ -26,7 +26,7 @@ if [ ! -f "$CONF_PATH" ]; then
 fi
 
 # Check if any 127.0.0.1 addresses remain in rpcbind/rpcallowip lines
-if ! grep -q '127\.0\.0\.1' "$CONF_PATH" 2>/dev/null; then
+if ! grep -q '127\.0\.0\.1\b' "$CONF_PATH" 2>/dev/null; then
     logger -t patch_rpc_conf "No 127.0.0.1 addresses found in $CONF_PATH. Disabling timer."
     systemctl stop "$TIMER_UNIT" 2>/dev/null || true
     systemctl disable "$TIMER_UNIT" 2>/dev/null || true
@@ -34,7 +34,7 @@ if ! grep -q '127\.0\.0\.1' "$CONF_PATH" 2>/dev/null; then
 fi
 
 # Replace all 127.0.0.1 occurrences with the per-chain loopback IP
-sed -i "s|127\.0\.0\.1|$RPC_HOST|g" "$CONF_PATH"
+sed -i "s|127\.0\.0\.1\b|$RPC_HOST|g" "$CONF_PATH"
 logger -t patch_rpc_conf "Replaced all 127.0.0.1 addresses with $RPC_HOST in $CONF_PATH."
 
 # Restart the daemon to pick up the new settings

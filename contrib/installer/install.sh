@@ -1761,11 +1761,11 @@ fi
 patchRpcConf
 patchFirewall
 
+# Check if running as root
+isRootUser
+
 # If running in update mode, run only the update process
 if [[ "$update_mode" == "update" ]]; then
-
-    # Check if running as root
-    isRootUser
 
     # Self-update: save the latest script to disk so future timer runs use it
     log "Updating install.sh at /usr/local/bin for systemd timer."
@@ -1802,9 +1802,6 @@ if [[ "$update_mode" == "update" ]]; then
 
     exit 0
 fi
-
-# Check if running as root
-isRootUser
 
 # Rebuild confirmation prompt
 if [ "$rebuild_mode" = "rebuild" ]; then
