@@ -925,7 +925,7 @@ executeHelpCommand() {
     version_info=$($SPARK_CLI -version 2>/dev/null | head -1 || echo "Unknown")
     [ -z "$version_info" ] && version_info="Unknown"
 
-    local title="Lynx Spark for the ${chain_cap} Data Storage Network"
+    local title="${chain_cap} Spark for the Lynx Data Storage Network"
     local width=64
     local pad=$(( (width - ${#title}) / 2 ))
     printf "%*s%s\n" "$pad" "" "$title"
