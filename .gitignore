@@ -82,3 +82,4 @@ src/.deps/
 src/wallet/test/.deps/
 deps/
 src/test/.deps/
+contrib/installer/MULTI_CHAIN_PLAN.md
