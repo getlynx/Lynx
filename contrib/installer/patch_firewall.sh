@@ -62,7 +62,8 @@ LOCKFILE="/var/lock/spark-iptables"
 
     # --- 1. Ensure SPARK parent chain exists and is attached to INPUT ---
     iptables -N "$PARENT" 2>/dev/null || true
-    iptables -C INPUT -j "$PARENT" 2>/dev/null || iptables -A INPUT -j "$PARENT"
+    # INSERT at position 1 so SPARK takes priority over any legacy rules
+    iptables -C INPUT -j "$PARENT" 2>/dev/null || iptables -I INPUT 1 -j "$PARENT"
 
     # --- 2. Ensure shared rules in SPARK (idempotent, never flushed) ---
     # Loopback
@@ -89,7 +90,8 @@ LOCKFILE="/var/lock/spark-iptables"
     # --- 6. Ensure SPARK has a jump to this sub-chain (before DROP) ---
     if ! iptables -C "$PARENT" -j "$SUBCHAIN" 2>/dev/null; then
         # Find the DROP rule number (if any) so we can insert before it
-        drop_line=$(iptables -L "$PARENT" --line-numbers -n 2>/dev/null | grep -i "DROP" | tail -1 | awk '{print $1}')
+        # Note: || true prevents pipefail from killing the subshell when grep finds no match
+        drop_line=$(iptables -L "$PARENT" --line-numbers -n 2>/dev/null | grep -i "DROP" | tail -1 | awk '{print $1}') || true
         if [ -n "$drop_line" ]; then
             iptables -I "$PARENT" "$drop_line" -j "$SUBCHAIN"
         else
@@ -107,7 +109,8 @@ LOCKFILE="/var/lock/spark-iptables"
     # We keep only the jump to SPARK. This is idempotent and safe.
     while true; do
         # Find the first INPUT rule that is NOT the jump to SPARK
-        legacy_line=$(iptables -L INPUT --line-numbers -n 2>/dev/null | tail -n +3 | grep -v "SPARK" | head -1 | awk '{print $1}')
+        # Note: || true prevents pipefail from killing the subshell when grep finds no match
+        legacy_line=$(iptables -L INPUT --line-numbers -n 2>/dev/null | tail -n +3 | grep -v "SPARK" | head -1 | awk '{print $1}') || true
         if [ -n "$legacy_line" ]; then
             iptables -D INPUT "$legacy_line" 2>/dev/null || break
         else
