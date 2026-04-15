@@ -31,12 +31,13 @@ The Spark installer. It automates the full lifecycle of a single daemon on AMD a
 
 **Usage:**
 
+Install or update a Spark (default Lynx chain)
 ```bash
-# Install or update a Spark (default Lynx chain)
 bash <(curl -sL install.getlynx.io)
 ```
+
+Install or update a Spark for a specific chain
 ```bash
-# Install or update a Spark for a specific chain
 bash <(curl -sL install.getlynx.io) --chain=mychain
 ```
 

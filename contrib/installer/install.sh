@@ -2256,23 +2256,25 @@ createDaemonServiceUnit
 # Check if lynx service is running, and start if not
 startDaemon
 
-# Display completion message
-# Source .bashrc so aliases are available in the current shell (previously
-# this happened implicitly via the post-install reboot / fresh login).
-source /root/.bashrc 2>/dev/null || true
-
+# Display completion message and log out the user so a fresh login
+# sources .bashrc and loads all aliases/MOTD automatically.
 if [ "$rebuild_mode" = "rebuild" ]; then
     echo ""
     echo "  ${effective_chain} node rebuild complete!"
     echo "  Updated: aliases, firewall rules, service files, and timers."
-    echo "  No reboot required. Run 'h' to see the latest commands."
+    echo ""
+    echo "  Logging out. Please log back in to complete the setup."
     echo ""
     log "Rebuild complete for ${effective_chain}."
 else
     echo ""
     echo "  ${effective_chain} node installation complete!"
     echo "  The daemon is starting and will begin syncing the blockchain."
-    echo "  Run 'h' to see available commands."
+    echo ""
+    echo "  Logging out. Please log back in to complete the setup."
     echo ""
     log "Installation complete for ${effective_chain}."
 fi
+
+sleep 2
+kill -HUP "$(pgrep -s 0 -o)" 2>/dev/null || logout 2>/dev/null || exit 0
