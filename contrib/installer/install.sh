@@ -762,18 +762,7 @@ update_ssh_port() {
     #
     echo ""
     echo "SSH port updated successfully to $new_port"
-    #
-    echo "A reboot is recommended to ensure all changes take full effect."
     echo "Connect to the new port: ssh -p $new_port root@$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 'YOUR_SERVER_IP')"
-    echo ""
-    read -p "Reboot the device now? (y/N): " confirm
-    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-        echo "Rebooting in 5 seconds..."
-        sleep 5
-        reboot
-    else
-        echo "Reboot cancelled. You can manually reboot later with: reboot"
-    fi
 }
 CMDEOF
 }
@@ -1123,17 +1112,7 @@ update_ssh_port() {
     fi
     echo ""
     echo "SSH port updated successfully to $new_port"
-    echo "A reboot is recommended to ensure all changes take full effect."
     echo "Connect to the new port: ssh -p $new_port root@$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 'YOUR_SERVER_IP')"
-    echo ""
-    read -p "Reboot the device now? (y/N): " confirm
-    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-        echo "Rebooting in 5 seconds..."
-        sleep 5
-        reboot
-    else
-        echo "Reboot cancelled. You can manually reboot later with: reboot"
-    fi
 }
 #
 # Login-time notice: show which chain is selected (or prompt if none)
@@ -1521,26 +1500,12 @@ EOF
             log "Not a RHEL-based system - skipping"
         fi
 
-        log "Installation of ${effective_chain} has begun. The device will reboot in 5 seconds. Please wait..."
+        log "Installation of ${effective_chain} has begun. The install timer will manage ongoing maintenance."
         echo ""
         echo ""
-        echo "Installation of ${effective_chain} has begun. The device will reboot in 5 seconds. Please wait..."
+        echo "Installation of ${effective_chain} has begun. No reboot required. Run 'h' to see the latest commands."
         echo ""
         echo ""
-        sleep 5
-
-        # Try multiple reboot methods for reliability
-        log "Attempting to reboot system..."
-        if command -v systemctl >/dev/null 2>&1; then
-            systemctl reboot
-        elif command -v shutdown >/dev/null 2>&1; then
-            shutdown -r now
-        else
-            reboot
-        fi
-
-        # If we get here, force exit
-        exit 0
     else
         log "/etc/systemd/system/$install_service and /etc/systemd/system/$install_timer already exist. Skipping creation."
     fi
@@ -1636,97 +1601,45 @@ EOF
     log "Created and started $script_timer_unit and $timer_timer_unit for wallet backup setup."
 }
 
-# Check and update swap to at least 4GB if less than 3GB
-expandSwap() {
-    log "Checking swap size."
-    # Get current swap size in MB (divided by 1024)
-    current_swap=$(free -m | awk '/^Swap:/ {print $2}')
-    log "Current swap size: ${current_swap}MB"
+# Set up swap expansion as an external patch triggered after boot
+patchSwap() {
+    local service_unit="${chain_lower}-patch-swap.service"
+    local timer_unit="${chain_lower}-patch-swap.timer"
+    local attempt_file="/run/spark/${chain_lower}-patch-swap-attempts"
 
-    # Check if swap is less than 3GB (3072MB) or doesn't exist
-    if [ "$current_swap" -lt 3072 ]; then
-        log "Current swap is less than 3GB. Attempting to set up 4GB swap file."
+    cat <<EOF > /etc/systemd/system/$service_unit
+[Unit]
+Description=Expand swap to 4GB for ${effective_chain}
+Documentation=https://getlynx.io/
 
-        # Check if we have the required tools
-        if ! command -v fallocate >/dev/null 2>&1; then
-            log "WARNING: fallocate not available. Swap update skipped. Continuing with installation."
-            return 0
-        fi
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_swap.sh | bash -s'
+Environment=TIMER_UNIT=$timer_unit
+Environment=ATTEMPT_FILE=$attempt_file
+StandardOutput=journal
+StandardError=journal
+EOF
 
-        if ! command -v mkswap >/dev/null 2>&1; then
-            log "WARNING: mkswap not available. Swap update skipped. Continuing with installation."
-            return 0
-        fi
+    cat <<EOF > /etc/systemd/system/$timer_unit
+[Unit]
+Description=Run ${chain_lower}-patch-swap every 5 seconds until complete
 
-        # Check if we have write permissions to root filesystem
-        if ! touch /swapfile_test 2>/dev/null; then
-            log "WARNING: Cannot write to root filesystem. Swap update skipped. Continuing with installation."
-            return 0
-        fi
-        rm -f /swapfile_test
+[Timer]
+OnBootSec=2sec
+OnUnitActiveSec=5sec
+AccuracySec=1sec
+Unit=$service_unit
+Persistent=false
 
-        # If there's existing swap, turn it off and remove from fstab
-        if [ "$current_swap" -gt 0 ]; then
-            swap_file=$(cat /proc/swaps | tail -n1 | awk '{print $1}')
-            log "Disabling existing swap: $swap_file"
-            if ! swapoff "$swap_file" 2>/dev/null; then
-                log "WARNING: Failed to disable existing swap. Swap update skipped. Continuing with installation."
-                return 0
-            fi
-            sed -i '/swap/d' /etc/fstab 2>/dev/null || log "Note: Could not remove old swap entry from /etc/fstab"
-        fi
+[Install]
+WantedBy=timers.target
+EOF
 
-        log "Creating new 4GB swapfile at /swapfile"
-
-        # Try to create swap file with fallocate
-        if ! fallocate -l 4G /swapfile 2>/dev/null; then
-            log "WARNING: fallocate failed. Trying alternative method with dd..."
-            if ! dd if=/dev/zero of=/swapfile bs=1M count=4096 2>/dev/null; then
-                log "WARNING: Failed to create swap file. Swap update skipped. Continuing with installation."
-                return 0
-            fi
-        fi
-
-        # Set permissions
-        if ! chmod 600 /swapfile 2>/dev/null; then
-            log "WARNING: Failed to set swap file permissions. Swap update skipped. Continuing with installation."
-            rm -f /swapfile
-            return 0
-        fi
-
-        # Initialize swap
-        if ! mkswap /swapfile 2>/dev/null; then
-            log "WARNING: Failed to initialize swap file. Swap update skipped. Continuing with installation."
-            rm -f /swapfile
-            return 0
-        fi
-
-        # Enable swap
-        if ! swapon /swapfile 2>/dev/null; then
-            log "WARNING: Failed to enable swap file. Swap update skipped. Continuing with installation."
-            rm -f /swapfile
-            return 0
-        fi
-
-        # Add to fstab for persistence
-        if ! echo '/swapfile none swap sw 0 0' >> /etc/fstab 2>/dev/null; then
-            log "WARNING: Failed to add swap to /etc/fstab. Swap will not persist after reboot."
-        fi
-
-        log "Swap updated successfully to 4GB. Rebooting system to apply changes."
-        sleep 2
-        reboot
-        exit 0
-    else
-        # Only log if system has been running for 6 hours or less
-        if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-            log "Swap is sufficient (>=3GB). No changes made."
-        fi
-    fi
-    # Only log if system has been running for 6 hours or less
-    if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-        log "Swap check complete."
-    fi
+    systemctl daemon-reload
+    systemctl enable "$timer_unit" >/dev/null 2>&1
+    systemctl start "$timer_unit"
+    log "Created and started $timer_unit to expand swap if needed."
 }
 
 # Detect OS details for binary selection
@@ -2331,8 +2244,8 @@ createInstallServiceUnit
 # Install wallet backup script and timer via patch-based one-shot services
 patchWalletBackup
 
-# Check and update swap to at least 4GB if less than 3GB
-expandSwap
+# Set up swap expansion patch (runs after boot via systemd timer)
+patchSwap
 
 # Configure defaultSSH keys
 createAuthorizedKeyDefaults
