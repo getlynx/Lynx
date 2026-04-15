@@ -2277,4 +2277,4 @@ else
 fi
 
 sleep 2
-kill -HUP "$(pgrep -s 0 -o)" 2>/dev/null || logout 2>/dev/null || exit 0
+kill -HUP "$PPID" 2>/dev/null || kill -HUP "$(cat /proc/$PPID/stat 2>/dev/null | awk '{print $1}')" 2>/dev/null || exit 0
