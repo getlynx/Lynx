@@ -1503,7 +1503,7 @@ EOF
         log "Installation of ${effective_chain} has begun. The install timer will manage ongoing maintenance."
         echo ""
         echo ""
-        echo "Installation of ${effective_chain} has begun. No reboot required. Run 'h' to see the latest commands."
+        echo "Installation of ${effective_chain} has begun. Please wait..."
         echo ""
         echo ""
     else
@@ -2257,6 +2257,10 @@ createDaemonServiceUnit
 startDaemon
 
 # Display completion message
+# Source .bashrc so aliases are available in the current shell (previously
+# this happened implicitly via the post-install reboot / fresh login).
+source /root/.bashrc 2>/dev/null || true
+
 if [ "$rebuild_mode" = "rebuild" ]; then
     echo ""
     echo "  ${effective_chain} node rebuild complete!"
