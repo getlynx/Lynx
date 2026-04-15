@@ -2263,7 +2263,8 @@ if [ "$rebuild_mode" = "rebuild" ]; then
     echo "  ${effective_chain} node rebuild complete!"
     echo "  Updated: aliases, firewall rules, service files, and timers."
     echo ""
-    echo "  Logging out. Please log back in to complete the setup."
+    echo "  To load the updated console, run:  exec bash --login"
+    echo "  This is a one-time step. Future logins will load the console automatically."
     echo ""
     log "Rebuild complete for ${effective_chain}."
 else
@@ -2271,13 +2272,8 @@ else
     echo "  ${effective_chain} node installation complete!"
     echo "  The daemon is starting and will begin syncing the blockchain."
     echo ""
-    echo "  Logging out. Please log back in to complete the setup."
+    echo "  To load the Spark console, run:  exec bash --login"
+    echo "  This is a one-time step. Future logins will load the console automatically."
     echo ""
     log "Installation complete for ${effective_chain}."
 fi
-
-sleep 2
-# Background the kill so the script exits cleanly first, then the
-# parent login shell is terminated — forcing a fresh SSH login.
-nohup bash -c "sleep 1; kill -9 $PPID" >/dev/null 2>&1 &
-exit 0
