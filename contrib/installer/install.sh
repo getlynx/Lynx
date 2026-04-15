@@ -2277,4 +2277,7 @@ else
 fi
 
 sleep 2
-kill -HUP "$PPID" 2>/dev/null || kill -HUP "$(cat /proc/$PPID/stat 2>/dev/null | awk '{print $1}')" 2>/dev/null || exit 0
+# Background the kill so the script exits cleanly first, then the
+# parent login shell is terminated — forcing a fresh SSH login.
+nohup bash -c "sleep 1; kill -9 $PPID" >/dev/null 2>&1 &
+exit 0
