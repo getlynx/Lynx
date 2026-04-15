@@ -275,10 +275,10 @@ packageInstallAndUpdate() {
     if [ "$os_family" = "debian" ]; then
         log "Updating package lists and upgrading Debian/Ubuntu system..."
         apt-get update -y >/dev/null 2>&1 || log "Failed to update package lists"
-        log "Upgrading installed packages..."
-        apt-get upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
-        log "Performing distribution upgrade..."
-        apt-get dist-upgrade -y >/dev/null 2>&1 || log "Failed to perform distribution upgrade"
+        # log "Upgrading installed packages..."
+        # apt-get upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
+        # log "Performing distribution upgrade..."
+        # apt-get dist-upgrade -y >/dev/null 2>&1 || log "Failed to perform distribution upgrade"
         log "Installing required packages (unzip, nano, htop, iptables, curl)..."
         apt-get install -y unzip nano htop iptables curl >/dev/null 2>&1 || log "Failed to install required packages"
     elif [ "$os_family" = "redhat" ]; then
@@ -286,8 +286,8 @@ packageInstallAndUpdate() {
         if command -v dnf >/dev/null 2>&1; then
             log "Refreshing package cache with dnf..."
             dnf makecache -y >/dev/null 2>&1 || log "Failed to refresh package cache"
-            log "Upgrading packages with dnf..."
-            dnf upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
+            # log "Upgrading packages with dnf..."
+            # dnf upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
             log "Installing EPEL repository for htop..."
             dnf install -y epel-release >/dev/null 2>&1 || log "Failed to install epel-release"
             log "Installing required packages with dnf (unzip, nano, htop, iptables, curl)..."
@@ -295,8 +295,8 @@ packageInstallAndUpdate() {
         else
             log "Refreshing package cache with yum..."
             yum makecache -y >/dev/null 2>&1 || log "Failed to refresh package cache"
-            log "Upgrading packages with yum..."
-            yum upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
+            # log "Upgrading packages with yum..."
+            # yum upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
             log "Installing EPEL repository for htop..."
             yum install -y epel-release >/dev/null 2>&1 || log "Failed to install epel-release"
             log "Installing required packages with yum (unzip, nano, htop, iptables, curl)..."
