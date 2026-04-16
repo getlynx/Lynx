@@ -8,10 +8,12 @@ set -euo pipefail
 # Parse command-line arguments
 chain_name=""
 update_mode=""
+rebuild_mode=""
 for arg in "$@"; do
     case "$arg" in
         --chain=*) chain_name="${arg#--chain=}" ;;
         update)    update_mode="update" ;;
+        rebuild)   rebuild_mode="rebuild" ;;
     esac
 done
 
@@ -25,7 +27,10 @@ tx_name="${chain_lower}-tx"
 service_name="${chain_lower}.service"
 conf_name="${chain_lower}.conf"
 
-# Set assumevalid flag only for the default Lynx chain
+# Base URL for fetching external helper scripts at runtime
+SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/installer"
+
+# Set assumevalid flag only for the default chain
 if [ "$chain_lower" = "lynx" ]; then
     assumevalid_flag=" -assumevalid=485bea987c62039d365a9458b6df2e3ef679054f2bd6e016877f783652912cfb"
 else
@@ -33,18 +38,22 @@ else
 fi
 
 ################################################################################
-# LYNX NODE BUILDER SCRIPT
+# LYNX SPARK INSTALLER
 ################################################################################
 #
 # PURPOSE:
-#   This script automates the setup and maintenance of a Lynx cryptocurrency node
-#   on AMD and ARM-based systems (Raspberry Pi, ARM64 servers, etc.). It handles the
-#   complete lifecycle from initial setup to ongoing maintenance with improved
-#   efficiency and error handling.
+#   Spark is a single-daemon deployment for the Lynx Data Storage Network.
+#   This script automates the full lifecycle of a Spark on AMD and ARM-based
+#   systems (Raspberry Pi, ARM64 servers, etc.) — from initial setup to
+#   ongoing maintenance. Multiple chains can run in parallel on the same host.
+#
+#   Spark runs one daemon per chain. Use 'chain' (or 'c') to switch between
+#   installed chains. For managing multiple daemons from a single console,
+#   see Beacon (https://github.com/getlynx/Beacon).
 #
 # AUTHOR: Lynx Development Team
-# VERSION: 3.1
-# LAST UPDATED: 2025
+# VERSION: 4.0
+# LAST UPDATED: 2026-04-01
 # DOCUMENTATION: https://docs.getlynx.io/
 #
 ################################################################################
@@ -55,21 +64,21 @@ fi
 #   1. SYSTEM SETUP:
 #      - Creates systemd timer (install.timer) to run every 12 minutes
 #      - Sets up 4GB swap file if current swap is less than 3GB
-#      - Installs Lynx ARM binaries if not present
-#      - Creates systemd service (lynx.service) for the Lynx daemon
-#      - Creates wallet backup service (lynx-wallet-backup.service) running every 60 minutes
+#      - Installs respective daemon ARM/AMD binaries if not present
+#      - Creates systemd service ({chain}.service) for the daemon
+#      - Creates wallet backup service running every 60 minutes
 #      - Configures firewall rules and SSH security settings
 #
-#   2. USER EXPERIENCE:
-#      - Adds convenient aliases to ~/.bashrc for common Lynx operations
-#      - Creates a beautiful MOTD (Message of the Day) with real-time node statistics
-#      - Shows staking performance metrics directly from wallet RPC (not log files)
+#   2. SPARK CONSOLE:
+#      - Adds convenient aliases to ~/.bashrc for common operations
+#      - Displays real-time daemon statistics on login
+#      - Shows staking performance metrics from wallet RPC
 #      - Displays 24-hour and 7-day yield rates based on network block time
 #      - Tracks immature stake rewards awaiting maturity
 #      - Provides quick access to wallet commands, system monitoring, and logs
 #
-#   3. NODE MAINTENANCE:
-#      - Ensures Lynx daemon is running
+#   3. DAEMON MAINTENANCE:
+#      - Ensures daemon is running
 #      - Monitors blockchain synchronization status
 #      - Automatically restarts daemon during sync
 #      - Disables timer once sync is complete
@@ -84,7 +93,7 @@ fi
 #
 ################################################################################
 #
-# ALIASES CREATED (type 'h' to see all):
+# SPARK CONSOLE COMMANDS (type 'h' to see all):
 #   WALLET COMMANDS:
 #     gba    - Get wallet balances
 #     gna    - Generate new address
@@ -93,32 +102,32 @@ fi
 #     swe    - Sweep a wallet (send all funds, recipient pays fee)
 #     bac    - Manual wallet backup
 #     lba    - List backup directory contents
-#     wdi    - Change to Lynx working directory
+#     wdi    - Change to daemon working directory
 #
-#   LYNX COMMANDS:
-#     lyv    - Show Lynx version
-#     lyc    - View/edit Lynx config file (-e to edit)
-#     lyl    - View Lynx debug log (default 30 lines, -f for follow)
-#     lyr    - Restart Lynx daemon (-d to purge debug log)
+#   DAEMON COMMANDS:
+#     lyv    - Show daemon version
+#     lyc    - View/edit daemon config file (-e to edit)
+#     lyl    - View daemon debug log (default 30 lines, -f for follow)
+#     lyr    - Restart daemon (-d to purge debug log)
 #     gbi    - Get blockchain info
-#     hel    - Show Lynx help (with keyword search)
+#     hel    - Show daemon help (with keyword search)
 #
 #   SYSTEM COMMANDS:
-#     sst    - Check Lynx service status
+#     lss    - Check daemon service status
 #     jou    - View install logs (default 30 lines, -f for follow)
-#     upd    - Update Lynx to latest release
+#     upd    - Install or update daemon to latest release
+#     reb    - Update services, timers, firewall, and aliases
 #     usp    - Change SSH port
-#     wdi    - Change to Lynx working directory
 #     ipt    - List iptables rules (verbose)
 #
 #   USEFUL COMMANDS:
-#     h      - Show help message and node statistics
+#     h      - Show Spark console and daemon statistics
 #     htop   - Monitor system resources
 #
 #   HIDDEN/ADVANCED COMMANDS:
 #     fire   - Edit firewall script
-#     shh   - Edit SSH authorized keys
-#     pass   - Toggle password authentication (on/off)
+#     shh    - Edit SSH authorized keys
+#     pas    - Toggle password authentication (on/off)
 #
 ################################################################################
 #
@@ -127,11 +136,12 @@ fi
 #   - Debian/Ubuntu-based or RHEL system (Rocky, AlmaLinux, CentOS, Fedora)
 #   - Root privileges
 #   - Internet connection
+#   - curl
 #   - Minimum 4GB RAM recommended
 #
-# DEPENDENCIES:
+# DEPENDENCIES (installed automatically):
 #   - systemd
-#   - wget, curl, unzip, nano, htop, iptables
+#   - curl, unzip, nano, htop, iptables
 #   - fallocate, mkswap, swapon
 #   - systemd-cat (for system logging)
 #   - awk (for JSON parsing - no jq required)
@@ -139,18 +149,17 @@ fi
 ################################################################################
 #
 # INSTALLATION:
-#   This script is typically downloaded and executed by the Pi installer during
-#   the initial system setup. It can also be run manually on any architecture:
+#   Install a new Spark (default Lynx chain):
+#   bash <(curl -sL install.getlynx.io)
 #
-#   Or for a permanent installation (one command):
-#   wget -4 -O /usr/local/bin/install.sh https://install.getlynx.io && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
-#   or long url
-#   wget -4 -O /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
+#   Install a Spark for a specific chain:
+#   bash <(curl -sL install.getlynx.io) --chain=mychain
 #
-#   Or for a permanent installation (separate steps):
-#   wget -4 -O /usr/local/bin/install.sh https://raw.githubusercontent.com/getlynx/Lynx/refs/heads/main/contrib/installer/install.sh
-#   chmod +x /usr/local/bin/install.sh
-#   /usr/local/bin/install.sh 
+#   Update an existing Spark daemon:
+#   bash <(curl -sL install.getlynx.io) update
+#
+#   Rebuild Spark (update services, timers, firewall, aliases):
+#   reb
 #
 ################################################################################
 #
@@ -158,18 +167,10 @@ fi
 #   - INITIAL SETUP: Creates all necessary files and services
 #   - MAINTENANCE: Runs every 12 minutes via systemd timer
 #   - SYNC MONITORING: Checks blockchain sync status and manages daemon
-#   - UPDATE MODE: Updates Lynx to latest release (use 'update' argument)
+#   - UPDATE: Updates daemon to latest release (use 'update' argument)
+#   - REBUILD: Updates services, timers, and aliases (use 'rebuild' argument)
 #   - CHAIN FILTER: Specify --chain=<name> to download binaries for a specific
 #     chain. If no binary matches, the script exits gracefully.
-#
-# PERFORMANCE OPTIMIZATIONS:
-#   - Stakes counting: Uses debug.log parsing with timestamp filtering
-#   - Block counting: Uses fixed 5-minute block time instead of intensive RPC loops
-#   - Immature stakes: Uses listunspent with awk parsing (no jq dependency)
-#   - All metrics calculated in real-time from wallet and logs
-#   - Smart locale configuration (skips if already configured)
-#   - Efficient OS detection (single function call)
-#   - OS-specific service management for better reliability
 #
 # LOGGING:
 #   - All operations are logged to systemd journal
@@ -184,13 +185,14 @@ fi
 #   - Swap file has restricted permissions (600)
 #   - Strict bash settings (set -euo pipefail)
 #   - Firewall configuration with iptables
+#   - Boot firewall secures SSH while daemon starts
 #   - SSH security hardening options
 #   - Password authentication toggle functionality
 #
 ################################################################################
 #
 # TROUBLESHOOTING:
-#   - Check service status: systemctl status lynx
+#   - Check service status: lss (or systemctl status lynx)
 #   - View debug logs: lyl -f (or tail -f $WorkingDirectory/debug.log)
 #   - Check install logs: jou -f (or journalctl -t install.sh -f)
 #   - Restart daemon: lyr (or systemctl restart lynx)
@@ -201,31 +203,26 @@ fi
 ################################################################################
 #
 # NETWORK PORTS:
-#   - Lynx daemon typically uses port 22566 (configurable in lynx.conf)
-#   - RPC typically uses port 8332 (configurable in lynx.conf)
-#   - SSH port is configurable via usp command (default varies by system)
+#   - Daemon P2P port: 22566 (configurable in lynx.conf)
+#   - RPC port: 8332 (configurable in lynx.conf)
+#   - SSH port: configurable via usp command (default varies by system)
 #
 # FILES CREATED:
-#   - /etc/systemd/system/install.service
-#   - /etc/systemd/system/install.timer
+#   - /etc/systemd/system/{chain}-install.service
+#   - /etc/systemd/system/{chain}-install.timer
 #   - /etc/systemd/system/lynx.service
 #   - /etc/systemd/system/lynx-wallet-backup.service
 #   - /etc/systemd/system/lynx-wallet-backup.timer
-#   - /usr/local/bin/firewall.sh
-#   - /usr/local/bin/backup.sh
+#   - /etc/systemd/system/lynx-patch-firewall.service
+#   - /etc/systemd/system/lynx-patch-firewall.timer
+#   - /usr/local/bin/{chain}-backup.sh
+#   - /usr/local/bin/chain (chain selector)
+#   - /usr/local/bin/c (symlink to chain)
+#   - /usr/local/bin/spark-current-chain.sh (sourced helper)
+#   - /etc/spark/chains.conf (chain registry)
+#   - /run/spark/current-chain (current selection, tmpfs)
 #   - /swapfile (if needed)
-#   - ~/.bashrc (aliases added)
-#
-################################################################################
-#
-# RECENT IMPROVEMENTS (v3.1):
-#   - Added OS-specific SSH service management (sshd vs ssh)
-#   - Enhanced SSH port change functionality with OS-aware restart commands
-#   - Added iptables alias (ipt) for firewall rule inspection
-#   - Improved conditional logic for RedHat vs Debian system handling
-#   - Updated MOTD to include new ipt command
-#   - Enhanced documentation with current alias list
-#   - Better error handling for service restarts
+#   - ~/.bashrc (Spark console aliases)
 #
 ################################################################################
 #
@@ -278,10 +275,10 @@ packageInstallAndUpdate() {
     if [ "$os_family" = "debian" ]; then
         log "Updating package lists and upgrading Debian/Ubuntu system..."
         apt-get update -y >/dev/null 2>&1 || log "Failed to update package lists"
-        log "Upgrading installed packages..."
-        apt-get upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
-        log "Performing distribution upgrade..."
-        apt-get dist-upgrade -y >/dev/null 2>&1 || log "Failed to perform distribution upgrade"
+        # log "Upgrading installed packages..."
+        # apt-get upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
+        # log "Performing distribution upgrade..."
+        # apt-get dist-upgrade -y >/dev/null 2>&1 || log "Failed to perform distribution upgrade"
         log "Installing required packages (unzip, nano, htop, iptables, curl)..."
         apt-get install -y unzip nano htop iptables curl >/dev/null 2>&1 || log "Failed to install required packages"
     elif [ "$os_family" = "redhat" ]; then
@@ -289,8 +286,8 @@ packageInstallAndUpdate() {
         if command -v dnf >/dev/null 2>&1; then
             log "Refreshing package cache with dnf..."
             dnf makecache -y >/dev/null 2>&1 || log "Failed to refresh package cache"
-            log "Upgrading packages with dnf..."
-            dnf upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
+            # log "Upgrading packages with dnf..."
+            # dnf upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
             log "Installing EPEL repository for htop..."
             dnf install -y epel-release >/dev/null 2>&1 || log "Failed to install epel-release"
             log "Installing required packages with dnf (unzip, nano, htop, iptables, curl)..."
@@ -298,8 +295,8 @@ packageInstallAndUpdate() {
         else
             log "Refreshing package cache with yum..."
             yum makecache -y >/dev/null 2>&1 || log "Failed to refresh package cache"
-            log "Upgrading packages with yum..."
-            yum upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
+            # log "Upgrading packages with yum..."
+            # yum upgrade -y >/dev/null 2>&1 || log "Failed to upgrade packages"
             log "Installing EPEL repository for htop..."
             yum install -y epel-release >/dev/null 2>&1 || log "Failed to install epel-release"
             log "Installing required packages with yum (unzip, nano, htop, iptables, curl)..."
@@ -314,10 +311,38 @@ packageInstallAndUpdate() {
 # Set the working directory variable for use throughout the script
 WorkingDirectory=/var/lib/${chain_lower}
 
-# Only show wait message if this is a fresh installation
-if [ ! -d "$WorkingDirectory" ]; then
-    echo "Please wait 10 seconds while the script runs..."
-fi
+# Derive a unique loopback IP for this chain's RPC (range 127.0.0.2-254, reserving .1 for system)
+rpc_octet=$(printf '%s' "$chain_lower" | cksum | awk '{print ($1 % 253) + 2}')
+
+# Collision guard: scan existing chain conf files for rpcbind= and bump if taken
+# by a different chain. Retry up to 253 times (full range).
+_collision_tries=0
+while [ "$_collision_tries" -lt 253 ]; do
+    _taken_by=""
+    for _conf_file in /var/lib/*/[a-z]*.conf; do
+        [ -f "$_conf_file" ] || continue
+        if grep -q "^rpcbind=127\\.0\\.0\\.${rpc_octet}$" "$_conf_file" 2>/dev/null; then
+            # Extract chain name from path: /var/lib/<chain>/<chain>.conf
+            _conf_chain=$(basename "$(dirname "$_conf_file")")
+            if [ "$_conf_chain" != "$chain_lower" ]; then
+                _taken_by="$_conf_chain"
+                break
+            fi
+        fi
+    done
+    if [ -z "$_taken_by" ]; then
+        break
+    fi
+    log "RPC octet $rpc_octet already used by $_taken_by — incrementing."
+    rpc_octet=$(( (rpc_octet % 253) + 2 ))
+    _collision_tries=$(( _collision_tries + 1 ))
+done
+unset _collision_tries _taken_by _conf_file _conf_chain
+
+rpc_host="127.0.0.${rpc_octet}"
+cli_flags="-datadir=$WorkingDirectory -rpcconnect=$rpc_host"
+
+echo "Please wait while the script runs..."
 
 # Create the data directory with proper permissions
 mkdir -p $WorkingDirectory
@@ -337,7 +362,7 @@ log_threshold_seconds=21600
 # Create a nicely formatted command list bashrc file
 createCommandListConsole() {
     local chain_upper=$(echo "${effective_chain}" | tr '[:lower:]' '[:upper:]')
-    cat <<'CMDEOF' | sed "s|WorkingDirectory=/var/lib/lynx|WorkingDirectory=${WorkingDirectory}|g; s|lynx-cli|${cli_name}|g; s|lynx\.conf|${conf_name}|g" | sed "/http/!{ s|LYNX|${chain_upper}|g; s|Lynx|${effective_chain}|g; }"
+    cat <<'CMDEOF' | sed "s|WorkingDirectory=/var/lib/lynx|WorkingDirectory=${WorkingDirectory}|g; s|lynx-cli|${cli_name} ${cli_flags}|g; s|lynx\.conf|${conf_name}|g" | sed "/http/!{ s|LYNX|${chain_upper}|g; s|Lynx|${effective_chain}|g; }" | sed "s|ORIGINALCHAIN|Lynx|g; s|originalchain|lynx|g"
 # Function to display Lynx aliases in a nicely formatted MOTD
 executeHelpCommand() {
     echo ""
@@ -435,7 +460,10 @@ executeHelpCommand() {
         lynx_version="Unknown"
     fi
 
-    echo "                    🦊 LYNX NODE COMMANDS 🦊"
+    local title="Lynx Spark for the ORIGINALCHAIN Data Storage Network"
+    local width=64
+    local pad=$(( (width - ${#title}) / 2 ))
+    printf "%*s%s\n" "$pad" "" "$title"
     echo ""
     echo "  NODE STATUS:"
     echo "    🎯 Stakes won in last 24 hours: $stakes_won"
@@ -466,7 +494,8 @@ executeHelpCommand() {
     echo "  SYSTEM COMMANDS:"
     echo "    lss                    - Check systemd service status"
     echo "    jou [lines] [-f]       - View install logs (default 30)"
-    echo "    upd                    - Update daemon to latest release"
+    echo "    upd                    - Install or update daemon to latest release"
+    echo "    reb                    - Update services, timers, firewall, and aliases"
     echo "    usp [port]             - Change SSH port"
     echo "    wdi                    - Change to daemon working directory"
     echo "    ipt                    - List iptables rules"
@@ -733,135 +762,371 @@ update_ssh_port() {
     #
     echo ""
     echo "SSH port updated successfully to $new_port"
-    #
-    echo "A reboot is recommended to ensure all changes take full effect."
     echo "Connect to the new port: ssh -p $new_port root@$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 'YOUR_SERVER_IP')"
-    echo ""
-    read -p "Reboot the device now? (y/N): " confirm
-    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-        echo "Rebooting in 5 seconds..."
-        sleep 5
-        reboot
-    else
-        echo "Reboot cancelled. You can manually reboot later with: reboot"
-    fi
 }
 CMDEOF
 }
 
 # Add useful aliases and MOTD to /root/.bashrc
+# Uses a single shared block that sources the chain-selector helper.
+# Aliases reference $SPARK_* vars so they work for whichever chain is selected.
+# The block is idempotent: written once and left alone on subsequent installs.
 addAliasesToBashrcFile() {
     local BASHRC="/root/.bashrc"
-    local ALIAS_BLOCK_START="# === LYNX ALIASES START ==="
-    local ALIAS_BLOCK_END="# === LYNX ALIASES END ==="
+    local BLOCK_START="# BEGIN spark-aliases"
+    local BLOCK_END="# END spark-aliases"
 
-    # Remove any existing alias block to avoid duplicates
-    if [ -f "$BASHRC" ] && grep -q "$ALIAS_BLOCK_START" "$BASHRC"; then
-        sed -i "/$ALIAS_BLOCK_START/,/$ALIAS_BLOCK_END/d" "$BASHRC"
+    # Remove any legacy alias block to avoid duplicates
+    local LEGACY_START="# === LYNX ALIASES START ==="
+    local LEGACY_END="# === LYNX ALIASES END ==="
+    if [ -f "$BASHRC" ] && grep -q "$LEGACY_START" "$BASHRC"; then
+        sed -i "/$LEGACY_START/,/$LEGACY_END/d" "$BASHRC"
     fi
 
-    # Append the new alias block
-    cat <<EOF >> "$BASHRC"
-$ALIAS_BLOCK_START
+    # Remove any existing spark-aliases block to update it
+    if [ -f "$BASHRC" ] && grep -q "$BLOCK_START" "$BASHRC"; then
+        sed -i "/$BLOCK_START/,/$BLOCK_END/d" "$BASHRC"
+    fi
+
+    # Write the single shared alias block
+    cat <<'SPARKEOF' >> "$BASHRC"
+# BEGIN spark-aliases
 #
 # Bail out immediately for non-interactive shells (SFTP, scp, rsync, etc.)
-case \$- in
+case $- in
     *i*) ;;
     *) return ;;
 esac
 #
-# This alias is a native $effective_chain command for getting wallet balances. Also provides a shorter undocumented version.
-gba() { $cli_name getbalances; }
+# Source the chain-selector helper to set SPARK_* variables
+if [ -f /usr/local/bin/spark-current-chain.sh ]; then
+    . /usr/local/bin/spark-current-chain.sh
+fi
+#
+# Wrapper functions for chain/c so the current shell picks up the new SPARK_* vars
+# (The script at /usr/local/bin/chain writes the file; we re-source to update env.)
+chain() { /usr/local/bin/chain "$@"; . /usr/local/bin/spark-current-chain.sh; }
+c()     { /usr/local/bin/chain "$@"; . /usr/local/bin/spark-current-chain.sh; }
+#
+# Helper: ensure a chain is selected before running an alias
+_spark_require_chain() {
+    if [ -z "${SPARK_CHAIN:-}" ]; then
+        echo "No chain selected. Run 'chain' or 'c' to pick one."
+        return 1
+    fi
+    return 0
+}
+#
+# WALLET COMMANDS
+gba() { _spark_require_chain && $SPARK_CLI getbalances; }
 gb() { gba; }
-#
-# This alias is a native command for getting a new address. Also provides a shorter undocumented version.
-gna() { $cli_name getnewaddress; }
+gna() { _spark_require_chain && $SPARK_CLI getnewaddress; }
 gn() { gna; }
-#
-# This alias is a custom alias for changing to the working directory. Also provides a shorter undocumented version.
-wdi() { cd $WorkingDirectory && ls -lh; }
-wd() { wdi; }
-#
-# This alias is a native command to list funded addresses in the current wallet. Also provides a shorter undocumented version.
-lag() { $cli_name listaddressgroupings; }
+lag() { _spark_require_chain && $SPARK_CLI listaddressgroupings; }
 la() { lag; }
+sta() { _spark_require_chain && $SPARK_CLI sendtoaddress "$1" "$2"; }
+sa() { sta "$@"; }
+swe() { _spark_require_chain && $SPARK_CLI sendtoaddress "$1" "$($SPARK_CLI getbalance)" "" "" true; }
+sw() { swe "$@"; }
+ca() { _spark_require_chain && $SPARK_CLI capacity; }
+bac() { _spark_require_chain && /usr/local/bin/${SPARK_CHAIN}-backup.sh; }
+lba() { _spark_require_chain && cd /var/lib/${SPARK_CHAIN}-backup && ls -lh; }
 #
-# This alias is a native command to show the version. Also provides a shorter undocumented version.
-lyv() { $cli_name -version; }
+# DAEMON COMMANDS
+lyv() { _spark_require_chain && $SPARK_CLI -version; }
 lv() { lyv; }
-#
-# This alias is a native command to get current blockchain info. Also provides a shorter undocumented version.
-gbi() { $cli_name getblockchaininfo; }
+gbi() { _spark_require_chain && $SPARK_CLI getblockchaininfo; }
 gi() { gbi; }
-#
-# This alias is a custom command to view current iptables rules. The fire alias is an undocumented version that allows you to edit the firewall script.
-ipt() { iptables -L -vn; }
-fire() { nano /usr/local/bin/firewall.sh && echo "Applying firewall changes..." && read -p "Execute firewall script to apply changes? (y/N): " confirm && if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then /usr/local/bin/firewall.sh && echo "Firewall rules updated successfully!"; else echo "Firewall script not executed."; fi; }
-#
-# This alias is a custom command to update the SSH port in both the sshd and iptables rules. Prompts to reboot the device to apply the changes.
-usp() { update_ssh_port "\$1"; }
-#
-# This alias is a custom command to view the $effective_chain debug log. The -f flag allows you to follow the log in real-time. The number of lines can be specified with the first argument. Also provides a shorter undocumented version.
-lyl() { if [ "\$1" = "-f" ]; then tail -f "$WorkingDirectory/debug.log"; elif [ "\$2" = "-f" ]; then tail -n \${1:-30} -f "$WorkingDirectory/debug.log"; else tail -n \${1:-30} "$WorkingDirectory/debug.log"; fi; }
-#
-# This alias is a custom command to view the $effective_chain config file. The -e flag allows you to edit the config file. Also provides a shorter undocumented version.
-lyc() { if [ "\$1" = "-e" ]; then nano "$WorkingDirectory/$conf_name" && read -p "Restart daemon to apply config changes? (y/N): " confirm && if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then lyr; else echo "Daemon not restarted."; fi; else cat "$WorkingDirectory/$conf_name"; fi; }
-lc() { lyc "\$@"; }
-#
-# This alias is a custom command to restart the $effective_chain daemon. The -d flag allows you to purge the debug log. Also provides a shorter undocumented version.
-lyr() { if [ "\$1" = "-d" ]; then echo "If you delete the debug log, the Staking results in Node Status will reset."; read -p "Do you want to continue? (y/N): " confirm; if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then systemctl stop $chain_lower && rm -rf "$WorkingDirectory/debug.log" && systemctl start $chain_lower; else echo "Operation cancelled."; fi; else systemctl restart $chain_lower; fi; }
-lr() { lyr "\$@"; }
-#
-# This alias is a native $effective_chain command to send funds to an address. Also provides a shorter undocumented version.
-sta() { $cli_name sendtoaddress "\$1" "\$2"; }
-sa() { sta "\$@"; }
-#
-# This alias is a custom command to sweep all funds to an address. It will empty the wallet of all coins and dust and the recipient pays the transaction fee. A great way to move funds between wallets in full. Also provides a shorter undocumented version.
-swe() { $cli_name sendtoaddress "\$1" "\$($cli_name getbalance)" "" "" true; }
-sw() { swe "\$@"; }
-#
-# This undocumented alias is a native command to get local node storage capacity info.
-ca() { $cli_name capacity; }
-#
-# This alias is a custom command to show the help message.
-h() { executeHelpCommand; }
-#
-# This alias is a custom command to show wallet value and LYNX price information.
-pri() { executePriceCommand; }
-#
-# This alias is a native $effective_chain command to backup the $effective_chain wallet.
-bac() { /usr/local/bin/backup.sh; }
-lba() { cd /var/lib/${chain_lower}-backup && ls -lh; }
-#
-# This alias is a custom command to view the install logs. The -f flag allows you to follow the logs in real-time. The number of lines can be specified with the first argument. Also provides a shorter undocumented version.
-jou() { if [ "\$1" = "-f" ]; then journalctl -t install.sh -f; elif [ "\$2" = "-f" ]; then journalctl -t install.sh -n \${1:-30} -f; else journalctl -t install.sh -n \${1:-30}; fi; }
-jo() { jou "\$@"; }
-#
-# This alias is a native $effective_chain command to show help for a keyword. Also provides a shorter undocumented version.
-hel() { if [ -n "\$1" ]; then $cli_name help | grep -i "\$1"; else $cli_name help; fi; }
-he() { hel "\$@"; }
-#
-# This alias is a custom command to show the status of the $effective_chain service. A command to show the status of the nginx daemon is also provided, if installed.
-lss() { systemctl status $chain_lower; }
+lyl() { _spark_require_chain || return 1; if [ "$1" = "-f" ]; then tail -f "$SPARK_DATADIR/debug.log"; elif [ "${2:-}" = "-f" ]; then tail -n ${1:-30} -f "$SPARK_DATADIR/debug.log"; else tail -n ${1:-30} "$SPARK_DATADIR/debug.log"; fi; }
+lyc() { _spark_require_chain || return 1; if [ "$1" = "-e" ]; then nano "$SPARK_CONF" && read -p "Restart daemon to apply config changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then lyr; else echo "Daemon not restarted."; fi; else cat "$SPARK_CONF"; fi; }
+lc() { lyc "$@"; }
+lyr() { _spark_require_chain || return 1; if [ "$1" = "-d" ]; then echo "If you delete the debug log, the Staking results in Node Status will reset."; read -p "Do you want to continue? (y/N): " confirm; if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl stop $SPARK_CHAIN && rm -rf "$SPARK_DATADIR/debug.log" && systemctl start $SPARK_CHAIN; else echo "Operation cancelled."; fi; else systemctl restart $SPARK_CHAIN; fi; }
+lr() { lyr "$@"; }
+hel() { _spark_require_chain || return 1; if [ -n "$1" ]; then $SPARK_CLI help | grep -i "$1"; else $SPARK_CLI help; fi; }
+he() { hel "$@"; }
+lss() { _spark_require_chain && systemctl status $SPARK_CHAIN; }
 nss() { systemctl status nginx; }
 #
-# This undocumented alias is a custom command to edit the SSH keys file.
-shh() { nano /root/.ssh/authorized_keys && read -p "Restart SSH daemon to apply changes? (y/N): " confirm && if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null && echo "SSH daemon restarted successfully"; else echo "SSH daemon not restarted. Changes will take effect after manual restart."; fi; }
+# DIRECTORY COMMANDS
+wdi() { _spark_require_chain && cd $SPARK_DATADIR && ls -lh; }
+wd() { wdi; }
 #
-# This undocumented alias is a custom command to toggle password authentication in the SSH config. Allowed values are "off" or "on".
-pas() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "\$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "\$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "\$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "\$ssh_config"; echo "\$new_setting" >> "\$ssh_config"; if [ "\$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; } # Toggle password authentication in SSH config
+# SYSTEM COMMANDS
+ipt() { iptables -L -vn; }
+fire() { nano /usr/local/bin/firewall.sh && echo "Applying firewall changes..." && read -p "Execute firewall script to apply changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then /usr/local/bin/firewall.sh && echo "Firewall rules updated successfully!"; else echo "Firewall script not executed."; fi; }
+usp() { update_ssh_port "$1"; }
+jou() { if [ "$1" = "-f" ]; then journalctl -t install.sh -f; elif [ "${2:-}" = "-f" ]; then journalctl -t install.sh -n ${1:-30} -f; else journalctl -t install.sh -n ${1:-30}; fi; }
+jo() { jou "$@"; }
+shh() { nano /root/.ssh/authorized_keys && read -p "Restart SSH daemon to apply changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null && echo "SSH daemon restarted successfully"; else echo "SSH daemon not restarted. Changes will take effect after manual restart."; fi; }
+pas() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "$ssh_config"; echo "$new_setting" >> "$ssh_config"; if [ "$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; }
+upd() { _spark_require_chain && bash <(curl -sL install.getlynx.io) --chain=$SPARK_CHAIN; }
+reb() { _spark_require_chain && bash <(curl -sL install.getlynx.io) rebuild --chain=$SPARK_CHAIN; }
 #
-# This alias is a custom command to update the install script. It will only run the update processes from the /usr/local/bin/install.sh file.
-upd() { /usr/local/bin/install.sh update${chain_name:+ --chain=$chain_name}; }
+h() { executeHelpCommand; }
+pri() { executePriceCommand; }
 #
-$(createCommandListConsole)
+# Function to display aliases in a nicely formatted MOTD (uses SPARK_* vars)
+executeHelpCommand() {
+    _spark_require_chain || return 1
+    echo ""
+    echo ""
+    local chain_upper
+    chain_upper=$(echo "$SPARK_CHAIN" | tr '[:lower:]' '[:upper:]')
+    local chain_cap
+    chain_cap=$(echo "$SPARK_CHAIN" | sed 's/./\U&/')
+
+    # Count stakes won in the last 24 hours from debug.log
+    local since_iso
+    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
+    local stakes_won=0
+    if [ -f "$SPARK_DATADIR/debug.log" ] && [ -n "$since_iso" ]; then
+        stakes_won=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
+    fi
+    [ -z "$stakes_won" ] && stakes_won="0"
+
+    local total_blocks=288
+    local percent_yield
+    percent_yield=$(awk "BEGIN {printf \"%.3f\", $stakes_won * 100 / $total_blocks}" 2>/dev/null || echo "0.000")
+
+    # Count stakes won in the last 7 days
+    local since_iso_7d
+    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
+    local stakes_won_7d=0
+    if [ -f "$SPARK_DATADIR/debug.log" ] && [ -n "$since_iso_7d" ]; then
+        stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
+    fi
+    [ -z "$stakes_won_7d" ] && stakes_won_7d="0"
+
+    local total_blocks_7d=2016
+    local percent_yield_7d
+    percent_yield_7d=$(awk "BEGIN {printf \"%.3f\", $stakes_won_7d * 100 / $total_blocks_7d}" 2>/dev/null || echo "0.000")
+
+    # Count immature UTXOs
+    local immature_utxos
+    immature_utxos=$($SPARK_CLI listunspent 2>/dev/null | awk '/"confirmations":/ {gsub(/[^0-9]/, "", $2); conf = $2 + 0; if (conf < 31 && conf > 0) count++} END {print count+0}')
+    [ -z "$immature_utxos" ] && immature_utxos="0"
+
+    local wallet_balance
+    wallet_balance=$($SPARK_CLI getbalance 2>/dev/null || echo "0")
+    [ -z "$wallet_balance" ] && wallet_balance="0"
+
+    local version_info
+    version_info=$($SPARK_CLI -version 2>/dev/null | head -1 || echo "Unknown")
+    [ -z "$version_info" ] && version_info="Unknown"
+
+    local title="${chain_cap} Spark for the Lynx Data Storage Network"
+    local width=64
+    local pad=$(( (width - ${#title}) / 2 ))
+    printf "%*s%s\n" "$pad" "" "$title"
+    echo ""
+    echo "  NODE STATUS:"
+    echo "    🎯 Stakes won in last 24 hours: $stakes_won"
+    echo "    📊 24-hour yield rate (stakes/blocks): ${percent_yield}%"
+    echo "    🎯 Stakes won in last 7 days: $stakes_won_7d"
+    echo "    📊 7-day yield rate (stakes/blocks): ${percent_yield_7d}%"
+    echo "    🔄 Immature transactions (< 31 confirmations): $immature_utxos"
+    echo "    💰 Current wallet balance: $wallet_balance"
+    echo ""
+    echo "  DAEMON COMMANDS:"
+    echo "    lyl [lines] [-f]       - View daemon debug log (default 30)"
+    echo "    lyv                    - Show daemon version"
+    echo "    lyr [-d]               - Restart daemon (-d to purge debug)"
+    echo "    lyc [-e]               - View/edit daemon conf (-e to edit)"
+    echo "    gbi                    - Get blockchain info"
+    echo "    hel [keyword]          - Show daemon help (keyword search)"
+    echo ""
+    echo "  WALLET COMMANDS:"
+    echo "    gba                    - Get wallet balances"
+    echo "    gna                    - Generate new address"
+    echo "    lag                    - List address groupings"
+    echo "    sta [address] [amount] - Send to address (sender pays fee)"
+    echo "    swe [address]          - Sweep a wallet (receiver pays fee)"
+    echo "    bac                    - Manual wallet backup"
+    echo "    lba                    - List backup directory contents"
+    echo "    pri                    - Show wallet value in USD"
+    echo ""
+    echo "  SYSTEM COMMANDS:"
+    echo "    lss                    - Check systemd service status"
+    echo "    jou [lines] [-f]       - View install logs (default 30)"
+    echo "    upd                    - Install or update daemon to latest release"
+    echo "    reb                    - Update services, timers, firewall, and aliases"
+    echo "    usp [port]             - Change SSH port"
+    echo "    wdi                    - Change to daemon working directory"
+    echo "    ipt                    - List iptables rules"
+    echo "    chain / c              - Switch between installed chains"
+    echo ""
+    echo "  USEFUL COMMANDS:"
+    echo "    htop                   - Monitor system resources"
+    echo "    h                      - Show this help message again"
+    echo ""
+    echo "  📚 Complete project documentation: https://docs.getlynx.io/"
+    echo "  💾 Store files permanently: https://clevver.org/"
+    echo "  🔍 Blockchain explorer: https://explorer.getlynx.io/"
+    echo "  📈 Trade Lynx: https://freixlite.com/market/LYNX/LTC"
+    echo "  🔢 Version: $version_info"
+    echo ""
+    echo ""
+}
 #
-# Automatically execute the 'h' command and change to root directory when switching to root user
-executeHelpCommand
+# Function to display wallet value and price information
+executePriceCommand() {
+    _spark_require_chain || return 1
+    echo ""
+
+    local wallet_balance
+    wallet_balance=$($SPARK_CLI getbalance 2>/dev/null || echo "0")
+    [ -z "$wallet_balance" ] && wallet_balance="0"
+
+    # Fetch LYNX price from API with random endpoint selection and fallback
+    local price_usd=""
+    local api_endpoints=(
+        "https://api-one.ewm-cx.info/api/v1/price/getPriceByCoin?symbol=LYNX"
+        "https://api-two.ewm-cx.net/api/v1/price/getPriceByCoin?symbol=LYNX"
+    )
+    local first_index=$((RANDOM % 2))
+    local second_index=$((1 - first_index))
+    local api_response extracted_price
+
+    api_response=$(curl -s --max-time 3 "${api_endpoints[$first_index]}" 2>/dev/null)
+    if [ -n "$api_response" ]; then
+        extracted_price=$(echo "$api_response" | awk -F'"priceUSD":"' '{print $2}' | awk -F'"' '{print $1}')
+        [ -n "$extracted_price" ] && price_usd="$extracted_price"
+    fi
+    if [ -z "$price_usd" ]; then
+        api_response=$(curl -s --max-time 3 "${api_endpoints[$second_index]}" 2>/dev/null)
+        if [ -n "$api_response" ]; then
+            extracted_price=$(echo "$api_response" | awk -F'"priceUSD":"' '{print $2}' | awk -F'"' '{print $1}')
+            [ -n "$extracted_price" ] && price_usd="$extracted_price"
+        fi
+    fi
+    [ -z "$price_usd" ] && price_usd="0.00000000"
+
+    # Count stakes from debug.log
+    local since_iso since_iso_7d stakes_won_24h=0 stakes_won_7d=0
+    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
+    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
+    if [ -f "$SPARK_DATADIR/debug.log" ]; then
+        stakes_won_24h=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
+        stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
+    fi
+    [[ "$stakes_won_24h" =~ ^[0-9]+$ ]] || stakes_won_24h=0
+    [[ "$stakes_won_7d" =~ ^[0-9]+$ ]] || stakes_won_7d=0
+
+    # Format USD helper
+    _format_usd() {
+        local formatted int_part dec_part int_with_commas
+        formatted=$(awk "BEGIN {printf \"%.2f\", $1}" 2>/dev/null || echo "0.00")
+        int_part=$(echo "$formatted" | cut -d. -f1)
+        dec_part=$(echo "$formatted" | cut -d. -f2)
+        int_with_commas=$(echo "$int_part" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1,\2/;ta')
+        echo "${int_with_commas}.${dec_part}"
+    }
+
+    local wallet_value_raw wallet_value_usd
+    wallet_value_raw=$(awk "BEGIN {printf \"%.2f\", $wallet_balance * $price_usd}" 2>/dev/null || echo "0.00")
+    wallet_value_usd=$(_format_usd "$wallet_value_raw")
+
+    local staking_yield_24h_raw staking_yield_24h_usd
+    staking_yield_24h_raw=$(awk "BEGIN {printf \"%.2f\", $stakes_won_24h * $price_usd}" 2>/dev/null || echo "0.00")
+    staking_yield_24h_usd=$(_format_usd "$staking_yield_24h_raw")
+
+    local staking_yield_7d_raw staking_yield_7d_usd
+    staking_yield_7d_raw=$(awk "BEGIN {printf \"%.2f\", $stakes_won_7d * $price_usd}" 2>/dev/null || echo "0.00")
+    staking_yield_7d_usd=$(_format_usd "$staking_yield_7d_raw")
+
+    local estimated_monthly_stakes staking_yield_monthly_raw staking_yield_monthly_usd
+    estimated_monthly_stakes=$((stakes_won_7d * 4)) 2>/dev/null || estimated_monthly_stakes=0
+    staking_yield_monthly_raw=$(awk "BEGIN {printf \"%.2f\", $staking_yield_7d_raw * 4}" 2>/dev/null || echo "0.00")
+    staking_yield_monthly_usd=$(_format_usd "$staking_yield_monthly_raw")
+
+    echo "  PRICE INFORMATION:"
+    echo "    💵 Wallet value (USD): \$$wallet_value_usd"
+    echo ""
+    echo "    🎯 Staking Yield (USD):"
+    echo "        24-hour yield:     \$$staking_yield_24h_usd ($stakes_won_24h stakes)"
+    echo "        7-day yield:       \$$staking_yield_7d_usd ($stakes_won_7d stakes)"
+    echo "        Estimated monthly: \$$staking_yield_monthly_usd (~$estimated_monthly_stakes stakes)"
+    echo ""
+
+    local amounts=(1 10 100 1000 10000 100000 1000000 10000000 100000000)
+    local labels=("1 LYNX" "10 LYNX" "100 LYNX" "1,000 LYNX" "10,000 LYNX" "100,000 LYNX" "1,000,000 LYNX" "10,000,000 LYNX" "100,000,000 LYNX")
+    echo "    💲 LYNX Price List (USD):"
+    local i=0
+    for amt in "${amounts[@]}"; do
+        local raw val
+        raw=$(awk "BEGIN {printf \"%.2f\", $amt * $price_usd}" 2>/dev/null || echo "0.00")
+        val=$(_format_usd "$raw")
+        printf "        %-22s \$%s\n" "${labels[$i]}:" "$val"
+        i=$((i + 1))
+    done
+    echo ""
+}
+#
+# Function to update SSH port
+update_ssh_port() {
+    if [ -z "$1" ]; then
+        local current_port
+        current_port=$(grep "^#*Port" /etc/ssh/sshd_config | head -1 | sed 's/^#*Port[[:space:]]*//')
+        [ -z "$current_port" ] && current_port="22"
+        echo "Current SSH port: $current_port"
+        echo ""
+        echo "Usage: usp <new_port>"
+        echo "Example: usp 2222"
+        return 0
+    fi
+    local new_port="$1"
+    local current_port
+    if ! [[ "$new_port" =~ ^[0-9]+$ ]] || [ "$new_port" -lt 1 ] || [ "$new_port" -gt 65535 ]; then
+        echo "ERROR: Invalid port number. Must be between 1 and 65535."
+        return 1
+    fi
+    current_port=$(grep "^#*Port" /etc/ssh/sshd_config | head -1 | sed 's/^#*Port[[:space:]]*//')
+    [ -z "$current_port" ] && current_port="22"
+    if [ "$new_port" = "$current_port" ]; then
+        echo "SSH is already on port $new_port."
+        return 0
+    fi
+    echo "Current SSH port: $current_port"
+    echo "New SSH port: $new_port"
+    echo ""
+    echo "WARNING: This will change the SSH port and reboot the device!"
+    echo ""
+    read -p "Do you want to continue? (y/N): " confirm
+    [[ ! "$confirm" =~ ^[Yy]$ ]] && echo "Operation cancelled." && return 1
+    echo "Updating sshd_config..."
+    sed -i "s/^#*Port.*/Port $new_port/" /etc/ssh/sshd_config
+    echo "Updating SPARK firewall rules..."
+    (
+        flock -w 10 200 || { echo "ERROR: Could not acquire firewall lock."; return 1; }
+        # Swap the SSH ACCEPT rule in the SPARK parent chain
+        iptables -D SPARK -p tcp --dport "$current_port" -j ACCEPT 2>/dev/null || true
+        iptables -C SPARK -p tcp --dport "$new_port" -j ACCEPT 2>/dev/null || \
+            iptables -I SPARK 3 -p tcp --dport "$new_port" -j ACCEPT
+    ) 200>/var/lock/spark-iptables
+    echo "Restarting SSH daemon..."
+    if systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; then
+        echo "SSH daemon restarted successfully"
+    else
+        echo "ERROR: Failed to restart SSH daemon"
+        return 1
+    fi
+    echo ""
+    echo "SSH port updated successfully to $new_port"
+    echo "Connect to the new port: ssh -p $new_port root@$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 'YOUR_SERVER_IP')"
+}
+#
+# Login-time notice: show which chain is selected (or prompt if none)
+if [ -n "${SPARK_CHAIN:-}" ]; then
+    executeHelpCommand
+else
+    echo ""
+    echo "  No chain selected. Run 'chain' or 'c' to pick one."
+    echo ""
+fi
 cd /root
 #
-$ALIAS_BLOCK_END
-EOF
+# END spark-aliases
+SPARKEOF
 }
 
 # Function to clean up multiple consecutive empty lines in bashrc
@@ -880,47 +1145,323 @@ truncateFileSpace() {
     log "Cleaned up multiple empty lines in $BASHRC"
 }
 
-# Create install.service and install.timer if not present
-createInstallServiceUnit() {
-    log "Checking for the existence of /etc/systemd/system/install.service and /etc/systemd/system/install.timer."
-    if [ ! -f /etc/systemd/system/install.service ] || [ ! -f /etc/systemd/system/install.timer ]; then
-        log "Creating /etc/systemd/system/install.service and /etc/systemd/system/install.timer."
-        cat <<EOF > /etc/systemd/system/install.service
+# Register this chain in /etc/spark/chains.conf and install chain selector
+# Creates: /etc/spark/chains.conf, /usr/local/bin/chain, /usr/local/bin/c (symlink),
+#          /usr/local/bin/spark-current-chain.sh
+registerChainAndInstallSelector() {
+    # --- Chain registry ---
+    mkdir -p /etc/spark
+    local registry="/etc/spark/chains.conf"
+    touch "$registry"
+    if ! grep -qx "$chain_lower" "$registry" 2>/dev/null; then
+        echo "$chain_lower" >> "$registry"
+        log "Registered $chain_lower in $registry."
+    fi
+
+    # --- Ensure /run/spark exists (tmpfs, cleared on reboot) ---
+    mkdir -p /run/spark
+
+    # --- Install /usr/local/bin/chain selector ---
+    cat <<'CHAINEOF' > /usr/local/bin/chain
+#!/bin/bash
+# chain — Spark chain selector
+# Usage: chain [<name|number>|--show|--clear]
+
+REGISTRY="/etc/spark/chains.conf"
+CURRENT="/run/spark/current-chain"
+
+if [ ! -f "$REGISTRY" ] || [ ! -s "$REGISTRY" ]; then
+    echo "No chains registered in $REGISTRY."
+    exit 1
+fi
+
+# Read registry into an array
+mapfile -t chains < "$REGISTRY"
+
+# Resolve the RPC octet for a given chain name (mirrors install.sh logic)
+_get_rpc_ip() {
+    local cname="$1"
+    local octet
+    octet=$(printf '%s' "$cname" | cksum | awk '{print ($1 % 253) + 2}')
+    # Collision resolution: scan conf files like install.sh does
+    local tries=0
+    while [ "$tries" -lt 253 ]; do
+        local taken=""
+        for cf in /var/lib/*/[a-z]*.conf; do
+            [ -f "$cf" ] || continue
+            if grep -q "^rpcbind=127\\.0\\.0\\.${octet}$" "$cf" 2>/dev/null; then
+                local cc
+                cc=$(basename "$(dirname "$cf")")
+                if [ "$cc" != "$cname" ]; then
+                    taken="$cc"
+                    break
+                fi
+            fi
+        done
+        [ -z "$taken" ] && break
+        octet=$(( (octet % 253) + 2 ))
+        tries=$(( tries + 1 ))
+    done
+    echo "127.0.0.${octet}"
+}
+
+# Display the numbered menu
+_show_menu() {
+    echo ""
+    echo "  Installed chains:"
+    echo ""
+    local i=1
+    for cname in "${chains[@]}"; do
+        local rpc_ip
+        rpc_ip=$(_get_rpc_ip "$cname")
+        local marker=""
+        if [ -f "$CURRENT" ] && [ "$(cat "$CURRENT" 2>/dev/null)" = "$cname" ]; then
+            marker=" *"
+        fi
+        printf "    %d) %s (%s)%s\n" "$i" "$cname" "$rpc_ip" "$marker"
+        i=$((i + 1))
+    done
+    echo ""
+}
+
+# Select a chain by name or number; write to current-chain file
+_select_chain() {
+    local input="$1"
+    local selected=""
+
+    # Try as a number first
+    if [[ "$input" =~ ^[0-9]+$ ]]; then
+        local idx=$((input - 1))
+        if [ "$idx" -ge 0 ] && [ "$idx" -lt "${#chains[@]}" ]; then
+            selected="${chains[$idx]}"
+        else
+            echo "Invalid number: $input (valid range: 1-${#chains[@]})"
+            return 1
+        fi
+    else
+        # Try as a name
+        local name_lower
+        name_lower=$(echo "$input" | tr '[:upper:]' '[:lower:]')
+        for cname in "${chains[@]}"; do
+            if [ "$cname" = "$name_lower" ]; then
+                selected="$cname"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$selected" ]; then
+        echo "Unknown chain: $input"
+        return 1
+    fi
+
+    mkdir -p /run/spark
+    echo "$selected" > "$CURRENT"
+    local rpc_ip
+    rpc_ip=$(_get_rpc_ip "$selected")
+    local display_name
+    display_name="$(echo "$selected" | sed 's/./\U&/')"
+    echo "  Switched to $display_name ($rpc_ip)"
+    return 0
+}
+
+# --- Handle arguments ---
+case "${1:-}" in
+    --show)
+        if [ -f "$CURRENT" ] && [ -s "$CURRENT" ]; then
+            cat "$CURRENT"
+        else
+            echo "No chain selected."
+            exit 1
+        fi
+        ;;
+    --clear)
+        rm -f "$CURRENT"
+        echo "Chain selection cleared."
+        ;;
+    "")
+        # No args: auto-select if one chain, otherwise interactive menu
+        if [ "${#chains[@]}" -eq 1 ]; then
+            _select_chain "${chains[0]}"
+        else
+            _show_menu
+            if [ -t 0 ]; then
+                read -p "  Select chain (number or name): " choice
+                if [ -n "$choice" ]; then
+                    _select_chain "$choice"
+                fi
+            else
+                echo "Non-interactive shell — pass a chain name or number as argument."
+                exit 1
+            fi
+        fi
+        ;;
+    *)
+        # Direct switch by name or number
+        _select_chain "$1"
+        ;;
+esac
+CHAINEOF
+    chmod +x /usr/local/bin/chain
+
+    # Create 'c' shortcut symlink
+    ln -sf /usr/local/bin/chain /usr/local/bin/c
+
+    # --- Install /usr/local/bin/spark-current-chain.sh (sourced by aliases) ---
+    cat <<'HELPEREOF' > /usr/local/bin/spark-current-chain.sh
+#!/bin/bash
+# spark-current-chain.sh — Sourced by .bashrc to export SPARK_* variables.
+# Reads the currently selected chain from /run/spark/current-chain.
+# If no chain is selected:
+#   - Interactive shell: shows a notice (does NOT auto-prompt to avoid blocking)
+#   - Non-interactive shell: silently skips
+
+_SPARK_CURRENT_FILE="/run/spark/current-chain"
+_SPARK_REGISTRY="/etc/spark/chains.conf"
+
+# Auto-select if only one chain is registered and none is selected
+if [ ! -f "$_SPARK_CURRENT_FILE" ] || [ ! -s "$_SPARK_CURRENT_FILE" ]; then
+    if [ -f "$_SPARK_REGISTRY" ] && [ -s "$_SPARK_REGISTRY" ]; then
+        _spark_count=$(wc -l < "$_SPARK_REGISTRY")
+        if [ "$_spark_count" -eq 1 ]; then
+            mkdir -p /run/spark
+            head -1 "$_SPARK_REGISTRY" > "$_SPARK_CURRENT_FILE"
+        fi
+        unset _spark_count
+    fi
+fi
+
+if [ -f "$_SPARK_CURRENT_FILE" ] && [ -s "$_SPARK_CURRENT_FILE" ]; then
+    SPARK_CHAIN=$(cat "$_SPARK_CURRENT_FILE")
+    SPARK_DATADIR="/var/lib/${SPARK_CHAIN}"
+    SPARK_CONF="${SPARK_DATADIR}/${SPARK_CHAIN}.conf"
+    SPARK_SERVICE="${SPARK_CHAIN}.service"
+
+    # Derive RPC IP (mirrors install.sh cksum logic)
+    _spark_octet=$(printf '%s' "$SPARK_CHAIN" | cksum | awk '{print ($1 % 253) + 2}')
+    # Collision resolution
+    _spark_tries=0
+    while [ "$_spark_tries" -lt 253 ]; do
+        _spark_taken=""
+        for _spark_cf in /var/lib/*/[a-z]*.conf; do
+            [ -f "$_spark_cf" ] || continue
+            if grep -q "^rpcbind=127\\.0\\.0\\.${_spark_octet}$" "$_spark_cf" 2>/dev/null; then
+                _spark_cc=$(basename "$(dirname "$_spark_cf")")
+                if [ "$_spark_cc" != "$SPARK_CHAIN" ]; then
+                    _spark_taken="$_spark_cc"
+                    break
+                fi
+            fi
+        done
+        [ -z "$_spark_taken" ] && break
+        _spark_octet=$(( (_spark_octet % 253) + 2 ))
+        _spark_tries=$(( _spark_tries + 1 ))
+    done
+    SPARK_RPC_HOST="127.0.0.${_spark_octet}"
+    SPARK_CLI="${SPARK_CHAIN}-cli -datadir=${SPARK_DATADIR} -rpcconnect=${SPARK_RPC_HOST}"
+    unset _spark_octet _spark_tries _spark_taken _spark_cf _spark_cc
+
+    export SPARK_CHAIN SPARK_DATADIR SPARK_CONF SPARK_SERVICE SPARK_RPC_HOST SPARK_CLI
+else
+    # No chain selected — clear vars
+    unset SPARK_CHAIN SPARK_DATADIR SPARK_CONF SPARK_SERVICE SPARK_RPC_HOST SPARK_CLI 2>/dev/null
+fi
+unset _SPARK_CURRENT_FILE _SPARK_REGISTRY
+HELPEREOF
+    chmod +x /usr/local/bin/spark-current-chain.sh
+
+    log "Installed chain selector (/usr/local/bin/chain, /usr/local/bin/c) and helper (/usr/local/bin/spark-current-chain.sh)."
+}
+
+# Create a one-shot service and timer that fetches and runs patch_rpc_conf.sh
+# to set the per-chain loopback RPC address. The timer disables itself once done.
+patchRpcConf() {
+    local service_unit="${chain_lower}-patch-rpc-conf.service"
+    local timer_unit="${chain_lower}-patch-rpc-conf.timer"
+    local conf_path="$WorkingDirectory/$conf_name"
+
+    # Create the systemd service unit (fetches and runs patch_rpc_conf.sh remotely)
+    cat <<EOF > /etc/systemd/system/$service_unit
 [Unit]
-Description=Run install.sh every 12 minutes
+Description=Patch ${effective_chain} conf with per-chain RPC address
+Documentation=https://getlynx.io/
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_rpc_conf.sh | bash -s'
+Environment=CONF_PATH=$conf_path
+Environment=RPC_HOST=$rpc_host
+Environment=SERVICE_NAME=$service_name
+Environment=TIMER_UNIT=$timer_unit
+StandardOutput=journal
+StandardError=journal
+EOF
+
+    # Create the systemd timer unit
+    cat <<EOF > /etc/systemd/system/$timer_unit
+[Unit]
+Description=Run ${chain_lower}-patch-rpc-conf every 5 seconds until patched
+
+[Timer]
+OnBootSec=5sec
+OnUnitActiveSec=5sec
+AccuracySec=5sec
+Unit=$service_unit
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable "$timer_unit" >/dev/null 2>&1
+    systemctl start "$timer_unit"
+    log "Created and started $timer_unit to patch RPC settings in $conf_path."
+}
+
+# Create per-chain install.service and install.timer if not present
+createInstallServiceUnit() {
+    local install_service="${chain_lower}-install.service"
+    local install_timer="${chain_lower}-install.timer"
+    log "Checking for the existence of /etc/systemd/system/$install_service and /etc/systemd/system/$install_timer."
+    if [ ! -f /etc/systemd/system/$install_service ] || [ ! -f /etc/systemd/system/$install_timer ]; then
+        log "Creating /etc/systemd/system/$install_service and /etc/systemd/system/$install_timer."
+        cat <<EOF > /etc/systemd/system/$install_service
+[Unit]
+Description=Run install.sh every 12 minutes for ${effective_chain}
 Documentation=https://getlynx.io/
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/install.sh${chain_name:+ --chain=$chain_name}
+ExecStart=/usr/local/bin/install.sh --chain=${chain_lower}
 StandardOutput=journal
 StandardError=journal
 Environment=HOME=/root
 WorkingDirectory=/root
 EOF
 
-        cat <<EOF > /etc/systemd/system/install.timer
+        cat <<EOF > /etc/systemd/system/$install_timer
 [Unit]
-Description=Run install.sh every 12 minutes
+Description=Run install.sh every 12 minutes for ${effective_chain}
 Documentation=https://getlynx.io/
 
 [Timer]
 OnBootSec=15sec
 OnUnitActiveSec=12min
 AccuracySec=5sec
-Unit=install.service
+Unit=$install_service
 Persistent=false
 
 [Install]
 WantedBy=timers.target
 EOF
-        log "Executing daemon-reload for new /etc/systemd/system/install.service and /etc/systemd/system/install.timer."
+        log "Executing daemon-reload for new /etc/systemd/system/$install_service and /etc/systemd/system/$install_timer."
         systemctl daemon-reload
-        log "Enabled systemd for new /etc/systemd/system/install.timer."
-        systemctl enable install.timer >/dev/null 2>&1
-        log "Starting systemd for new /etc/systemd/system/install.timer."
-        systemctl start install.timer
-        log "/etc/systemd/system/install.service and /etc/systemd/system/install.timer created, enabled, and started."
+        log "Enabled systemd for new /etc/systemd/system/$install_timer."
+        systemctl enable $install_timer >/dev/null 2>&1
+        log "Starting systemd for new /etc/systemd/system/$install_timer."
+        systemctl start $install_timer
+        log "/etc/systemd/system/$install_service and /etc/systemd/system/$install_timer created, enabled, and started."
 
         # Disable firewalld and SELinux on RHEL-based systems
         log "Checking for RHEL-based system to disable firewalld and SELinux."
@@ -959,274 +1500,146 @@ EOF
             log "Not a RHEL-based system - skipping"
         fi
 
-        log "Installation of ${effective_chain} has begun. The device will reboot in 5 seconds. Please wait..."
+        log "Installation of ${effective_chain} has begun. The install timer will manage ongoing maintenance."
         echo ""
         echo ""
-        echo "Installation of ${effective_chain} has begun. The device will reboot in 5 seconds. Please wait..."
+        echo "Installation of ${effective_chain} has begun. Please wait..."
         echo ""
         echo ""
-        sleep 5
-
-        # Try multiple reboot methods for reliability
-        log "Attempting to reboot system..."
-        if command -v systemctl >/dev/null 2>&1; then
-            systemctl reboot
-        elif command -v shutdown >/dev/null 2>&1; then
-            shutdown -r now
-        else
-            reboot
-        fi
-
-        # If we get here, force exit
-        exit 0
     else
-        log "/etc/systemd/system/install.service and /etc/systemd/system/install.timer already exist. Skipping creation."
+        log "/etc/systemd/system/$install_service and /etc/systemd/system/$install_timer already exist. Skipping creation."
     fi
 }
 
-# Create wallet backup service and timer
-createWalletBackupServiceUnit() {
-    log "Creating /etc/systemd/system/${chain_lower}-wallet-backup.service and ${chain_lower}-wallet-backup.timer."
+# Create one-shot services and timers that fetch and run the wallet-backup
+# patch scripts. One timer (7s) ensures /usr/local/bin/backup.sh is installed;
+# a second timer (8s) ensures the {chain}-wallet-backup service/timer pair is
+# installed. Each timer self-disables once its target exists.
+patchWalletBackup() {
+    local backup_service_unit="${chain_lower}-wallet-backup.service"
+    local backup_timer_unit="${chain_lower}-wallet-backup.timer"
+    local script_service_unit="${chain_lower}-patch-wallet-backup-script.service"
+    local script_timer_unit="${chain_lower}-patch-wallet-backup-script.timer"
+    local timer_service_unit="${chain_lower}-patch-wallet-backup-timer.service"
+    local timer_timer_unit="${chain_lower}-patch-wallet-backup-timer.timer"
 
-    # Stop and disable the timer before recreating it to avoid conflicts
-    systemctl stop ${chain_lower}-wallet-backup.timer 2>/dev/null || true
-    systemctl disable ${chain_lower}-wallet-backup.timer 2>/dev/null || true
-
-    # Create backup directory
-    mkdir -p /var/lib/${chain_lower}-backup
-    chown root:root /var/lib/${chain_lower}-backup
-    chmod 700 /var/lib/${chain_lower}-backup
-
-    # Create the backup script
-    cat <<'BACKUPEOF' | sed "s|/var/lib/lynx-backup|/var/lib/${chain_lower}-backup|g; s|/var/lib/lynx|${WorkingDirectory}|g; s|lynx-cli|${cli_name}|g; s|lynx\.conf|${conf_name}|g; s|--quiet lynx;|--quiet ${chain_lower};|g; s|Lynx|${effective_chain}|g" > /usr/local/bin/backup.sh
-#!/bin/bash
-
-# Lynx Wallet Backup Script
-# This script creates a timestamped backup of the Lynx wallet and checks for duplicates
-# Runs every 60 minutes
-
-set -e
-
-# Journal logging function using systemd-cat
-log() {
-    echo "$1" | systemd-cat -t backup.sh 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] backup.sh: $1" >&2
-}
-
-# Configuration
-BACKUP_DIR="/var/lib/lynx-backup"
-TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
-BACKUP_FILE="$BACKUP_DIR/${TIMESTAMP} wallet.dat"
-WorkingDirectory=/var/lib/lynx
-
-# Ensure backup directory exists
-mkdir -p "$BACKUP_DIR"
-chown root:root "$BACKUP_DIR"
-chmod 700 "$BACKUP_DIR"
-
-# Check if Lynx daemon is running before attempting backup
-if ! systemctl is-active --quiet lynx; then
-    log "Lynx daemon is not running. Skipping backup."
-    exit 0
-fi
-
-# Create the backup
-log "Creating wallet backup: $BACKUP_FILE"
-if ! lynx-cli -conf=$WorkingDirectory/lynx.conf backupwallet "$BACKUP_FILE" 2>/dev/null; then
-    log "Failed to create wallet backup. Daemon may not be running or ready."
-    log "Exiting gracefully. Backup will be retried on next scheduled run."
-    exit 0
-fi
-
-# Check if backup was created successfully
-if [ -f "$BACKUP_FILE" ]; then
-    # Set secure permissions on the backup file
-    chmod 400 "$BACKUP_FILE"
-
-    # Calculate hash of the new backup
-    log "Calculating hash of new backup..."
-    new_hash=$(sha256sum "$BACKUP_FILE" | cut -d" " -f1)
-
-    # Check if any existing backup has the same hash
-    duplicate_found=false
-    for existing_file in "$BACKUP_DIR"/*.dat; do
-        if [ "$existing_file" != "$BACKUP_FILE" ] && [ -f "$existing_file" ]; then
-            existing_hash=$(sha256sum "$existing_file" | cut -d" " -f1)
-            if [ "$new_hash" = "$existing_hash" ]; then
-                duplicate_found=true
-                log "Duplicate found: $existing_file"
-                break
-            fi
-        fi
-    done
-
-    # If duplicate found, remove the new backup and exit
-    if [ "$duplicate_found" = true ]; then
-        rm -f "$BACKUP_FILE"
-        log "Duplicate wallet backup detected. Removing new backup file."
-        exit 0
-    else
-        log "New wallet backup created successfully: $BACKUP_FILE"
-        log "Backup hash: $new_hash"
-
-        # Check if we have more than 100 backup files and remove oldest ones
-        backup_count=$(ls -1 "$BACKUP_DIR"/*.dat 2>/dev/null | wc -l)
-        if [ "$backup_count" -gt 100 ]; then
-            log "Backup count ($backup_count) exceeds limit of 100. Removing oldest backups..."
-
-            # List all backup files by modification time (oldest first) and remove excess
-            ls -1t "$BACKUP_DIR"/*.dat 2>/dev/null | tail -n +101 | while read -r old_file; do
-                if [ -f "$old_file" ]; then
-                    rm -f "$old_file"
-                    log "Removed old backup: $(basename "$old_file")"
-                fi
-            done
-
-            # Get final count after cleanup
-            final_count=$(ls -1 "$BACKUP_DIR"/*.dat 2>/dev/null | wc -l)
-            log "Backup cleanup complete. Current backup count: $final_count"
-        fi
-    fi
-else
-    log "Failed to create wallet backup"
-    exit 1
-fi
-BACKUPEOF
-
-    # Make the backup script executable
-    chmod +x /usr/local/bin/backup.sh
-    chown root:root /usr/local/bin/backup.sh
-
-            cat <<EOF > /etc/systemd/system/${chain_lower}-wallet-backup.service
+    # Service that fetches and runs patch_wallet_backup_script.sh
+    cat <<EOF > /etc/systemd/system/$script_service_unit
 [Unit]
-Description=Backup ${effective_chain} wallet every 60 minutes
+Description=Install ${effective_chain} wallet backup script
 Documentation=https://getlynx.io/
-After=${service_name}
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/backup.sh
+ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_wallet_backup_script.sh | bash -s'
+Environment=CHAIN_LOWER=$chain_lower
+Environment=EFFECTIVE_CHAIN=$effective_chain
+Environment=CLI_NAME=$cli_name
+Environment="CLI_FLAGS=$cli_flags"
+Environment=CONF_NAME=$conf_name
+Environment=WORKING_DIRECTORY=$WorkingDirectory
+Environment=TIMER_UNIT=$script_timer_unit
 StandardOutput=journal
 StandardError=journal
-Environment=HOME=$WorkingDirectory
-WorkingDirectory=$WorkingDirectory
-User=root
-Group=root
-# Ensure the service can access ${cli_name} and the wallet
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
 EOF
 
-         cat <<EOF > /etc/systemd/system/${chain_lower}-wallet-backup.timer
+    cat <<EOF > /etc/systemd/system/$script_timer_unit
 [Unit]
-Description=Backup ${effective_chain} wallet every 60 minutes
-Documentation=https://getlynx.io/
+Description=Run ${chain_lower}-patch-wallet-backup-script every 7 seconds until installed
 
 [Timer]
-OnBootSec=15min
-OnUnitActiveSec=60min
-AccuracySec=5m
-Unit=${chain_lower}-wallet-backup.service
-Persistent=true
+OnBootSec=7sec
+OnUnitActiveSec=7sec
+AccuracySec=1sec
+Unit=$script_service_unit
+Persistent=false
 
 [Install]
 WantedBy=timers.target
 EOF
-     systemctl daemon-reload
-     systemctl enable ${chain_lower}-wallet-backup.timer
-     systemctl start ${chain_lower}-wallet-backup.timer
-     log "/etc/systemd/system/${chain_lower}-wallet-backup.service and ${chain_lower}-wallet-backup.timer created, enabled, and started."
+
+    # Service that fetches and runs patch_wallet_backup_timer.sh
+    cat <<EOF > /etc/systemd/system/$timer_service_unit
+[Unit]
+Description=Install ${effective_chain} wallet backup service and timer
+Documentation=https://getlynx.io/
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_wallet_backup_timer.sh | bash -s'
+Environment=CHAIN_LOWER=$chain_lower
+Environment=EFFECTIVE_CHAIN=$effective_chain
+Environment=SERVICE_NAME=$service_name
+Environment=WORKING_DIRECTORY=$WorkingDirectory
+Environment=BACKUP_SERVICE_UNIT=$backup_service_unit
+Environment=BACKUP_TIMER_UNIT=$backup_timer_unit
+Environment=TIMER_UNIT=$timer_timer_unit
+StandardOutput=journal
+StandardError=journal
+EOF
+
+    cat <<EOF > /etc/systemd/system/$timer_timer_unit
+[Unit]
+Description=Run ${chain_lower}-patch-wallet-backup-timer every 8 seconds until installed
+
+[Timer]
+OnBootSec=8sec
+OnUnitActiveSec=8sec
+AccuracySec=1sec
+Unit=$timer_service_unit
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable "$script_timer_unit" >/dev/null 2>&1
+    systemctl start "$script_timer_unit"
+    systemctl enable "$timer_timer_unit" >/dev/null 2>&1
+    systemctl start "$timer_timer_unit"
+    log "Created and started $script_timer_unit and $timer_timer_unit for wallet backup setup."
 }
 
-# Check and update swap to at least 4GB if less than 3GB
-expandSwap() {
-    log "Checking swap size."
-    # Get current swap size in MB (divided by 1024)
-    current_swap=$(free -m | awk '/^Swap:/ {print $2}')
-    log "Current swap size: ${current_swap}MB"
+# Set up swap expansion as an external patch triggered after boot
+patchSwap() {
+    local service_unit="${chain_lower}-patch-swap.service"
+    local timer_unit="${chain_lower}-patch-swap.timer"
+    local attempt_file="/run/spark/${chain_lower}-patch-swap-attempts"
 
-    # Check if swap is less than 3GB (3072MB) or doesn't exist
-    if [ "$current_swap" -lt 3072 ]; then
-        log "Current swap is less than 3GB. Attempting to set up 4GB swap file."
+    cat <<EOF > /etc/systemd/system/$service_unit
+[Unit]
+Description=Expand swap to 4GB for ${effective_chain}
+Documentation=https://getlynx.io/
 
-        # Check if we have the required tools
-        if ! command -v fallocate >/dev/null 2>&1; then
-            log "WARNING: fallocate not available. Swap update skipped. Continuing with installation."
-            return 0
-        fi
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_swap.sh | bash -s'
+Environment=TIMER_UNIT=$timer_unit
+Environment=ATTEMPT_FILE=$attempt_file
+StandardOutput=journal
+StandardError=journal
+EOF
 
-        if ! command -v mkswap >/dev/null 2>&1; then
-            log "WARNING: mkswap not available. Swap update skipped. Continuing with installation."
-            return 0
-        fi
+    cat <<EOF > /etc/systemd/system/$timer_unit
+[Unit]
+Description=Run ${chain_lower}-patch-swap every 5 seconds until complete
 
-        # Check if we have write permissions to root filesystem
-        if ! touch /swapfile_test 2>/dev/null; then
-            log "WARNING: Cannot write to root filesystem. Swap update skipped. Continuing with installation."
-            return 0
-        fi
-        rm -f /swapfile_test
+[Timer]
+OnBootSec=2sec
+OnUnitActiveSec=5sec
+AccuracySec=1sec
+Unit=$service_unit
+Persistent=false
 
-        # If there's existing swap, turn it off and remove from fstab
-        if [ "$current_swap" -gt 0 ]; then
-            swap_file=$(cat /proc/swaps | tail -n1 | awk '{print $1}')
-            log "Disabling existing swap: $swap_file"
-            if ! swapoff "$swap_file" 2>/dev/null; then
-                log "WARNING: Failed to disable existing swap. Swap update skipped. Continuing with installation."
-                return 0
-            fi
-            sed -i '/swap/d' /etc/fstab 2>/dev/null || log "Note: Could not remove old swap entry from /etc/fstab"
-        fi
+[Install]
+WantedBy=timers.target
+EOF
 
-        log "Creating new 4GB swapfile at /swapfile"
-
-        # Try to create swap file with fallocate
-        if ! fallocate -l 4G /swapfile 2>/dev/null; then
-            log "WARNING: fallocate failed. Trying alternative method with dd..."
-            if ! dd if=/dev/zero of=/swapfile bs=1M count=4096 2>/dev/null; then
-                log "WARNING: Failed to create swap file. Swap update skipped. Continuing with installation."
-                return 0
-            fi
-        fi
-
-        # Set permissions
-        if ! chmod 600 /swapfile 2>/dev/null; then
-            log "WARNING: Failed to set swap file permissions. Swap update skipped. Continuing with installation."
-            rm -f /swapfile
-            return 0
-        fi
-
-        # Initialize swap
-        if ! mkswap /swapfile 2>/dev/null; then
-            log "WARNING: Failed to initialize swap file. Swap update skipped. Continuing with installation."
-            rm -f /swapfile
-            return 0
-        fi
-
-        # Enable swap
-        if ! swapon /swapfile 2>/dev/null; then
-            log "WARNING: Failed to enable swap file. Swap update skipped. Continuing with installation."
-            rm -f /swapfile
-            return 0
-        fi
-
-        # Add to fstab for persistence
-        if ! echo '/swapfile none swap sw 0 0' >> /etc/fstab 2>/dev/null; then
-            log "WARNING: Failed to add swap to /etc/fstab. Swap will not persist after reboot."
-        fi
-
-        log "Swap updated successfully to 4GB. Rebooting system to apply changes."
-        sleep 2
-        reboot
-        exit 0
-    else
-        # Only log if system has been running for 6 hours or less
-        if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-            log "Swap is sufficient (>=3GB). No changes made."
-        fi
-    fi
-    # Only log if system has been running for 6 hours or less
-    if [ "$uptime_seconds" -le "$log_threshold_seconds" ]; then
-        log "Swap check complete."
-    fi
+    systemctl daemon-reload
+    systemctl enable "$timer_unit" >/dev/null 2>&1
+    systemctl start "$timer_unit"
+    log "Created and started $timer_unit to expand swap if needed."
 }
 
 # Detect OS details for binary selection
@@ -1460,8 +1873,8 @@ getCompatibleBinary() {
 }
 
 # Create systemd unit file for the chain daemon
-createLynxServiceUnit() {
-    if [ ! -f /etc/systemd/system/$service_name ]; then
+createDaemonServiceUnit() {
+    if [ ! -f /etc/systemd/system/$service_name ] || [ "$rebuild_mode" = "rebuild" ]; then
         log "Creating /etc/systemd/system/$service_name systemd unit file."
         cat <<EOF > /etc/systemd/system/$service_name
 [Unit]
@@ -1475,7 +1888,7 @@ Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
 ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory -dbcache=2048${assumevalid_flag}
-ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory stop
+ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory -rpcconnect=$rpc_host stop
 Restart=on-failure
 RestartSec=30
 User=root
@@ -1503,7 +1916,7 @@ EOF
 }
 
 # Check if daemon service is running, and start if not
-startLynx() {
+startDaemon() {
     # First verify the binary exists
     if [ ! -f "/usr/local/bin/$daemon_name" ]; then
         log "ERROR: Cannot start service - $daemon_name binary not found at /usr/local/bin/$daemon_name"
@@ -1526,7 +1939,7 @@ startLynx() {
         return
     else
         log "${effective_chain} daemon is not running. Attempting to start."
-        systemctl enable $service_name
+        systemctl enable $service_name >/dev/null 2>&1
         sleep 5
         systemctl start $service_name
         log "${effective_chain} daemon started."
@@ -1538,82 +1951,70 @@ startLynx() {
     fi
 }
 
-# Create and configure defaultfirewall rules
-createFirewallDefaults() {
+# Create a one-shot service with two timers for patch_firewall.sh:
+#   1. A fast-poll timer (every 5 sec) that self-disables once the daemon is ready
+#   2. A maintenance timer (every 6 hours) that keeps firewall rules correct permanently
+patchFirewall() {
+    local service_unit="${chain_lower}-patch-firewall.service"
+    local timer_unit="${chain_lower}-patch-firewall.timer"
+    local maint_timer_unit="${chain_lower}-patch-firewall-maint.timer"
 
-    log "Creating firewall script at /usr/local/bin/firewall.sh..."
-    cat <<'FWEOF' | sed "s|Lynx|${effective_chain}|g" > /usr/local/bin/firewall.sh
-#!/bin/bash
-
-# Lynx Firewall Configuration Script
-# This script applies the standard firewall rules for Lynx nodes
-
-# Logging function
-log() {
-    echo "$1" | systemd-cat -t firewall.sh 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] firewall.sh: $1" >&2
-}
-
-iptables -F
-iptables -A INPUT -i lo -j ACCEPT
-iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-# HTTPD_PORT_START - This line will be updated by the httpd_port function
-# iptables -A INPUT -p tcp --dport 443 -j ACCEPT
-# HTTPD_PORT_END - This line will be updated by the httpd_port function
-# SSH_PORT_START - This line will be updated by the ssh_port function
-iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-# SSH_PORT_END - This line will be updated by the ssh_port function
-# RPC_PORT_START - This line will be updated by the rpc_port function
-# iptables -A INPUT -p tcp --dport 8332 -j ACCEPT # Lynx RPC port
-# RPC_PORT_END - This line will be updated by the rpc_port function
-iptables -A INPUT -p tcp --dport 22566 -j ACCEPT # Lynx P2P port (keep this open to let other nodes connect to you)
-iptables -A INPUT -j DROP
-
-# Purge the journal history to keep the drive trim
-journalctl --vacuum-time=7d >/dev/null 2>&1
-
-log "Firewall rules applied at $(date)"
-FWEOF
-    chmod +x /usr/local/bin/firewall.sh
-}
-
-# Create a systemd service and timer unit to restore firewall rules every 6 hours
-createFirewallServiceUnit() {
-    log "Creating firewall restoration service that runs every 6 hours..."
-
-    # Create the service unit
-    cat <<EOF > /etc/systemd/system/firewall-restore.service
+    # Create the systemd service unit (fetches and runs patch_firewall.sh remotely)
+    cat <<EOF > /etc/systemd/system/$service_unit
 [Unit]
-Description=Restore ${effective_chain} firewall rules
+Description=Apply ${effective_chain} firewall rules
 After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/firewall.sh
+ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_firewall.sh | bash -s'
+Environment=CLI_PATH=/usr/local/bin/$cli_name
+Environment=DATADIR=$WorkingDirectory
+Environment=RPCCONNECT=$rpc_host
+Environment=CHAIN_NAME=$effective_chain
+Environment=CHAIN_LOWER=$chain_lower
+Environment=TIMER_UNIT=$timer_unit
 StandardOutput=journal
 StandardError=journal
 EOF
 
-    # Create the timer unit
-    log "Creating firewall restoration timer that triggers every 6 hours..."
-    cat <<EOF > /etc/systemd/system/firewall-restore.timer
+    # Fast-poll timer: runs every 5 sec until firewall is applied, then self-disables
+    cat <<EOF > /etc/systemd/system/$timer_unit
 [Unit]
-Description=Restore ${effective_chain} firewall rules every 6 hours
+Description=Run ${chain_lower}-patch-firewall every 5 seconds until complete
 
 [Timer]
-OnBootSec=10sec
-OnUnitActiveSec=6h
-Unit=firewall-restore.service
+OnBootSec=4sec
+OnUnitActiveSec=5sec
+AccuracySec=5sec
+Unit=$service_unit
+Persistent=false
 
 [Install]
 WantedBy=timers.target
 EOF
 
-    log "Reloading systemd daemon for firewall timer..."
-    systemctl daemon-reload || log "Failed to reload systemd daemon for firewall timer"
-    log "Enabling and starting firewall restoration timer (runs every 6 hours)..."
-    systemctl enable firewall-restore.timer >/dev/null 2>&1 || log "Failed to enable firewall timer"
-    systemctl start firewall-restore.timer >/dev/null 2>&1 || log "Failed to start firewall timer"
-    log "Firewall restoration timer created and started (runs every 6 hours)."
+    # Maintenance timer: reapplies firewall rules every 6 hours and after reboot
+    cat <<EOF > /etc/systemd/system/$maint_timer_unit
+[Unit]
+Description=Reapply ${chain_lower}-patch-firewall every 6 hours
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=6h
+Unit=$service_unit
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable "$timer_unit" >/dev/null 2>&1
+    systemctl start "$timer_unit"
+    systemctl enable "$maint_timer_unit" >/dev/null 2>&1
+    systemctl start "$maint_timer_unit"
+    log "Created and started $timer_unit and $maint_timer_unit for firewall rules."
 }
 
 # Configure defaultSSH keys
@@ -1669,11 +2070,91 @@ EOF
     fi
 }
 
-# If called with 'update', run only the update process
+# Check if blockchain has completed syncing
+isBlockchainSyncComplete() {
+    # Skip sync check if the service hasn't been created yet (fresh install)
+    if [ ! -f "/etc/systemd/system/$service_name" ]; then
+        log "Service $service_name not yet created. Continuing with installation."
+        return 0
+    fi
+
+    # Check if cli binary is available
+    if [ ! -f "/usr/local/bin/$cli_name" ]; then
+        log "ERROR: $cli_name binary not found. Cannot check sync status."
+        log "Will continue to install and configure services."
+        return 0
+    fi
+
+    # Get blockchain sync status
+    SYNC_STATUS=$(/usr/local/bin/$cli_name -datadir=$WorkingDirectory -rpcconnect=$rpc_host getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
+
+    # If sync is complete (false), stop and disable timer
+    if [ "$SYNC_STATUS" = "false" ]; then
+        log "Blockchain sync complete. Stopping and disabling ${chain_lower}-install.timer."
+        systemctl stop ${chain_lower}-install.timer 2>/dev/null || true
+        systemctl disable ${chain_lower}-install.timer 2>/dev/null || true
+        if [ -f /etc/rc.local ]; then
+            log "Disabling rc.local to prevent future install.sh downloads"
+            chmod -x /etc/rc.local
+        fi
+        # During a rebuild, continue to update services/timers/aliases
+        if [ "$rebuild_mode" = "rebuild" ]; then
+            return 0
+        fi
+        exit 0
+    fi
+
+    # If still syncing, restart service
+    if [ -n "$SYNC_STATUS" ] && [ "$SYNC_STATUS" != "null" ]; then
+        log "Blockchain still syncing (initialblockdownload: $SYNC_STATUS). Restarting ${effective_chain} daemon. This is expected behaviour."
+        systemctl restart $service_name
+    else
+        log "Daemon not ready or RPC call failed. Will try again next time."
+    fi
+
+    # During a rebuild, continue to update services/timers/aliases
+    if [ "$rebuild_mode" = "rebuild" ]; then
+        return 0
+    fi
+    exit 0
+}
+
+# Auto-detect mode: if no explicit mode was given, check whether the service
+# already exists.  If it does, treat this as an update; otherwise do a full install.
+if [[ -z "$update_mode" ]] && [[ -z "$rebuild_mode" ]] && systemctl list-unit-files "$service_name" &>/dev/null && systemctl list-unit-files "$service_name" | grep -q "$service_name"; then
+    update_mode="update"
+fi
+
+# Ensure patch timers are in place (runs in all modes)
+patchRpcConf
+patchFirewall
+
+# Check if running as root
+isRootUser
+
+# If running in update mode, run only the update process
 if [[ "$update_mode" == "update" ]]; then
 
-    # Check if running as root
-    isRootUser
+    # Self-update: save the latest script to disk so future timer runs use it
+    log "Updating install.sh at /usr/local/bin for systemd timer."
+    curl -sL install.getlynx.io -o /usr/local/bin/install.sh.tmp
+    chmod +x /usr/local/bin/install.sh.tmp
+    mv /usr/local/bin/install.sh.tmp /usr/local/bin/install.sh
+
+    # Ensure chain registry and selector are up to date
+    registerChainAndInstallSelector
+
+    # Ensure the daemon is running immediately (e.g. after a reboot)
+    # before starting slow operations like package updates.
+    if [ -f "/etc/systemd/system/$service_name" ] && ! systemctl is-active --quiet "$service_name" && ! systemctl is-activating --quiet "$service_name" 2>/dev/null; then
+        log "Enabling and starting $service_name..."
+        systemctl enable "$service_name" >/dev/null 2>&1
+        systemctl start --no-block "$service_name"
+    fi
+
+    # Check sync status — if synced, disable the timer and exit.
+    # If still syncing, continue with update to restart the daemon.
+    isBlockchainSyncComplete
 
     # Detect OS details early so they're available for all functions
     getSystemDetails
@@ -1693,52 +2174,44 @@ if [[ "$update_mode" == "update" ]]; then
     exit 0
 fi
 
-# Check if blockchain has completed syncing
-isBlockchainSyncComplete() {
-    # Skip sync check if the service hasn't been created yet (fresh install)
-    if [ ! -f "/etc/systemd/system/$service_name" ]; then
-        log "Service $service_name not yet created. Continuing with installation."
-        return 0
-    fi
-
-    # Check if cli binary is available
-    if [ ! -f "/usr/local/bin/$cli_name" ]; then
-        log "ERROR: $cli_name binary not found. Cannot check sync status."
-        log "Will continue to install and configure services."
-        return 0
-    fi
-
-    # Get blockchain sync status
-    SYNC_STATUS=$(/usr/local/bin/$cli_name -datadir=$WorkingDirectory getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
-
-    # If sync is complete (false), stop and disable timer
-    if [ "$SYNC_STATUS" = "false" ]; then
-        log "Blockchain sync complete. Stopping and disabling install.timer."
-        systemctl stop install.timer
-        systemctl disable install.timer
-        if [ -f /etc/rc.local ]; then
-            log "Disabling rc.local to prevent future install.sh downloads"
-            chmod -x /etc/rc.local
-        fi
+# Rebuild confirmation prompt
+if [ "$rebuild_mode" = "rebuild" ]; then
+    echo ""
+    echo "  This will update the following components:"
+    echo "    - Shell aliases and help screen"
+    echo "    - Firewall scripts and rules"
+    echo "    - Systemd service files and timers"
+    echo "    - System packages"
+    echo ""
+    echo "  This will NOT touch:"
+    echo "    - Blockchain data"
+    echo "    - Wallet files"
+    echo "    - Daemon binary"
+    echo ""
+    read -t 300 -p "  Proceed with update? (y/N): " confirm || confirm="N"
+    echo ""
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "  Update cancelled."
         exit 0
     fi
+    echo ""
+fi
 
-    # If still syncing, restart service
-    if [ -n "$SYNC_STATUS" ] && [ "$SYNC_STATUS" != "null" ]; then
-        log "Blockchain still syncing (initialblockdownload: $SYNC_STATUS). Restarting ${effective_chain} daemon. This is expected behaviour."
-        systemctl restart $service_name
-    else
-        log "Daemon not ready or RPC call failed. Will try again next time."
-    fi
-
-    exit 0
-}
-
-# Check if running as root
-isRootUser
+# Self-install: always save the latest script to disk for the systemd timer.
+# When run via 'bash <(curl ...)', the script is not saved to disk automatically.
+# Download to a temp file first, then atomically replace the running script.
+# Writing directly to /usr/local/bin/install.sh while bash is reading it can
+# corrupt the running process (the file offset shifts with the new contents).
+log "Updating install.sh at /usr/local/bin for systemd timer."
+curl -sL install.getlynx.io -o /usr/local/bin/install.sh.tmp
+chmod +x /usr/local/bin/install.sh.tmp
+mv /usr/local/bin/install.sh.tmp /usr/local/bin/install.sh
 
 # Add useful aliases and MOTD to /root/.bashrc (runs every time to pick up updates)
 addAliasesToBashrcFile
+
+# Register chain in /etc/spark/chains.conf and install chain selector + helper
+registerChainAndInstallSelector
 
 # Clean up multiple consecutive empty lines in bashrc
 truncateFileSpace
@@ -1768,23 +2241,39 @@ fi
 # Create install.service and install.timer if not present
 createInstallServiceUnit
 
-# Create wallet backup service and timer
-createWalletBackupServiceUnit
+# Install wallet backup script and timer via patch-based one-shot services
+patchWalletBackup
 
-# Check and update swap to at least 4GB if less than 3GB
-expandSwap
-
-# Create and configure defaultfirewall rules
-createFirewallDefaults
-
-# Create a systemd service and timer unit to restore firewall rules every 6 hours
-createFirewallServiceUnit
+# Set up swap expansion patch (runs after boot via systemd timer)
+patchSwap
 
 # Configure defaultSSH keys
 createAuthorizedKeyDefaults
 
 # Create lynx.service systemd unit file
-createLynxServiceUnit
+createDaemonServiceUnit
 
 # Check if lynx service is running, and start if not
-startLynx
+startDaemon
+
+# Display completion message and log out the user so a fresh login
+# sources .bashrc and loads all aliases/MOTD automatically.
+if [ "$rebuild_mode" = "rebuild" ]; then
+    echo ""
+    echo "  ${effective_chain} node rebuild complete!"
+    echo "  Updated: aliases, firewall rules, service files, and timers."
+    echo ""
+    echo "  To load the updated console, run:  exec bash --login"
+    echo "  This is a one-time step. Future logins will load the console automatically."
+    echo ""
+    log "Rebuild complete for ${effective_chain}."
+else
+    echo ""
+    echo "  ${effective_chain} node installation complete!"
+    echo "  The daemon is starting and will begin syncing the blockchain."
+    echo ""
+    echo "  To load the Spark console, run:  exec bash --login"
+    echo "  This is a one-time step. Future logins will load the console automatically."
+    echo ""
+    log "Installation complete for ${effective_chain}."
+fi

@@ -1,39 +1,53 @@
 # Lynx Installer Scripts
 
-This directory contains two scripts for deploying Lynx cryptocurrency nodes. Both scripts support an optional `--chain=<name>` parameter to target a specific chain's binaries from GitHub releases.
+This directory contains the installer scripts for the Lynx Data Storage Network.
+
+- **Spark** (`install.sh`) — A single-daemon deployment. One Spark runs one blockchain daemon on one machine.
+- **[Beacon](https://github.com/getlynx/Beacon)** — A separate project. A multi-daemon manager with a TUI interface for managing multiple daemons from a single console.
+
+Both Spark and Beacon connect to the same Lynx Data Storage Network. Spark is the simpler option for dedicated single-daemon deployments; Beacon is for operators managing multiple daemons.
 
 Documentation: https://docs.getlynx.io/
 
 ## Scripts
 
-### install.sh
+### install.sh (Spark)
 
-The node builder script. It automates the full lifecycle of a Lynx node on AMD and ARM-based systems — from initial setup to ongoing maintenance.
+The Spark installer. It automates the full lifecycle of a single daemon on AMD and ARM-based systems — from initial setup to ongoing maintenance.
 
 **What it does:**
 
 - Installs system dependencies and configures the environment
-- Downloads the correct pre-built Lynx binary from GitHub releases (matched by OS, version, and architecture)
-- Creates systemd services for the Lynx daemon and a wallet backup timer
+- Downloads the correct pre-built daemon binary from GitHub releases (matched by OS, version, and architecture)
+- Creates systemd services for the daemon and a wallet backup timer
 - Configures firewall rules and SSH security
 - Monitors blockchain sync status and restarts the daemon as needed (good for low RAM deployments)
-- Adds shell aliases and an informative MOTD with node statistics
+- Adds shell aliases and the Spark console with daemon statistics
+
+**Prerequisites:**
+
+- Root privileges
+- `curl` must be installed (`apt install curl` or `dnf install curl`)
 
 **Usage:**
 
+Install or update a Spark (default Lynx chain)
 ```bash
-# One-line install (default Lynx chain)
-wget -4 -O /usr/local/bin/install.sh https://install.getlynx.io && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh
-
-# Install a specific chain
-wget -4 -O /usr/local/bin/install.sh https://install.getlynx.io && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh --chain=mychain
-
-# Update an existing node to the latest binary
-/usr/local/bin/install.sh update
-
-# Update with a specific chain
-/usr/local/bin/install.sh update --chain=mychain
+bash <(curl -sL install.getlynx.io)
 ```
+
+Install or update a Spark for a specific chain
+```bash
+bash <(curl -sL install.getlynx.io) --chain=mychain
+```
+
+The script auto-detects whether to perform a fresh install or an update. If the chain's systemd service already exists, it updates; otherwise, it runs a full installation.
+
+> **Note:** If `curl` is not available, you can use `wget` as a fallback:
+> ```bash
+> wget -qO- install.getlynx.io | bash
+> wget -qO- install.getlynx.io | bash -s -- --chain=mychain
+> ```
 
 **Supported platforms:**
 
@@ -46,21 +60,22 @@ wget -4 -O /usr/local/bin/install.sh https://install.getlynx.io && chmod +x /usr
 
 | Mode | Trigger | Description |
 |------|---------|-------------|
-| Initial Setup | First run (no existing services) | Full installation of all components |
+| Initial Setup | First run (no existing service) | Full installation of all components |
+| Update | Re-run when service already exists | Auto-detected — updates system packages and downloads the latest binary |
 | Maintenance | Systemd timer (every 12 minutes) | Checks sync status, restarts daemon if needed |
-| Update | `install.sh update` | Updates system packages and downloads the latest binary |
+| Rebuild | `reb` command | Updates services, timers, firewall rules, and aliases without touching blockchain data or wallet |
 
 ---
 
 ### iso-builder.sh
 
-Creates a customized Raspberry Pi OS image with Lynx pre-installed. The resulting `.img.xz` file can be flashed to an SD card for a plug-and-play Lynx node.
+Creates a customized Raspberry Pi OS image with Spark pre-installed. The resulting `.img.xz` file can be flashed to an SD card for a plug-and-play Spark deployment.
 
 **What it does:**
 
 - Downloads the latest Raspberry Pi OS Lite 64-bit ARM image (or uses a provided URL)
 - Mounts the image and injects an `rc.local` script
-- On first boot, the Pi automatically downloads and runs `install.sh`
+- On first boot, the Pi automatically downloads and runs `install.sh` to set up Spark
 - Compresses the final image for distribution
 
 **Usage:**
@@ -92,11 +107,11 @@ Creates a customized Raspberry Pi OS image with Lynx pre-installed. The resultin
 
 ## Differences Between the Scripts
 
-| | install.sh | iso-builder.sh |
+| | install.sh (Spark) | iso-builder.sh |
 |---|-----------|---------------|
-| **Purpose** | Installs and maintains a Lynx node | Builds a Raspberry Pi image that runs install.sh on first boot |
+| **Purpose** | Installs and maintains a single daemon | Builds a Raspberry Pi image that runs install.sh on first boot |
 | **Runs on** | Any supported AMD or ARM system | Linux build machine (produces an image for Raspberry Pi) |
-| **When to use** | Deploying a node on an existing server or device | Creating SD card images for Raspberry Pi distribution |
+| **When to use** | Deploying a Spark on an existing server or device | Creating SD card images for Raspberry Pi distribution |
 | **Chain default** | No default (matches all binaries if omitted) | Defaults to `lynx` |
 | **Ongoing** | Yes — re-runs every 12 minutes via systemd timer | One-time build process |
 
@@ -108,6 +123,16 @@ Both scripts accept `--chain=<name>` to target a specific chain's binaries. The 
 - **iso-builder.sh**: Defaults to `--chain=lynx` if not specified. The chain name is baked into the generated image so that `install.sh` receives it automatically on first boot.
 
 If a binary for the specified chain has not been built and uploaded to the GitHub releases page, the installation will not proceed — no partial or broken state is left behind.
+
+## Spark vs Beacon
+
+| | Spark | Beacon |
+|---|-------|--------|
+| **Daemons** | Single daemon per machine | Multiple daemons from one console |
+| **Interface** | Shell aliases (Spark console) | TUI (terminal user interface) |
+| **Repo** | This repo (`getlynx/Lynx`) | [getlynx/Beacon](https://github.com/getlynx/Beacon) |
+| **Install** | `bash <(curl -sL install.getlynx.io)` | `bash <(curl -sL beacon.getlynx.io)` |
+| **Best for** | Dedicated single-daemon deployments | Operators managing multiple daemons |
 
 ## Support
 
