@@ -1125,6 +1125,11 @@ bool AppInitInterfaces(NodeContext& node)
     return true;
 }
 
+static void LogTestMessageEveryMinute()
+{
+    LogPrintf("dkdkfjfjdkdkfjfj\n");
+}
+
 bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 {
 
@@ -1202,6 +1207,9 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     node.scheduler->scheduleEvery([]{
         RandAddPeriodic();
     }, std::chrono::minutes{1});
+
+    // Test task: log a fixed message once every minute.
+    node.scheduler->scheduleEvery(&LogTestMessageEveryMinute, std::chrono::minutes{1});
 
     GetMainSignals().RegisterBackgroundSignalScheduler(*node.scheduler);
 
