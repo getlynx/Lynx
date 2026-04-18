@@ -1947,7 +1947,6 @@ startDaemon() {
             log "Disabling rc.local to prevent future install.sh downloads"
             chmod -x /etc/rc.local
         fi
-        exit 0
     fi
 }
 
