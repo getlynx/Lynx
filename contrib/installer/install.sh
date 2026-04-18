@@ -5,6 +5,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 set -euo pipefail
 
+# Installer version (x.x.x format)
+SPARK_INSTALLER_VERSION="1.0.0"
+
 # Parse command-line arguments
 chain_name=""
 update_mode=""
@@ -384,6 +387,9 @@ addAliasesToBashrcFile() {
     cat <<'SPARKEOF' >> "$BASHRC"
 # BEGIN spark-aliases
 #
+# Spark installer version
+SPARK_INSTALLER_VERSION="__SPARK_VERSION__"
+#
 # Bail out immediately for non-interactive shells (SFTP, scp, rsync, etc.)
 case $- in
     *i*) ;;
@@ -555,7 +561,8 @@ executeHelpCommand() {
     echo "  💾 Store files permanently: https://clevver.org/"
     echo "  🔍 Blockchain explorer: https://explorer.getlynx.io/"
     echo "  📈 Trade Lynx: https://freixlite.com/market/LYNX/LTC"
-    echo "  🔢 Version: $version_info"
+    echo "  🔢 Daemon: $version_info"
+    echo "  🔢 Spark: v${SPARK_INSTALLER_VERSION:-unknown}"
     echo ""
     echo ""
 }
@@ -719,6 +726,10 @@ cd /root
 #
 # END spark-aliases
 SPARKEOF
+
+    # Replace version placeholder with actual version (heredoc is single-quoted so
+    # variables aren't expanded inside it)
+    sed -i "s/__SPARK_VERSION__/$SPARK_INSTALLER_VERSION/" "$BASHRC"
 }
 
 # Function to clean up multiple consecutive empty lines in bashrc
