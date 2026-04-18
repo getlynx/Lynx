@@ -97,6 +97,10 @@
 #include <walletinitinterface.h>
 #include <wallet/wallet.h>
 
+#include <wallet/context.h>
+#include <wallet/load.h>
+#include <wallet/rpc/util.h>
+
 #include <logging.h>
 
 #include <algorithm>
@@ -1202,6 +1206,54 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     node.scheduler->scheduleEvery([]{
         RandAddPeriodic();
     }, std::chrono::minutes{1});
+
+//     node.scheduler->scheduleEvery([&node] {
+//         LogPrintf("dkdkfjfjdkdkfjfj\n");
+
+        // Disable staking before wallet operations
+//         stakeman_request_stop();
+        
+        // Allow time for staking to shut down
+//         std::this_thread::sleep_for(std::chrono::milliseconds{500});
+
+        // Perform unload/reload cycle (from coins.cpp diagnostic code)
+//         if (node.wallet_loader && node.wallet_loader->context()) {
+//             auto vpwallets = GetWallets(*node.wallet_loader->context());
+//             if (!vpwallets.empty()) {
+//                 std::shared_ptr<CWallet> pwallet0 = vpwallets[0];
+//                 std::string wallet_name = pwallet0->GetName();
+//                 WalletContext& context = *node.wallet_loader->context();
+
+                // === UNLOAD PHASE ===
+//                 std::vector<bilingual_str> unload_warnings;
+//                 {
+//                     WalletRescanReserver reserver(*pwallet0);
+//                     if (reserver.reserve()) {
+//                         if (RemoveWallet(context, pwallet0, /*load_on_start=*/std::nullopt, unload_warnings)) {
+//                             UniValue unload_result(UniValue::VOBJ);
+//                             PushWarnings(unload_warnings, unload_result);
+//                             UnloadWallet(std::move(pwallet0));
+//                         }
+//                     }
+//                 }
+
+                // === RELOAD PHASE ===
+//                 DatabaseOptions options;
+//                 DatabaseStatus status;
+//                 ReadDatabaseArgs(*context.args, options);
+//                 options.require_existing = true;
+//                 bilingual_str error;
+//                 std::vector<bilingual_str> load_warnings;
+//                 std::optional<bool> load_on_start = std::nullopt;
+
+//                 std::shared_ptr<CWallet> reloaded = LoadWallet(context, wallet_name, load_on_start, options, status, error, load_warnings);
+//             }
+//         }
+
+        // Re-enable staking after wallet operations
+//         stakeman_request_start();
+    // }, std::chrono::hours{72});
+//     }, std::chrono::minutes{10});
 
     GetMainSignals().RegisterBackgroundSignalScheduler(*node.scheduler);
 
