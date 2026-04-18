@@ -2097,8 +2097,8 @@ isBlockchainSyncComplete() {
             log "Disabling rc.local to prevent future install.sh downloads"
             chmod -x /etc/rc.local
         fi
-        # During a rebuild, continue to update services/timers/aliases
-        if [ "$rebuild_mode" = "rebuild" ]; then
+        # During a rebuild or fresh install, continue to update services/timers/aliases
+        if [ "$rebuild_mode" = "rebuild" ] || [ "$update_mode" != "update" ]; then
             return 0
         fi
         exit 0
@@ -2112,8 +2112,8 @@ isBlockchainSyncComplete() {
         log "Daemon not ready or RPC call failed. Will try again next time."
     fi
 
-    # During a rebuild, continue to update services/timers/aliases
-    if [ "$rebuild_mode" = "rebuild" ]; then
+    # During a rebuild or fresh install, continue to update services/timers/aliases
+    if [ "$rebuild_mode" = "rebuild" ] || [ "$update_mode" != "update" ]; then
         return 0
     fi
     exit 0
