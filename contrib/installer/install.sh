@@ -1885,7 +1885,7 @@ Wants=network-online.target
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
-ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory -dbcache=2048${assumevalid_flag}
+ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory${assumevalid_flag}
 ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory -rpcconnect=$rpc_host stop
 Restart=on-failure
 RestartSec=30
