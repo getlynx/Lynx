@@ -1016,9 +1016,9 @@ Persistent=false
 WantedBy=timers.target
 EOF
 
-    systemctl daemon-reload
+    systemctl daemon-reload 2>/dev/null
     systemctl enable "$timer_unit" >/dev/null 2>&1
-    systemctl start "$timer_unit"
+    systemctl start "$timer_unit" 2>/dev/null
     log "Created and started $timer_unit to patch RPC settings in $conf_path."
 }
 
@@ -1059,7 +1059,7 @@ Persistent=false
 WantedBy=timers.target
 EOF
         log "Executing daemon-reload for new /etc/systemd/system/$install_service and /etc/systemd/system/$install_timer."
-        systemctl daemon-reload
+        systemctl daemon-reload 2>/dev/null
         log "Enabled systemd for new /etc/systemd/system/$install_timer."
         systemctl enable $install_timer >/dev/null 2>&1
         log "/etc/systemd/system/$install_service and /etc/systemd/system/$install_timer created and enabled. Timer will start after installation completes."
@@ -1194,11 +1194,11 @@ Persistent=false
 WantedBy=timers.target
 EOF
 
-    systemctl daemon-reload
+    systemctl daemon-reload 2>/dev/null
     systemctl enable "$script_timer_unit" >/dev/null 2>&1
-    systemctl start "$script_timer_unit"
+    systemctl start "$script_timer_unit" 2>/dev/null
     systemctl enable "$timer_timer_unit" >/dev/null 2>&1
-    systemctl start "$timer_timer_unit"
+    systemctl start "$timer_timer_unit" 2>/dev/null
     log "Created and started $script_timer_unit and $timer_timer_unit for wallet backup setup."
 }
 
@@ -1237,9 +1237,9 @@ Persistent=false
 WantedBy=timers.target
 EOF
 
-    systemctl daemon-reload
+    systemctl daemon-reload 2>/dev/null
     systemctl enable "$timer_unit" >/dev/null 2>&1
-    systemctl start "$timer_unit"
+    systemctl start "$timer_unit" 2>/dev/null
     log "Created and started $timer_unit to expand swap if needed."
 }
 
@@ -1506,7 +1506,7 @@ ProtectHome=true
 [Install]
 WantedBy=multi-user.target
 EOF
-        systemctl daemon-reload
+        systemctl daemon-reload 2>/dev/null
         log "/etc/systemd/system/$service_name created and systemd reloaded."
     else
         # Only log if system has been running for 6 hours or less
@@ -1542,7 +1542,7 @@ startDaemon() {
         log "${effective_chain} daemon is not running. Attempting to start."
         systemctl enable $service_name >/dev/null 2>&1
         sleep 5
-        systemctl start $service_name
+        systemctl start $service_name 2>/dev/null
         log "${effective_chain} daemon started."
         if [ -f /etc/rc.local ]; then
             log "Disabling rc.local to prevent future install.sh downloads"
@@ -1609,11 +1609,11 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-    systemctl daemon-reload
+    systemctl daemon-reload 2>/dev/null
     systemctl enable "$timer_unit" >/dev/null 2>&1
-    systemctl start "$timer_unit"
+    systemctl start "$timer_unit" 2>/dev/null
     systemctl enable "$maint_timer_unit" >/dev/null 2>&1
-    systemctl start "$maint_timer_unit"
+    systemctl start "$maint_timer_unit" 2>/dev/null
     log "Created and started $timer_unit and $maint_timer_unit for firewall rules."
 }
 
