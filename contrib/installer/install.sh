@@ -1459,9 +1459,7 @@ EOF
         systemctl daemon-reload
         log "Enabled systemd for new /etc/systemd/system/$install_timer."
         systemctl enable $install_timer >/dev/null 2>&1
-        log "Starting systemd for new /etc/systemd/system/$install_timer."
-        systemctl start $install_timer
-        log "/etc/systemd/system/$install_service and /etc/systemd/system/$install_timer created, enabled, and started."
+        log "/etc/systemd/system/$install_service and /etc/systemd/system/$install_timer created and enabled. Timer will start after installation completes."
 
         # Disable firewalld and SELinux on RHEL-based systems
         log "Checking for RHEL-based system to disable firewalld and SELinux."
@@ -2275,4 +2273,14 @@ else
     echo "  This is a one-time step. Future logins will load the console automatically."
     echo ""
     log "Installation complete for ${effective_chain}."
+fi
+
+# Start the install timer now that the interactive installation is complete.
+# This is deferred from createInstallServiceUnit to avoid a race condition
+# where the timer-triggered install.sh runs in parallel with the interactive
+# install, causing silent failures under set -euo pipefail.
+install_timer="${chain_lower}-install.timer"
+if systemctl is-enabled "$install_timer" >/dev/null 2>&1 && ! systemctl is-active "$install_timer" >/dev/null 2>&1; then
+    systemctl start "$install_timer" 2>/dev/null || true
+    log "Started $install_timer for ongoing maintenance."
 fi
