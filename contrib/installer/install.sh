@@ -1113,9 +1113,9 @@ EOF
 }
 
 # Create one-shot services and timers that fetch and run the wallet-backup
-# patch scripts. One timer (7s) ensures /usr/local/bin/backup.sh is installed;
-# a second timer (8s) ensures the {chain}-wallet-backup service/timer pair is
-# installed. Each timer self-disables once its target exists.
+# patch scripts. One timer (7s) ensures /usr/local/bin/{chain}-backup.sh is
+# installed; a second timer (8s) ensures the {chain}-wallet-backup service/timer
+# pair is installed. Each timer self-disables once its target exists.
 patchWalletBackup() {
     local backup_service_unit="${chain_lower}-wallet-backup.service"
     local backup_timer_unit="${chain_lower}-wallet-backup.timer"

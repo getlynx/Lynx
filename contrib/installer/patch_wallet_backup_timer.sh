@@ -40,7 +40,7 @@ After=${SERVICE_NAME}
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/backup.sh
+ExecStart=/usr/local/bin/${CHAIN_LOWER}-backup.sh
 StandardOutput=journal
 StandardError=journal
 Environment=HOME=${WORKING_DIRECTORY}
