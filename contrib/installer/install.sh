@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="1.3.1"
+SPARK_INSTALLER_VERSION="1.3.2"
 
 # Parse command-line arguments
 chain_name=""
