@@ -155,6 +155,8 @@ Both Spark and Beacon run multiple daemons per host. The difference is not *how 
 | **Interface** | Shell aliases + `chain` / `c` selector | TUI (terminal user interface) |
 | **Resource footprint** | Minimal — no persistent UI process, `awk`-only JSON parsing, sync-time restarts tuned for low RAM | Higher — TUI process running continuously |
 | **Ergonomics** | Functional; command-line driven | Richer and more convenient — live views and keyboard-driven navigation |
+| **Wallet encryption** | Not provided — use `<chain>-cli encryptwallet` / `walletpassphrase` directly if needed | Built-in wallet encryption workflows |
+| **ElectrumX** | Not included — install separately if you need it | Built-in ElectrumX installer |
 | **Repo** | This repo (`getlynx/Lynx`) | [getlynx/Beacon](https://github.com/getlynx/Beacon) |
 | **Install** | `bash <(curl -sL install.getlynx.io)` | `bash <(curl -sL beacon.getlynx.io)` |
 | **Best for** | Low-RAM devices, Raspberry Pis, budget VPSs, headless deployments | Operators with the headroom who want a comfortable multi-daemon cockpit |
