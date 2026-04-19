@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="1.1.1"
+SPARK_INSTALLER_VERSION="1.3.1"
 
 # Parse command-line arguments
 chain_name=""
@@ -968,6 +968,21 @@ if [ -f "$_SPARK_CURRENT_FILE" ] && [ -s "$_SPARK_CURRENT_FILE" ]; then
 else
     # No chain selected — clear vars
     unset SPARK_CHAIN SPARK_DATADIR SPARK_CONF SPARK_SERVICE SPARK_RPC_HOST SPARK_CLI 2>/dev/null
+fi
+
+# Define a wrapper function for every installed chain's CLI so that running
+# "<chain>-cli <args>" auto-injects -datadir and -rpcconnect. Reads rpcbind
+# straight from each chain's conf file rather than re-deriving via cksum.
+if [ -f "$_SPARK_REGISTRY" ] && [ -s "$_SPARK_REGISTRY" ]; then
+    while IFS= read -r _spark_c; do
+        [ -n "$_spark_c" ] || continue
+        _spark_cf="/var/lib/${_spark_c}/${_spark_c}.conf"
+        [ -f "$_spark_cf" ] || continue
+        _spark_rpc=$(awk -F= '/^rpcbind=/ {print $2; exit}' "$_spark_cf" 2>/dev/null)
+        [ -n "$_spark_rpc" ] || continue
+        eval "${_spark_c}-cli() { command /usr/local/bin/${_spark_c}-cli -datadir=/var/lib/${_spark_c} -rpcconnect=${_spark_rpc} \"\$@\"; }"
+    done < "$_SPARK_REGISTRY"
+    unset _spark_c _spark_cf _spark_rpc
 fi
 unset _SPARK_CURRENT_FILE _SPARK_REGISTRY
 HELPEREOF
