@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="1.3.2"
+SPARK_INSTALLER_VERSION="1.3.3"
 
 # Parse command-line arguments
 chain_name=""
@@ -324,7 +324,7 @@ while [ "$_collision_tries" -lt 253 ]; do
     _taken_by=""
     for _conf_file in /var/lib/*/[a-z]*.conf; do
         [ -f "$_conf_file" ] || continue
-        if grep -q "^rpcbind=127\\.0\\.0\\.${rpc_octet}$" "$_conf_file" 2>/dev/null; then
+        if grep -Eq "^(main\.|test\.)?rpcbind=127\.0\.0\.${rpc_octet}$" "$_conf_file" 2>/dev/null; then
             # Extract chain name from path: /var/lib/<chain>/<chain>.conf
             _conf_chain=$(basename "$(dirname "$_conf_file")")
             if [ "$_conf_chain" != "$chain_lower" ]; then
@@ -792,7 +792,7 @@ _get_rpc_ip() {
         local taken=""
         for cf in /var/lib/*/[a-z]*.conf; do
             [ -f "$cf" ] || continue
-            if grep -q "^rpcbind=127\\.0\\.0\\.${octet}$" "$cf" 2>/dev/null; then
+            if grep -Eq "^(main\.|test\.)?rpcbind=127\.0\.0\.${octet}$" "$cf" 2>/dev/null; then
                 local cc
                 cc=$(basename "$(dirname "$cf")")
                 if [ "$cc" != "$cname" ]; then
@@ -948,7 +948,7 @@ if [ -f "$_SPARK_CURRENT_FILE" ] && [ -s "$_SPARK_CURRENT_FILE" ]; then
         _spark_taken=""
         for _spark_cf in /var/lib/*/[a-z]*.conf; do
             [ -f "$_spark_cf" ] || continue
-            if grep -q "^rpcbind=127\\.0\\.0\\.${_spark_octet}$" "$_spark_cf" 2>/dev/null; then
+            if grep -Eq "^(main\.|test\.)?rpcbind=127\.0\.0\.${_spark_octet}$" "$_spark_cf" 2>/dev/null; then
                 _spark_cc=$(basename "$(dirname "$_spark_cf")")
                 if [ "$_spark_cc" != "$SPARK_CHAIN" ]; then
                     _spark_taken="$_spark_cc"
@@ -978,7 +978,7 @@ if [ -f "$_SPARK_REGISTRY" ] && [ -s "$_SPARK_REGISTRY" ]; then
         [ -n "$_spark_c" ] || continue
         _spark_cf="/var/lib/${_spark_c}/${_spark_c}.conf"
         [ -f "$_spark_cf" ] || continue
-        _spark_rpc=$(awk -F= '/^rpcbind=/ {print $2; exit}' "$_spark_cf" 2>/dev/null)
+        _spark_rpc=$(awk -F= '/^(main\.|test\.)?rpcbind=/ {print $2; exit}' "$_spark_cf" 2>/dev/null)
         [ -n "$_spark_rpc" ] || continue
         eval "${_spark_c}-cli() { command /usr/local/bin/${_spark_c}-cli -datadir=/var/lib/${_spark_c} -rpcconnect=${_spark_rpc} \"\$@\"; }"
     done < "$_SPARK_REGISTRY"
