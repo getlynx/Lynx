@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="1.4.0"
+SPARK_INSTALLER_VERSION="1.5.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -985,6 +985,10 @@ if [ -f "$_SPARK_REGISTRY" ] && [ -s "$_SPARK_REGISTRY" ]; then
     unset _spark_c _spark_cf _spark_rpc
 fi
 unset _SPARK_CURRENT_FILE _SPARK_REGISTRY
+
+# Inject chain name into PS1. Uses runtime expansion of $SPARK_CHAIN so the
+# prompt stays fresh after `c <chain>` without re-setting PS1.
+PS1='\u@\h${SPARK_CHAIN:+-$SPARK_CHAIN}:\w\$ '
 HELPEREOF
     chmod +x /usr/local/bin/spark-current-chain.sh
 
