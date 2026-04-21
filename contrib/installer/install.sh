@@ -893,8 +893,10 @@ case "${1:-}" in
         else
             _show_menu
             if [ -t 0 ]; then
-                read -p "  Select chain (number or name): " choice
-                if [ -n "$choice" ]; then
+                if ! read -t 15 -p "  Select chain (number or name, 15s timeout): " choice; then
+                    echo ""
+                    echo "  Timed out. No change made."
+                elif [ -n "$choice" ]; then
                     _select_chain "$choice"
                 fi
             else
