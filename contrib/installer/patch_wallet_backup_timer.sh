@@ -24,14 +24,6 @@ done
 service_path="/etc/systemd/system/${BACKUP_SERVICE_UNIT}"
 timer_path="/etc/systemd/system/${BACKUP_TIMER_UNIT}"
 
-# If both unit files already exist and the timer is enabled, disable this timer and exit
-if [ -f "$service_path" ] && [ -f "$timer_path" ] && systemctl is-enabled --quiet "$BACKUP_TIMER_UNIT" 2>/dev/null; then
-    logger -t patch_wallet_backup_timer "$BACKUP_TIMER_UNIT already installed. Disabling timer."
-    systemctl stop "$TIMER_UNIT" 2>/dev/null || true
-    systemctl disable "$TIMER_UNIT" 2>/dev/null || true
-    exit 0
-fi
-
 cat <<EOF > "$service_path"
 [Unit]
 Description=Backup ${EFFECTIVE_CHAIN} wallet every 60 minutes
@@ -58,6 +50,7 @@ Documentation=https://getlynx.io/
 [Timer]
 OnBootSec=15min
 OnUnitActiveSec=60min
+RandomizedDelaySec=5min
 AccuracySec=5m
 Unit=${BACKUP_SERVICE_UNIT}
 Persistent=true
