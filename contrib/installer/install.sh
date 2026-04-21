@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="1.5.0"
+SPARK_INSTALLER_VERSION="1.6.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -821,7 +821,11 @@ _show_menu() {
         if [ -f "$CURRENT" ] && [ "$(cat "$CURRENT" 2>/dev/null)" = "$cname" ]; then
             marker=" *"
         fi
-        printf "    %d) %s (%s)%s\n" "$i" "$cname" "$rpc_ip" "$marker"
+        local badge="🔴"
+        if systemctl is-active --quiet "${cname}.service" 2>/dev/null; then
+            badge="🟢"
+        fi
+        printf "    %s %d) %s (%s)%s\n" "$badge" "$i" "$cname" "$rpc_ip" "$marker"
         i=$((i + 1))
     done
     echo ""
@@ -986,9 +990,17 @@ if [ -f "$_SPARK_REGISTRY" ] && [ -s "$_SPARK_REGISTRY" ]; then
 fi
 unset _SPARK_CURRENT_FILE _SPARK_REGISTRY
 
-# Inject chain name into PS1. Uses runtime expansion of $SPARK_CHAIN so the
-# prompt stays fresh after `c <chain>` without re-setting PS1.
-PS1='\u@\h${SPARK_CHAIN:+-$SPARK_CHAIN}:\w\$ '
+# Inject chain name into PS1 with a stable per-chain color (hashed from the
+# chain name) so each chain is visually distinct on multi-chain VPSes.
+if [ -n "${SPARK_CHAIN:-}" ]; then
+    _spark_colors=(32 33 34 35 36)
+    _spark_color_idx=$(printf '%s' "$SPARK_CHAIN" | cksum | awk '{print $1 % 5}')
+    _spark_color="${_spark_colors[$_spark_color_idx]}"
+    PS1="\u@\h-\[\e[1;${_spark_color}m\]${SPARK_CHAIN}\[\e[0m\]:\w\\$ "
+    unset _spark_colors _spark_color_idx _spark_color
+else
+    PS1='\u@\h:\w\$ '
+fi
 HELPEREOF
     chmod +x /usr/local/bin/spark-current-chain.sh
 
