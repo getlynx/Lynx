@@ -44,6 +44,35 @@ Install or update a Spark for a specific chain
 bash <(curl -sL install.getlynx.io) --chain=mychain
 ```
 
+Current chain options
+```bash
+bash <(curl -sL install.getlynx.io) --chain=alioth
+```
+```bash
+bash <(curl -sL install.getlynx.io) --chain=borrelly
+```
+```bash
+bash <(curl -sL install.getlynx.io) --chain=cassiopeia
+```
+```bash
+bash <(curl -sL install.getlynx.io) --chain=delphinus
+```
+```bash
+bash <(curl -sL install.getlynx.io) --chain=enceladus
+```
+```bash
+bash <(curl -sL install.getlynx.io) --chain=fenrir
+```
+```bash
+bash <(curl -sL install.getlynx.io) --chain=galatea
+```
+```bash
+bash <(curl -sL install.getlynx.io) --chain=halley
+```
+```bash
+bash <(curl -sL install.getlynx.io) --chain=indus
+```
+
 Explicitly update an existing Spark daemon
 ```bash
 bash <(curl -sL install.getlynx.io) update
