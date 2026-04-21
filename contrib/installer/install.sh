@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="1.6.0"
+SPARK_INSTALLER_VERSION="1.8.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -781,6 +781,20 @@ fi
 # Read registry into an array
 mapfile -t chains < "$REGISTRY"
 
+# Per-chain color (mirrors PS1 logic in spark-current-chain.sh so the color
+# a chain shows in this menu matches the color it will produce in the prompt).
+_SPARK_PALETTE=(20 27 33 39 45 51 46 82 118 154 190 226 220 214 208 202 196 160 124 198 201 207 213 219 135 141 165 171 177 21 57 93 99 129 75 81 87 147 111 148)
+_chain_color() {
+    local idx
+    idx=$(printf '%s' "$1" | cksum | awk '{print $1 % 40}')
+    printf '%s' "${_SPARK_PALETTE[$idx]}"
+}
+_colorize_chain() {
+    local name="$1" color
+    color=$(_chain_color "$name")
+    printf '\033[1;38;5;%sm%s\033[0m' "$color" "$name"
+}
+
 # Resolve the RPC octet for a given chain name (mirrors install.sh logic)
 _get_rpc_ip() {
     local cname="$1"
@@ -825,7 +839,7 @@ _show_menu() {
         if systemctl is-active --quiet "${cname}.service" 2>/dev/null; then
             badge="🟢"
         fi
-        printf "    %s %d) %s (%s)%s\n" "$badge" "$i" "$cname" "$rpc_ip" "$marker"
+        printf "    %s %d) %b (%s)%s\n" "$badge" "$i" "$(_colorize_chain "$cname")" "$rpc_ip" "$marker"
         i=$((i + 1))
     done
     echo ""
@@ -868,7 +882,9 @@ _select_chain() {
     rpc_ip=$(_get_rpc_ip "$selected")
     local display_name
     display_name="$(echo "$selected" | sed 's/./\U&/')"
-    echo "  Switched to $display_name ($rpc_ip)"
+    local color
+    color=$(_chain_color "$selected")
+    printf "  Switched to \033[1;38;5;%sm%s\033[0m (%s)\n" "$color" "$display_name" "$rpc_ip"
     return 0
 }
 
@@ -994,11 +1010,13 @@ unset _SPARK_CURRENT_FILE _SPARK_REGISTRY
 
 # Inject chain name into PS1 with a stable per-chain color (hashed from the
 # chain name) so each chain is visually distinct on multi-chain VPSes.
+# 40-color palette drawn from the xterm 256-color cube; skips dark/pale
+# shades that read poorly on typical terminal backgrounds.
 if [ -n "${SPARK_CHAIN:-}" ]; then
-    _spark_colors=(32 33 34 35 36)
-    _spark_color_idx=$(printf '%s' "$SPARK_CHAIN" | cksum | awk '{print $1 % 5}')
+    _spark_colors=(20 27 33 39 45 51 46 82 118 154 190 226 220 214 208 202 196 160 124 198 201 207 213 219 135 141 165 171 177 21 57 93 99 129 75 81 87 147 111 148)
+    _spark_color_idx=$(printf '%s' "$SPARK_CHAIN" | cksum | awk '{print $1 % 40}')
     _spark_color="${_spark_colors[$_spark_color_idx]}"
-    PS1="\u@\h-\[\e[1;${_spark_color}m\]${SPARK_CHAIN}\[\e[0m\]:\w\\$ "
+    PS1="\u@\h-\[\e[1;38;5;${_spark_color}m\]${SPARK_CHAIN}\[\e[0m\]:\w\\$ "
     unset _spark_colors _spark_color_idx _spark_color
 else
     PS1='\u@\h:\w\$ '
