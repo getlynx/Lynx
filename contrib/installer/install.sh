@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="1.8.0"
+SPARK_INSTALLER_VERSION="2.0.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -224,6 +224,7 @@ fi
 #   - /usr/local/bin/spark-current-chain.sh (sourced helper)
 #   - /etc/spark/chains.conf (chain registry)
 #   - /run/spark/current-chain (current selection, tmpfs)
+#   - /run/spark/chain-colors (per-chain PS1 color cache, tmpfs)
 #   - /swapfile (if needed)
 #   - ~/.bashrc (Spark console aliases)
 #
@@ -781,18 +782,70 @@ fi
 # Read registry into an array
 mapfile -t chains < "$REGISTRY"
 
-# Per-chain color (mirrors PS1 logic in spark-current-chain.sh so the color
-# a chain shows in this menu matches the color it will produce in the prompt).
-_SPARK_PALETTE=(20 27 33 39 45 51 46 82 118 154 190 226 220 214 208 202 196 160 124 198 201 207 213 219 135 141 165 171 177 21 57 93 99 129 75 81 87 147 111 148)
+# Per-chain color with greedy collision resolution + cache.
+# 100-color palette from the xterm 256-color cube (no grays, no too-dark).
+# Chains are processed in registry order; each chain takes its hashed slot,
+# or walks forward to the next free slot if that slot is already claimed.
+# Resolved assignments cache at /run/spark/chain-colors (tmpfs) and regenerate
+# only when /etc/spark/chains.conf changes. Lookup is pure-bash (no forks).
+# Keep palette + resolver in sync with spark-current-chain.sh.
+_SPARK_PALETTE=(
+    20 21 26 27 32 33 38 39 44 45
+    50 51 56 57 62 63 68 69 74 75
+    80 81 86 87 92 93 98 99 104 105
+    110 111 116 117 122 123 128 129 134 135
+    140 141 146 147 152 153 158 159 164 165
+    170 171 176 177 182 183 190 191 196 197
+    202 203 208 209 214 215 220 221 226 227
+    22 28 34 40 46 82 118 154
+    124 130 136 142 148 160 166 172 178 184
+    198 199 200 201 204 205 206 207 210 211 212 213
+)
+# djb2 hash, pure bash — avoids forking cksum per chain during cache rebuild.
+_spark_hash_mod100() {
+    local s="$1" i c h=5381
+    for ((i=0; i<${#s}; i++)); do
+        printf -v c '%d' "'${s:i:1}"
+        h=$(( (h * 33 + c) & 0x7fffffff ))
+    done
+    printf '%d' $((h % 100))
+}
+_spark_rebuild_color_cache() {
+    local tmp="/run/spark/chain-colors.tmp.$$"
+    mkdir -p /run/spark 2>/dev/null || return 1
+    local -a used=()
+    local chain idx slot
+    : > "$tmp"
+    while IFS= read -r chain || [ -n "$chain" ]; do
+        [ -z "$chain" ] && continue
+        idx=$(_spark_hash_mod100 "$chain")
+        slot=$idx
+        while [ -n "${used[$slot]:-}" ]; do
+            slot=$(( (slot + 1) % 100 ))
+            [ "$slot" = "$idx" ] && break
+        done
+        used[$slot]=1
+        printf '%s %s\n' "$chain" "${_SPARK_PALETTE[$slot]}" >> "$tmp"
+    done < "$REGISTRY"
+    mv -f "$tmp" "/run/spark/chain-colors" 2>/dev/null
+}
 _chain_color() {
+    local cache="/run/spark/chain-colors"
+    if [ ! -f "$cache" ] || [ "$REGISTRY" -nt "$cache" ]; then
+        _spark_rebuild_color_cache
+    fi
+    local c col
+    while IFS=' ' read -r c col; do
+        [ "$c" = "$1" ] && { printf '%s' "$col"; return 0; }
+    done < "$cache" 2>/dev/null
     local idx
-    idx=$(printf '%s' "$1" | cksum | awk '{print $1 % 40}')
+    idx=$(_spark_hash_mod100 "$1")
     printf '%s' "${_SPARK_PALETTE[$idx]}"
 }
 _colorize_chain() {
-    local name="$1" color
-    color=$(_chain_color "$name")
-    printf '\033[1;38;5;%sm%s\033[0m' "$color" "$name"
+    local color
+    color=$(_chain_color "$1")
+    printf '\033[1;38;5;%sm%s\033[0m' "$color" "$1"
 }
 
 # Resolve the RPC octet for a given chain name (mirrors install.sh logic)
@@ -1008,16 +1061,73 @@ if [ -f "$_SPARK_REGISTRY" ] && [ -s "$_SPARK_REGISTRY" ]; then
 fi
 unset _SPARK_CURRENT_FILE _SPARK_REGISTRY
 
-# Inject chain name into PS1 with a stable per-chain color (hashed from the
-# chain name) so each chain is visually distinct on multi-chain VPSes.
-# 40-color palette drawn from the xterm 256-color cube; skips dark/pale
-# shades that read poorly on typical terminal backgrounds.
+# Per-chain color with greedy collision resolution + cache.
+# Keep palette + resolver in sync with /usr/local/bin/chain.
+# Hot path (cache hit): one stat + pure-bash file read, no forks.
+_SPARK_PALETTE=(
+    20 21 26 27 32 33 38 39 44 45
+    50 51 56 57 62 63 68 69 74 75
+    80 81 86 87 92 93 98 99 104 105
+    110 111 116 117 122 123 128 129 134 135
+    140 141 146 147 152 153 158 159 164 165
+    170 171 176 177 182 183 190 191 196 197
+    202 203 208 209 214 215 220 221 226 227
+    22 28 34 40 46 82 118 154
+    124 130 136 142 148 160 166 172 178 184
+    198 199 200 201 204 205 206 207 210 211 212 213
+)
+# djb2 hash in pure bash. Sets _SPARK_HASH.
+_spark_hash_mod100() {
+    local s="$1" i c h=5381
+    for ((i=0; i<${#s}; i++)); do
+        printf -v c '%d' "'${s:i:1}"
+        h=$(( (h * 33 + c) & 0x7fffffff ))
+    done
+    _SPARK_HASH=$(( h % 100 ))
+}
+# Rebuild /run/spark/chain-colors from registry with greedy walk.
+_spark_rebuild_color_cache() {
+    local tmp="/run/spark/chain-colors.tmp.$$"
+    mkdir -p /run/spark 2>/dev/null || return 1
+    local -a used=()
+    local chain slot
+    : > "$tmp"
+    while IFS= read -r chain || [ -n "$chain" ]; do
+        [ -z "$chain" ] && continue
+        _spark_hash_mod100 "$chain"
+        slot=$_SPARK_HASH
+        while [ -n "${used[$slot]:-}" ]; do
+            slot=$(( (slot + 1) % 100 ))
+            [ "$slot" = "$_SPARK_HASH" ] && break
+        done
+        used[$slot]=1
+        printf '%s %s\n' "$chain" "${_SPARK_PALETTE[$slot]}" >> "$tmp"
+    done < /etc/spark/chains.conf
+    mv -f "$tmp" /run/spark/chain-colors 2>/dev/null
+}
+# Resolve a chain's color. Sets SPARK_COLOR. No subshells on cache hit.
+_spark_resolve_color() {
+    SPARK_COLOR=""
+    [ -n "$1" ] || return 1
+    if [ ! -f /run/spark/chain-colors ] || [ /etc/spark/chains.conf -nt /run/spark/chain-colors ]; then
+        _spark_rebuild_color_cache
+    fi
+    local c col
+    while IFS=' ' read -r c col; do
+        if [ "$c" = "$1" ]; then
+            SPARK_COLOR="$col"
+            return 0
+        fi
+    done < /run/spark/chain-colors 2>/dev/null
+    _spark_hash_mod100 "$1"
+    SPARK_COLOR="${_SPARK_PALETTE[$_SPARK_HASH]}"
+}
+
+# Inject chain name into PS1 with its resolved color.
 if [ -n "${SPARK_CHAIN:-}" ]; then
-    _spark_colors=(20 27 33 39 45 51 46 82 118 154 190 226 220 214 208 202 196 160 124 198 201 207 213 219 135 141 165 171 177 21 57 93 99 129 75 81 87 147 111 148)
-    _spark_color_idx=$(printf '%s' "$SPARK_CHAIN" | cksum | awk '{print $1 % 40}')
-    _spark_color="${_spark_colors[$_spark_color_idx]}"
-    PS1="\u@\h-\[\e[1;38;5;${_spark_color}m\]${SPARK_CHAIN}\[\e[0m\]:\w\\$ "
-    unset _spark_colors _spark_color_idx _spark_color
+    _spark_resolve_color "$SPARK_CHAIN"
+    PS1="\u@\h-\[\e[1;38;5;${SPARK_COLOR}m\]${SPARK_CHAIN}\[\e[0m\]:\w\\$ "
+    unset SPARK_COLOR _SPARK_HASH
 else
     PS1='\u@\h:\w\$ '
 fi
