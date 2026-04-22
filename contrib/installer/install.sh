@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.6.1"
+SPARK_INSTALLER_VERSION="2.7.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -246,6 +246,27 @@ fi
 # Journal logging function using systemd-cat
 log() {
     echo "$1" | systemd-cat -t install.sh 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] install.sh: $1" >&2
+}
+
+# Atomically refresh /usr/local/bin/install.sh from install.getlynx.io.
+# Downloads to a temp file first, verifies it looks like a bash script, then
+# mv-replaces. A CDN hiccup or HTML error page leaves the existing installer
+# untouched so the systemd timer keeps working.
+refreshInstallerFromCDN() {
+    local tmp=/usr/local/bin/install.sh.tmp
+    log "Updating install.sh at /usr/local/bin for systemd timer."
+    if ! curl -sfL --max-time 30 install.getlynx.io -o "$tmp"; then
+        log "Failed to fetch install.sh from install.getlynx.io. Keeping existing copy."
+        rm -f "$tmp"
+        return 0
+    fi
+    if ! head -n 1 "$tmp" 2>/dev/null | grep -q '^#!/bin/bash'; then
+        log "Downloaded install.sh does not start with a bash shebang. Keeping existing copy."
+        rm -f "$tmp"
+        return 0
+    fi
+    chmod +x "$tmp"
+    mv "$tmp" /usr/local/bin/install.sh
 }
 
 # Check if running as root
@@ -1621,11 +1642,17 @@ getCompatibleBinary() {
         log "Stopping $service_name..."
         systemctl stop $service_name || log "Failed to stop $service_name. Continuing with update."
     fi
-    # Download latest release info from GitHub
+    # Download latest release info from GitHub. Use -f so HTTP errors
+    # (404/5xx/rate-limit) don't yield a JSON error body we'd then try to
+    # grep for asset URLs.
     log "Querying GitHub API for latest ${effective_chain} release..."
-    release_info=$(curl -s https://api.github.com/repos/getlynx/Lynx/releases/latest)
-    if [ $? -ne 0 ] || [ -z "$release_info" ]; then
-        log "Failed to fetch release information from GitHub API"
+    if ! release_info=$(curl -sfL --max-time 10 --retry 2 https://api.github.com/repos/getlynx/Lynx/releases/latest); then
+        log "Failed to fetch release information from GitHub API (network error, rate limit, or 5xx)."
+        return 1
+    fi
+    if [ -z "$release_info" ]; then
+        log "GitHub API returned an empty response for the latest release."
+        return 1
     fi
     # Detect architecture
     ARCH="$(uname -m)"
@@ -1692,17 +1719,39 @@ getCompatibleBinary() {
         return 1
     fi
     local filename=$(basename "$download_url")
+    local archive="/root/$filename"
     log "Downloading $filename to /root..."
-    wget -q -O "/root/$filename" "$download_url" || log "Failed to download $filename"
-    # Extract only the binaries to /usr/local/bin
+    if ! wget -q -O "$archive" "$download_url"; then
+        log "Failed to download $filename from $download_url"
+        rm -f "$archive"
+        return 1
+    fi
+    if [ ! -s "$archive" ]; then
+        log "Downloaded $filename is empty; aborting install/update."
+        rm -f "$archive"
+        return 1
+    fi
+    # Verify the archive actually contains the three binaries we expect
+    # before touching /usr/local/bin. Catches partial downloads and
+    # misnamed release assets early.
+    if ! unzip -l "$archive" "$daemon_name" "$cli_name" "$tx_name" >/dev/null 2>&1; then
+        log "Archive $filename is missing one of: $daemon_name, $cli_name, $tx_name. Aborting."
+        rm -f "$archive"
+        return 1
+    fi
     log "Extracting binaries to /usr/local/bin..."
-    unzip -o "/root/$filename" $daemon_name $cli_name $tx_name -d /usr/local/bin >/dev/null 2>&1 || log "Failed to extract binaries"
-    # Clean up the downloaded archive
+    if ! unzip -o "$archive" "$daemon_name" "$cli_name" "$tx_name" -d /usr/local/bin >/dev/null 2>&1; then
+        log "Failed to extract binaries from $filename"
+        rm -f "$archive"
+        return 1
+    fi
     log "Cleaning up downloaded archive..."
-    rm -f "/root/$filename"
-    # Set correct permissions on the binaries
+    rm -f "$archive"
     log "Setting permissions for binaries..."
-    chmod 755 /usr/local/bin/$daemon_name /usr/local/bin/$cli_name /usr/local/bin/$tx_name || log "Failed to set permissions"
+    if ! chmod 755 "/usr/local/bin/$daemon_name" "/usr/local/bin/$cli_name" "/usr/local/bin/$tx_name"; then
+        log "Failed to set permissions on extracted binaries"
+        return 1
+    fi
     # Restart the service if it exists
     if [ -f "/etc/systemd/system/$service_name" ]; then
         log "Restarting $service_name..."
@@ -1976,10 +2025,7 @@ isRootUser
 if [[ "$update_mode" == "update" ]]; then
 
     # Self-update: save the latest script to disk so future timer runs use it
-    log "Updating install.sh at /usr/local/bin for systemd timer."
-    curl -sL install.getlynx.io -o /usr/local/bin/install.sh.tmp
-    chmod +x /usr/local/bin/install.sh.tmp
-    mv /usr/local/bin/install.sh.tmp /usr/local/bin/install.sh
+    refreshInstallerFromCDN
 
     # Ensure chain registry and selector are up to date
     registerChainAndInstallSelector
@@ -2039,13 +2085,9 @@ fi
 
 # Self-install: always save the latest script to disk for the systemd timer.
 # When run via 'bash <(curl ...)', the script is not saved to disk automatically.
-# Download to a temp file first, then atomically replace the running script.
-# Writing directly to /usr/local/bin/install.sh while bash is reading it can
-# corrupt the running process (the file offset shifts with the new contents).
-log "Updating install.sh at /usr/local/bin for systemd timer."
-curl -sL install.getlynx.io -o /usr/local/bin/install.sh.tmp
-chmod +x /usr/local/bin/install.sh.tmp
-mv /usr/local/bin/install.sh.tmp /usr/local/bin/install.sh
+# Downloading to a temp file first avoids corrupting the running process, and
+# refreshInstallerFromCDN verifies the payload before replacing the live copy.
+refreshInstallerFromCDN
 
 # Add useful aliases and MOTD to /root/.bashrc (runs every time to pick up updates)
 addAliasesToBashrcFile
