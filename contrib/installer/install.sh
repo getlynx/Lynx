@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.7.0"
+SPARK_INSTALLER_VERSION="2.8.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -427,6 +427,13 @@ fi
 # (The script at /usr/local/bin/chain writes the file; we re-source to update env.)
 chain() { /usr/local/bin/chain "$@"; . /usr/local/bin/spark-current-chain.sh; }
 c()     { /usr/local/bin/chain "$@"; . /usr/local/bin/spark-current-chain.sh; }
+#
+# Shortcut: "c4" (no space) expands to "c 4", etc. The chain selector handles
+# the number and prints its normal "Switched to <chain>" confirmation.
+for _spark_cn in {1..99}; do
+    alias "c${_spark_cn}=c ${_spark_cn}"
+done
+unset _spark_cn
 #
 # Helper: ensure a chain is selected before running an alias
 _spark_require_chain() {
