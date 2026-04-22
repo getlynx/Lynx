@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.3.0"
+SPARK_INSTALLER_VERSION="2.4.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -464,6 +464,29 @@ reb() { _spark_require_chain && bash <(curl -sL install.getlynx.io) rebuild --ch
 h() { executeHelpCommand; }
 pri() { executePriceCommand; }
 #
+# Count CheckStake hits in the 24h and 7d windows in one pass. Scans debug.log
+# backwards with tac and exits awk as soon as a line predates the 7d cutoff, so
+# only ~7 days of log data is read regardless of total log size. Writes
+# "<24h> <7d>" to stdout; zeros on any error or missing log.
+_spark_count_stakes() {
+    local log="$1" cutoff_24h="$2" cutoff_7d="$3"
+    if [ ! -f "$log" ] || [ -z "$cutoff_24h" ] || [ -z "$cutoff_7d" ]; then
+        echo "0 0"
+        return
+    fi
+    tac "$log" 2>/dev/null | awk -v c24="$cutoff_24h" -v c7d="$cutoff_7d" '
+        /^[12][0-9][0-9][0-9]-/ {
+            ts = substr($0, 1, 20) "Z"
+            if (ts < c7d) exit
+            if (/CheckStake\(\): New proof-of-stake block found/) {
+                n7++
+                if (ts >= c24) n24++
+            }
+        }
+        END { printf "%d %d\n", n24+0, n7+0 }
+    ' 2>/dev/null || echo "0 0"
+}
+#
 # Function to display aliases in a nicely formatted MOTD (uses SPARK_* vars)
 executeHelpCommand() {
     _spark_require_chain || return 1
@@ -474,27 +497,17 @@ executeHelpCommand() {
     local chain_cap
     chain_cap=$(echo "$SPARK_CHAIN" | sed 's/./\U&/')
 
-    # Count stakes won in the last 24 hours from debug.log
-    local since_iso
+    # Count stakes won in the 24h and 7d windows in a single reverse scan.
+    local since_iso since_iso_7d stakes_won=0 stakes_won_7d=0
     since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    local stakes_won=0
-    if [ -f "$SPARK_DATADIR/debug.log" ] && [ -n "$since_iso" ]; then
-        stakes_won=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
-    fi
-    [ -z "$stakes_won" ] && stakes_won="0"
+    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
+    read -r stakes_won stakes_won_7d < <(_spark_count_stakes "$SPARK_DATADIR/debug.log" "$since_iso" "$since_iso_7d")
+    [[ "$stakes_won" =~ ^[0-9]+$ ]] || stakes_won=0
+    [[ "$stakes_won_7d" =~ ^[0-9]+$ ]] || stakes_won_7d=0
 
     local total_blocks=288
     local percent_yield
     percent_yield=$(awk "BEGIN {printf \"%.3f\", $stakes_won * 100 / $total_blocks}" 2>/dev/null || echo "0.000")
-
-    # Count stakes won in the last 7 days
-    local since_iso_7d
-    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    local stakes_won_7d=0
-    if [ -f "$SPARK_DATADIR/debug.log" ] && [ -n "$since_iso_7d" ]; then
-        stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
-    fi
-    [ -z "$stakes_won_7d" ] && stakes_won_7d="0"
 
     local total_blocks_7d=2016
     local percent_yield_7d
@@ -601,14 +614,11 @@ executePriceCommand() {
     fi
     [ -z "$price_usd" ] && price_usd="0.00000000"
 
-    # Count stakes from debug.log
+    # Count stakes in the 24h and 7d windows in a single reverse scan.
     local since_iso since_iso_7d stakes_won_24h=0 stakes_won_7d=0
     since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
     since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    if [ -f "$SPARK_DATADIR/debug.log" ]; then
-        stakes_won_24h=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
-        stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
-    fi
+    read -r stakes_won_24h stakes_won_7d < <(_spark_count_stakes "$SPARK_DATADIR/debug.log" "$since_iso" "$since_iso_7d")
     [[ "$stakes_won_24h" =~ ^[0-9]+$ ]] || stakes_won_24h=0
     [[ "$stakes_won_7d" =~ ^[0-9]+$ ]] || stakes_won_7d=0
 
