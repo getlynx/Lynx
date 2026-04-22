@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.4.0"
+SPARK_INSTALLER_VERSION="2.6.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -464,27 +464,111 @@ reb() { _spark_require_chain && bash <(curl -sL install.getlynx.io) rebuild --ch
 h() { executeHelpCommand; }
 pri() { executePriceCommand; }
 #
-# Count CheckStake hits in the 24h and 7d windows in one pass. Scans debug.log
-# backwards with tac and exits awk as soon as a line predates the 7d cutoff, so
-# only ~7 days of log data is read regardless of total log size. Writes
-# "<24h> <7d>" to stdout; zeros on any error or missing log.
-_spark_count_stakes() {
-    local log="$1" cutoff_24h="$2" cutoff_7d="$3"
-    if [ ! -f "$log" ] || [ -z "$cutoff_24h" ] || [ -z "$cutoff_7d" ]; then
-        echo "0 0"
-        return
+# 1-second-timeout wrapper around $SPARK_CLI. Empty stdout + non-zero exit
+# on timeout or daemon error, so callers can distinguish "no value" from 0.
+_spark_rpc() {
+    timeout 1 $SPARK_CLI "$@" 2>/dev/null
+}
+#
+# Extract a numeric field value from pretty-printed bitcoin-cli JSON. Echoes
+# the first matching integer, or empty on no match.
+_spark_json_int() {
+    awk -v key="\"$1\":" '$1==key { gsub(/[^0-9]/, "", $2); print $2; exit }'
+}
+#
+# Query the daemon for "stakes won" and "blocks in window" in one sweep.
+#
+#   Output: "<stakes_24h> <stakes_7d> <blocks_24h> <blocks_7d>"
+#   On any RPC timeout/error the affected fields become "n/a".
+#
+# Stakes: listsinceblock starting at tip-2016, with each tx matched on
+#         category=="receive" AND blockindex==1 (the coinstake slot of a
+#         PoS block), deduped by txid so multi-vout coinstakes count once.
+# Blocks: sampled from the 2016-block window between tip and anchor —
+#         block rate = (tip_time - anchor_time) / 2016, scaled to 24h/7d.
+# Cutoffs: derived from tip_time so ratios stay consistent if the chain is
+#          lagging wall-clock (a syncing node shouldn't show 0 stakes).
+_spark_wallet_snapshot() {
+    local tip tip_hash tip_time anchor anchor_hash anchor_time
+    local stakes_24h="n/a" stakes_7d="n/a" blocks_24h="n/a" blocks_7d="n/a"
+
+    tip=$(_spark_rpc getblockcount)
+    [[ "$tip" =~ ^[0-9]+$ ]] || { echo "n/a n/a n/a n/a"; return; }
+
+    tip_hash=$(_spark_rpc getblockhash "$tip")
+    [[ "$tip_hash" =~ ^[0-9a-f]{64}$ ]] || { echo "n/a n/a n/a n/a"; return; }
+
+    anchor=$((tip - 2016))
+    [ "$anchor" -lt 0 ] && anchor=0
+    anchor_hash=$(_spark_rpc getblockhash "$anchor")
+    [[ "$anchor_hash" =~ ^[0-9a-f]{64}$ ]] || { echo "n/a n/a n/a n/a"; return; }
+
+    tip_time=$(_spark_rpc getblockheader "$tip_hash" | _spark_json_int time)
+    anchor_time=$(_spark_rpc getblockheader "$anchor_hash" | _spark_json_int time)
+
+    # Derive block counts from the sampled window if both timestamps came back.
+    if [[ "$tip_time" =~ ^[0-9]+$ ]] && [[ "$anchor_time" =~ ^[0-9]+$ ]]; then
+        local span_blocks=$((tip - anchor)) span_time=$((tip_time - anchor_time))
+        if [ "$span_blocks" -gt 0 ] && [ "$span_time" -gt 0 ]; then
+            blocks_24h=$(awk "BEGIN {printf \"%d\", 86400 * $span_blocks / $span_time + 0.5}")
+            blocks_7d=$(awk "BEGIN {printf \"%d\", 604800 * $span_blocks / $span_time + 0.5}")
+        fi
     fi
-    tac "$log" 2>/dev/null | awk -v c24="$cutoff_24h" -v c7d="$cutoff_7d" '
-        /^[12][0-9][0-9][0-9]-/ {
-            ts = substr($0, 1, 20) "Z"
-            if (ts < c7d) exit
-            if (/CheckStake\(\): New proof-of-stake block found/) {
-                n7++
-                if (ts >= c24) n24++
+
+    # Anchor stake-count window to tip_time when available so a lagging chain
+    # still reports meaningful ratios; fall back to wall-clock otherwise.
+    local ref_time
+    if [[ "$tip_time" =~ ^[0-9]+$ ]]; then
+        ref_time="$tip_time"
+    else
+        ref_time=$(date +%s)
+    fi
+    local cutoff_24h=$((ref_time - 86400)) cutoff_7d=$((ref_time - 604800))
+
+    local txns
+    txns=$(_spark_rpc listsinceblock "$anchor_hash")
+    if [ -n "$txns" ]; then
+        read -r stakes_24h stakes_7d < <(printf '%s\n' "$txns" | awk -v c24="$cutoff_24h" -v c7d="$cutoff_7d" '
+            BEGIN { n24=0; n7=0 }
+            /^[[:space:]]*\{[[:space:]]*$/ { cat=""; bi=-1; t=0; txid=""; next }
+            /^[[:space:]]*\},?[[:space:]]*$/ {
+                if (cat=="receive" && bi==1 && t>0 && txid!="" && !(txid in seen)) {
+                    seen[txid]=1
+                    if (t >= c7d) n7++
+                    if (t >= c24) n24++
+                }
+                next
             }
-        }
-        END { printf "%d %d\n", n24+0, n7+0 }
-    ' 2>/dev/null || echo "0 0"
+            $1 == "\"category\":"   { v=$2; gsub(/[",]/, "", v); cat=v }
+            $1 == "\"blockindex\":" { v=$2; gsub(/,/, "", v);    bi=v+0 }
+            $1 == "\"time\":"       { v=$2; gsub(/,/, "", v);    t=v+0 }
+            $1 == "\"txid\":"       { v=$2; gsub(/[",]/, "", v); txid=v }
+            END { printf "%d %d\n", n24, n7 }
+        ')
+        [[ "$stakes_24h" =~ ^[0-9]+$ ]] || stakes_24h="n/a"
+        [[ "$stakes_7d"  =~ ^[0-9]+$ ]] || stakes_7d="n/a"
+    fi
+
+    echo "$stakes_24h $stakes_7d $blocks_24h $blocks_7d"
+}
+#
+# Format a decimal as USD with thousand-separators. Passes through "n/a".
+_spark_format_usd() {
+    [ "$1" = "n/a" ] && { echo "n/a"; return; }
+    local formatted int_part dec_part int_with_commas
+    formatted=$(awk "BEGIN {printf \"%.2f\", $1}" 2>/dev/null || echo "0.00")
+    int_part=$(echo "$formatted" | cut -d. -f1)
+    dec_part=$(echo "$formatted" | cut -d. -f2)
+    int_with_commas=$(echo "$int_part" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1,\2/;ta')
+    echo "${int_with_commas}.${dec_part}"
+}
+#
+# Multiply two decimals and format as USD. Returns "n/a" if either operand is "n/a".
+_spark_usd_product() {
+    { [ "$1" = "n/a" ] || [ "$2" = "n/a" ]; } && { echo "n/a"; return; }
+    local raw
+    raw=$(awk "BEGIN {printf \"%.2f\", $1 * $2}" 2>/dev/null || echo "0.00")
+    _spark_format_usd "$raw"
 }
 #
 # Function to display aliases in a nicely formatted MOTD (uses SPARK_* vars)
@@ -497,30 +581,42 @@ executeHelpCommand() {
     local chain_cap
     chain_cap=$(echo "$SPARK_CHAIN" | sed 's/./\U&/')
 
-    # Count stakes won in the 24h and 7d windows in a single reverse scan.
-    local since_iso since_iso_7d stakes_won=0 stakes_won_7d=0
-    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    read -r stakes_won stakes_won_7d < <(_spark_count_stakes "$SPARK_DATADIR/debug.log" "$since_iso" "$since_iso_7d")
-    [[ "$stakes_won" =~ ^[0-9]+$ ]] || stakes_won=0
-    [[ "$stakes_won_7d" =~ ^[0-9]+$ ]] || stakes_won_7d=0
+    # Stake and block counts via wallet RPC. Each call has a 1s timeout;
+    # any unknown field is rendered as "n/a" rather than a misleading zero.
+    local stakes_won stakes_won_7d blocks_24h blocks_7d
+    read -r stakes_won stakes_won_7d blocks_24h blocks_7d < <(_spark_wallet_snapshot)
+    [ -n "$stakes_won" ]    || stakes_won="n/a"
+    [ -n "$stakes_won_7d" ] || stakes_won_7d="n/a"
+    [ -n "$blocks_24h" ]    || blocks_24h="n/a"
+    [ -n "$blocks_7d" ]     || blocks_7d="n/a"
 
-    local total_blocks=288
-    local percent_yield
-    percent_yield=$(awk "BEGIN {printf \"%.3f\", $stakes_won * 100 / $total_blocks}" 2>/dev/null || echo "0.000")
+    # Yield% = stakes_won / blocks_in_window. Needs both numbers and a nonzero
+    # denominator; otherwise n/a.
+    local percent_yield percent_yield_7d
+    if [ "$stakes_won" = "n/a" ] || [ "$blocks_24h" = "n/a" ] || [ "$blocks_24h" = "0" ]; then
+        percent_yield="n/a"
+    else
+        percent_yield=$(awk "BEGIN {printf \"%.3f%%\", $stakes_won * 100 / $blocks_24h}")
+    fi
+    if [ "$stakes_won_7d" = "n/a" ] || [ "$blocks_7d" = "n/a" ] || [ "$blocks_7d" = "0" ]; then
+        percent_yield_7d="n/a"
+    else
+        percent_yield_7d=$(awk "BEGIN {printf \"%.3f%%\", $stakes_won_7d * 100 / $blocks_7d}")
+    fi
 
-    local total_blocks_7d=2016
-    local percent_yield_7d
-    percent_yield_7d=$(awk "BEGIN {printf \"%.3f\", $stakes_won_7d * 100 / $total_blocks_7d}" 2>/dev/null || echo "0.000")
-
-    # Count immature UTXOs
-    local immature_utxos
-    immature_utxos=$($SPARK_CLI listunspent 2>/dev/null | awk '/"confirmations":/ {gsub(/[^0-9]/, "", $2); conf = $2 + 0; if (conf < 31 && conf > 0) count++} END {print count+0}')
-    [ -z "$immature_utxos" ] && immature_utxos="0"
+    # Immature UTXOs via listunspent; n/a if RPC times out.
+    local immature_utxos listunspent_json
+    listunspent_json=$(_spark_rpc listunspent)
+    if [ -n "$listunspent_json" ]; then
+        immature_utxos=$(printf '%s\n' "$listunspent_json" | awk '/"confirmations":/ {gsub(/[^0-9]/, "", $2); conf = $2 + 0; if (conf < 31 && conf > 0) count++} END {print count+0}')
+        [[ "$immature_utxos" =~ ^[0-9]+$ ]] || immature_utxos="n/a"
+    else
+        immature_utxos="n/a"
+    fi
 
     local wallet_balance
-    wallet_balance=$($SPARK_CLI getbalance 2>/dev/null || echo "0")
-    [ -z "$wallet_balance" ] && wallet_balance="0"
+    wallet_balance=$(_spark_rpc getbalance)
+    [ -n "$wallet_balance" ] || wallet_balance="n/a"
 
     local version_info
     version_info=$($SPARK_CLI -version 2>/dev/null | head -1 || echo "Unknown")
@@ -533,9 +629,9 @@ executeHelpCommand() {
     echo ""
     echo "  NODE STATUS:"
     echo "    🎯 Stakes won in last 24 hours: $stakes_won"
-    echo "    📊 24-hour yield rate (stakes/blocks): ${percent_yield}%"
+    echo "    📊 24-hour yield rate (stakes/blocks): $percent_yield"
     echo "    🎯 Stakes won in last 7 days: $stakes_won_7d"
-    echo "    📊 7-day yield rate (stakes/blocks): ${percent_yield_7d}%"
+    echo "    📊 7-day yield rate (stakes/blocks): $percent_yield_7d"
     echo "    🔄 Immature transactions (< 31 confirmations): $immature_utxos"
     echo "    💰 Current wallet balance: $wallet_balance"
     echo ""
@@ -587,8 +683,8 @@ executePriceCommand() {
     echo ""
 
     local wallet_balance
-    wallet_balance=$($SPARK_CLI getbalance 2>/dev/null || echo "0")
-    [ -z "$wallet_balance" ] && wallet_balance="0"
+    wallet_balance=$(_spark_rpc getbalance)
+    [ -n "$wallet_balance" ] || wallet_balance="n/a"
 
     # Fetch LYNX price from API with random endpoint selection and fallback
     local price_usd=""
@@ -614,48 +710,50 @@ executePriceCommand() {
     fi
     [ -z "$price_usd" ] && price_usd="0.00000000"
 
-    # Count stakes in the 24h and 7d windows in a single reverse scan.
-    local since_iso since_iso_7d stakes_won_24h=0 stakes_won_7d=0
-    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    read -r stakes_won_24h stakes_won_7d < <(_spark_count_stakes "$SPARK_DATADIR/debug.log" "$since_iso" "$since_iso_7d")
-    [[ "$stakes_won_24h" =~ ^[0-9]+$ ]] || stakes_won_24h=0
-    [[ "$stakes_won_7d" =~ ^[0-9]+$ ]] || stakes_won_7d=0
+    # Stake counts via wallet RPC; n/a on timeout. Block counts in the
+    # snapshot aren't used here.
+    local stakes_won_24h stakes_won_7d _blocks_24h _blocks_7d
+    read -r stakes_won_24h stakes_won_7d _blocks_24h _blocks_7d < <(_spark_wallet_snapshot)
+    [ -n "$stakes_won_24h" ] || stakes_won_24h="n/a"
+    [ -n "$stakes_won_7d" ]  || stakes_won_7d="n/a"
 
-    # Format USD helper
-    _format_usd() {
-        local formatted int_part dec_part int_with_commas
-        formatted=$(awk "BEGIN {printf \"%.2f\", $1}" 2>/dev/null || echo "0.00")
-        int_part=$(echo "$formatted" | cut -d. -f1)
-        dec_part=$(echo "$formatted" | cut -d. -f2)
-        int_with_commas=$(echo "$int_part" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1,\2/;ta')
-        echo "${int_with_commas}.${dec_part}"
-    }
+    local wallet_value_usd staking_yield_24h_usd staking_yield_7d_usd
+    wallet_value_usd=$(_spark_usd_product "$wallet_balance" "$price_usd")
+    staking_yield_24h_usd=$(_spark_usd_product "$stakes_won_24h" "$price_usd")
+    staking_yield_7d_usd=$(_spark_usd_product "$stakes_won_7d" "$price_usd")
 
-    local wallet_value_raw wallet_value_usd
-    wallet_value_raw=$(awk "BEGIN {printf \"%.2f\", $wallet_balance * $price_usd}" 2>/dev/null || echo "0.00")
-    wallet_value_usd=$(_format_usd "$wallet_value_raw")
-
-    local staking_yield_24h_raw staking_yield_24h_usd
-    staking_yield_24h_raw=$(awk "BEGIN {printf \"%.2f\", $stakes_won_24h * $price_usd}" 2>/dev/null || echo "0.00")
-    staking_yield_24h_usd=$(_format_usd "$staking_yield_24h_raw")
-
-    local staking_yield_7d_raw staking_yield_7d_usd
-    staking_yield_7d_raw=$(awk "BEGIN {printf \"%.2f\", $stakes_won_7d * $price_usd}" 2>/dev/null || echo "0.00")
-    staking_yield_7d_usd=$(_format_usd "$staking_yield_7d_raw")
-
-    local estimated_monthly_stakes staking_yield_monthly_raw staking_yield_monthly_usd
-    estimated_monthly_stakes=$((stakes_won_7d * 4)) 2>/dev/null || estimated_monthly_stakes=0
-    staking_yield_monthly_raw=$(awk "BEGIN {printf \"%.2f\", $staking_yield_7d_raw * 4}" 2>/dev/null || echo "0.00")
-    staking_yield_monthly_usd=$(_format_usd "$staking_yield_monthly_raw")
+    local estimated_monthly_stakes staking_yield_monthly_usd
+    if [ "$stakes_won_7d" = "n/a" ]; then
+        estimated_monthly_stakes="n/a"
+        staking_yield_monthly_usd="n/a"
+    else
+        estimated_monthly_stakes=$((stakes_won_7d * 4))
+        staking_yield_monthly_usd=$(_spark_usd_product "$estimated_monthly_stakes" "$price_usd")
+    fi
 
     echo "  PRICE INFORMATION:"
-    echo "    💵 Wallet value (USD): \$$wallet_value_usd"
+    if [ "$wallet_value_usd" = "n/a" ]; then
+        echo "    💵 Wallet value (USD): n/a"
+    else
+        echo "    💵 Wallet value (USD): \$$wallet_value_usd"
+    fi
     echo ""
     echo "    🎯 Staking Yield (USD):"
-    echo "        24-hour yield:     \$$staking_yield_24h_usd ($stakes_won_24h stakes)"
-    echo "        7-day yield:       \$$staking_yield_7d_usd ($stakes_won_7d stakes)"
-    echo "        Estimated monthly: \$$staking_yield_monthly_usd (~$estimated_monthly_stakes stakes)"
+    if [ "$staking_yield_24h_usd" = "n/a" ]; then
+        echo "        24-hour yield:     n/a"
+    else
+        echo "        24-hour yield:     \$$staking_yield_24h_usd ($stakes_won_24h stakes)"
+    fi
+    if [ "$staking_yield_7d_usd" = "n/a" ]; then
+        echo "        7-day yield:       n/a"
+    else
+        echo "        7-day yield:       \$$staking_yield_7d_usd ($stakes_won_7d stakes)"
+    fi
+    if [ "$staking_yield_monthly_usd" = "n/a" ]; then
+        echo "        Estimated monthly: n/a"
+    else
+        echo "        Estimated monthly: \$$staking_yield_monthly_usd (~$estimated_monthly_stakes stakes)"
+    fi
     echo ""
 
     local amounts=(1 10 100 1000 10000 100000 1000000 10000000 100000000)
@@ -663,10 +761,13 @@ executePriceCommand() {
     echo "    💲 LYNX Price List (USD):"
     local i=0
     for amt in "${amounts[@]}"; do
-        local raw val
-        raw=$(awk "BEGIN {printf \"%.2f\", $amt * $price_usd}" 2>/dev/null || echo "0.00")
-        val=$(_format_usd "$raw")
-        printf "        %-22s \$%s\n" "${labels[$i]}:" "$val"
+        local val
+        val=$(_spark_usd_product "$amt" "$price_usd")
+        if [ "$val" = "n/a" ]; then
+            printf "        %-22s n/a\n" "${labels[$i]}:"
+        else
+            printf "        %-22s \$%s\n" "${labels[$i]}:" "$val"
+        fi
         i=$((i + 1))
     done
     echo ""
