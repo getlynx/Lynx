@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.0.0"
+SPARK_INSTALLER_VERSION="2.3.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -779,8 +779,9 @@ if [ ! -f "$REGISTRY" ] || [ ! -s "$REGISTRY" ]; then
     exit 1
 fi
 
-# Read registry into an array
-mapfile -t chains < "$REGISTRY"
+# Read registry into an array, sorted alphabetically so menu order is
+# independent of install order.
+mapfile -t chains < <(LC_ALL=C sort -u "$REGISTRY")
 
 # Per-chain color with greedy collision resolution + cache.
 # 100-color palette from the xterm 256-color cube (no grays, no too-dark).
@@ -848,33 +849,6 @@ _colorize_chain() {
     printf '\033[1;38;5;%sm%s\033[0m' "$color" "$1"
 }
 
-# Resolve the RPC octet for a given chain name (mirrors install.sh logic)
-_get_rpc_ip() {
-    local cname="$1"
-    local octet
-    octet=$(printf '%s' "$cname" | cksum | awk '{print ($1 % 253) + 2}')
-    # Collision resolution: scan conf files like install.sh does
-    local tries=0
-    while [ "$tries" -lt 253 ]; do
-        local taken=""
-        for cf in /var/lib/*/[a-z]*.conf; do
-            [ -f "$cf" ] || continue
-            if grep -Eq "^(main\.|test\.)?rpcbind=127\.0\.0\.${octet}$" "$cf" 2>/dev/null; then
-                local cc
-                cc=$(basename "$(dirname "$cf")")
-                if [ "$cc" != "$cname" ]; then
-                    taken="$cc"
-                    break
-                fi
-            fi
-        done
-        [ -z "$taken" ] && break
-        octet=$(( (octet % 253) + 2 ))
-        tries=$(( tries + 1 ))
-    done
-    echo "127.0.0.${octet}"
-}
-
 # Display the numbered menu
 _show_menu() {
     echo ""
@@ -882,8 +856,6 @@ _show_menu() {
     echo ""
     local i=1
     for cname in "${chains[@]}"; do
-        local rpc_ip
-        rpc_ip=$(_get_rpc_ip "$cname")
         local marker=""
         if [ -f "$CURRENT" ] && [ "$(cat "$CURRENT" 2>/dev/null)" = "$cname" ]; then
             marker=" *"
@@ -892,7 +864,7 @@ _show_menu() {
         if systemctl is-active --quiet "${cname}.service" 2>/dev/null; then
             badge="🟢"
         fi
-        printf "    %s %d) %b (%s)%s\n" "$badge" "$i" "$(_colorize_chain "$cname")" "$rpc_ip" "$marker"
+        printf "    %s %d) %b%s\n" "$badge" "$i" "$(_colorize_chain "$cname")" "$marker"
         i=$((i + 1))
     done
     echo ""
@@ -931,13 +903,11 @@ _select_chain() {
 
     mkdir -p /run/spark
     echo "$selected" > "$CURRENT"
-    local rpc_ip
-    rpc_ip=$(_get_rpc_ip "$selected")
     local display_name
     display_name="$(echo "$selected" | sed 's/./\U&/')"
     local color
     color=$(_chain_color "$selected")
-    printf "  Switched to \033[1;38;5;%sm%s\033[0m (%s)\n" "$color" "$display_name" "$rpc_ip"
+    printf "  Switched to \033[1;38;5;%sm%s\033[0m\n" "$color" "$display_name"
     return 0
 }
 
