@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.8.0"
+SPARK_INSTALLER_VERSION="2.8.1"
 
 # Parse command-line arguments
 chain_name=""
@@ -509,9 +509,14 @@ _spark_json_int() {
 #   Output: "<stakes_24h> <stakes_7d> <blocks_24h> <blocks_7d>"
 #   On any RPC timeout/error the affected fields become "n/a".
 #
-# Stakes: listsinceblock starting at tip-2016, with each tx matched on
-#         category=="receive" AND blockindex==1 (the coinstake slot of a
-#         PoS block), deduped by txid so multi-vout coinstakes count once.
+# Stakes: listsinceblock starting at tip-2016. A stake counts only when BOTH
+#         (a) the tx has the coinstake marker — a send entry with vout==0,
+#         amount==0.00000000, at blockindex==1 (the PoS empty-output protocol
+#         marker that regular payments never have), AND (b) the wallet has a
+#         receive entry for the same txid (i.e., the reward actually landed
+#         here). Without (a) we'd miscount plain deposits that happened to be
+#         the first tx in a block; without (b) we'd count blocks where our
+#         UTXO was staked but the reward went to an external address.
 # Blocks: sampled from the 2016-block window between tip and anchor —
 #         block rate = (tip_time - anchor_time) / 2016, scaled to 24h/7d.
 # Cutoffs: derived from tip_time so ratios stay consistent if the chain is
@@ -558,20 +563,36 @@ _spark_wallet_snapshot() {
     if [ -n "$txns" ]; then
         read -r stakes_24h stakes_7d < <(printf '%s\n' "$txns" | awk -v c24="$cutoff_24h" -v c7d="$cutoff_7d" '
             BEGIN { n24=0; n7=0 }
-            /^[[:space:]]*\{[[:space:]]*$/ { cat=""; bi=-1; t=0; txid=""; next }
+            /^[[:space:]]*\{[[:space:]]*$/ {
+                cat=""; bi=-1; t=0; txid=""; vout=-1; amt=""; next
+            }
             /^[[:space:]]*\},?[[:space:]]*$/ {
-                if (cat=="receive" && bi==1 && t>0 && txid!="" && !(txid in seen)) {
-                    seen[txid]=1
-                    if (t >= c7d) n7++
-                    if (t >= c24) n24++
+                if (txid != "") {
+                    # PoS coinstake marker: empty 0-value send at vout 0 of a blockindex-1 tx
+                    if (cat == "send" && vout == 0 && amt == "0.00000000" && bi == 1) {
+                        is_stake[txid] = 1
+                        stake_time[txid] = t
+                    }
+                    # Wallet received a paid output of this tx (reward landed here)
+                    if (cat == "receive") has_reward[txid] = 1
                 }
                 next
             }
             $1 == "\"category\":"   { v=$2; gsub(/[",]/, "", v); cat=v }
             $1 == "\"blockindex\":" { v=$2; gsub(/,/, "", v);    bi=v+0 }
+            $1 == "\"vout\":"       { v=$2; gsub(/,/, "", v);    vout=v+0 }
+            $1 == "\"amount\":"     { v=$2; gsub(/,/, "", v);    amt=v }
             $1 == "\"time\":"       { v=$2; gsub(/,/, "", v);    t=v+0 }
             $1 == "\"txid\":"       { v=$2; gsub(/[",]/, "", v); txid=v }
-            END { printf "%d %d\n", n24, n7 }
+            END {
+                for (tx in is_stake) {
+                    if (has_reward[tx] && stake_time[tx] > 0) {
+                        if (stake_time[tx] >= c7d) n7++
+                        if (stake_time[tx] >= c24) n24++
+                    }
+                }
+                printf "%d %d\n", n24, n7
+            }
         ')
         [[ "$stakes_24h" =~ ^[0-9]+$ ]] || stakes_24h="n/a"
         [[ "$stakes_7d"  =~ ^[0-9]+$ ]] || stakes_7d="n/a"
