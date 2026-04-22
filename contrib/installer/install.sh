@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.6.0"
+SPARK_INSTALLER_VERSION="2.6.1"
 
 # Parse command-line arguments
 chain_name=""
@@ -1014,11 +1014,9 @@ _select_chain() {
 
     mkdir -p /run/spark
     echo "$selected" > "$CURRENT"
-    local display_name
-    display_name="$(echo "$selected" | sed 's/./\U&/')"
     local color
     color=$(_chain_color "$selected")
-    printf "  Switched to \033[1;38;5;%sm%s\033[0m\n" "$color" "$display_name"
+    printf "  Switched to \033[1;38;5;%sm%s\033[0m\n" "$color" "$selected"
     return 0
 }
 
