@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.8.1"
+SPARK_INSTALLER_VERSION="2.9.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -1009,24 +1009,82 @@ _colorize_chain() {
     printf '\033[1;38;5;%sm%s\033[0m' "$color" "$1"
 }
 
-# Display the numbered menu
+# Display the numbered menu. For each active chain, fetches wallet balance
+# and staking state via background RPC calls (1s timeout each) so menu
+# latency stays ~1s regardless of chain count.
 _show_menu() {
     echo ""
     echo "  Installed chains:"
     echo ""
-    local i=1
+
+    # Track which chains are active so we only call systemctl once per chain.
+    local -a active=()
+    local cname
     for cname in "${chains[@]}"; do
-        local marker=""
+        if systemctl is-active --quiet "${cname}.service" 2>/dev/null; then
+            active+=("$cname")
+        fi
+    done
+
+    # Fan out RPC queries in parallel for active chains.
+    local tmpdir
+    tmpdir=$(mktemp -d /run/spark/menu.XXXXXX 2>/dev/null) || tmpdir=$(mktemp -d)
+    for cname in "${active[@]}"; do
+        (
+            conf="/var/lib/${cname}/${cname}.conf"
+            rpc_host=$(awk -F= '/^(main\.|test\.)?rpcbind=/ {print $2; exit}' "$conf" 2>/dev/null)
+            [ -n "$rpc_host" ] || exit 0
+            cli_bin="/usr/local/bin/${cname}-cli"
+            [ -x "$cli_bin" ] || exit 0
+            timeout 1 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalance 2>/dev/null > "$tmpdir/${cname}.bal"
+            timeout 1 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking  2>/dev/null > "$tmpdir/${cname}.stk"
+        ) &
+    done
+    wait
+
+    # Widest chain name — used to right-pad the name column so the balance
+    # column aligns. _colorize_chain emits ANSI escapes that printf counts
+    # as visible width, so we pad with explicit spaces instead of %-Ns.
+    local max_name=0
+    for cname in "${chains[@]}"; do
+        [ "${#cname}" -gt "$max_name" ] && max_name=${#cname}
+    done
+
+    local i=1 is_active marker badge bal stk staking_emoji pad extra name_len
+    for cname in "${chains[@]}"; do
+        marker=""
         if [ -f "$CURRENT" ] && [ "$(cat "$CURRENT" 2>/dev/null)" = "$cname" ]; then
             marker=" *"
         fi
-        local badge="🔴"
-        if systemctl is-active --quiet "${cname}.service" 2>/dev/null; then
+        is_active=0
+        for a in "${active[@]}"; do [ "$a" = "$cname" ] && is_active=1 && break; done
+        if [ "$is_active" = "1" ]; then
             badge="🟢"
+        else
+            badge="🔴"
         fi
-        printf "    %s %d) %b%s\n" "$badge" "$i" "$(_colorize_chain "$cname")" "$marker"
+
+        extra=""
+        if [ "$is_active" = "1" ] && [ -s "$tmpdir/${cname}.bal" ]; then
+            bal=$(cat "$tmpdir/${cname}.bal" 2>/dev/null)
+            stk=$(cat "$tmpdir/${cname}.stk" 2>/dev/null)
+            case "$stk" in
+                true)  staking_emoji="⚡" ;;
+                false) staking_emoji="💤" ;;
+                *)     staking_emoji="" ;;
+            esac
+            name_len=${#cname}
+            [ -n "$marker" ] && name_len=$((name_len + 2))
+            pad=$(( max_name + 2 - name_len ))
+            [ "$pad" -lt 1 ] && pad=1
+            extra=$(printf "%*s%15s  %s" "$pad" "" "$bal" "$staking_emoji")
+        fi
+
+        printf "    %s %d) %b%s%s\n" "$badge" "$i" "$(_colorize_chain "$cname")" "$marker" "$extra"
         i=$((i + 1))
     done
+
+    rm -rf "$tmpdir" 2>/dev/null
     echo ""
 }
 
