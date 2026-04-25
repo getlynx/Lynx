@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.9.0"
+SPARK_INSTALLER_VERSION="2.9.1"
 
 # Parse command-line arguments
 chain_name=""
@@ -1042,15 +1042,23 @@ _show_menu() {
     done
     wait
 
-    # Widest chain name — used to right-pad the name column so the balance
-    # column aligns. _colorize_chain emits ANSI escapes that printf counts
-    # as visible width, so we pad with explicit spaces instead of %-Ns.
-    local max_name=0
+    # Widest chain name (for name-column padding — _colorize_chain emits
+    # ANSI escapes so we can't use %-Ns) and widest balance string (so
+    # balances right-justify into a column that fits the largest value).
+    local max_name=0 max_bal=0 bal_len
     for cname in "${chains[@]}"; do
         [ "${#cname}" -gt "$max_name" ] && max_name=${#cname}
+        if [ -s "$tmpdir/${cname}.bal" ]; then
+            bal_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.bal")
+            [ "$bal_len" -gt "$max_bal" ] && max_bal=$bal_len
+        fi
     done
+    # Floor at "0.00000000" so the column doesn't collapse when no balances came back.
+    [ "$max_bal" -lt 10 ] && max_bal=10
 
-    local i=1 is_active marker badge bal stk staking_emoji pad extra name_len
+    # Staking-slot is two visible columns (one emoji or two spaces) so the
+    # daemon badge always lines up vertically across rows.
+    local i=1 is_active marker badge bal stk staking_slot pad extra name_len
     for cname in "${chains[@]}"; do
         marker=""
         if [ -f "$CURRENT" ] && [ "$(cat "$CURRENT" 2>/dev/null)" = "$cname" ]; then
@@ -1058,29 +1066,30 @@ _show_menu() {
         fi
         is_active=0
         for a in "${active[@]}"; do [ "$a" = "$cname" ] && is_active=1 && break; done
-        if [ "$is_active" = "1" ]; then
-            badge="🟢"
-        else
-            badge="🔴"
-        fi
 
         extra=""
-        if [ "$is_active" = "1" ] && [ -s "$tmpdir/${cname}.bal" ]; then
-            bal=$(cat "$tmpdir/${cname}.bal" 2>/dev/null)
+        if [ "$is_active" = "1" ]; then
+            badge="🟢"
             stk=$(cat "$tmpdir/${cname}.stk" 2>/dev/null)
             case "$stk" in
-                true)  staking_emoji="⚡" ;;
-                false) staking_emoji="💤" ;;
-                *)     staking_emoji="" ;;
+                true)  staking_slot="⚡" ;;
+                false) staking_slot="💤" ;;
+                *)     staking_slot="  " ;;
             esac
-            name_len=${#cname}
-            [ -n "$marker" ] && name_len=$((name_len + 2))
-            pad=$(( max_name + 2 - name_len ))
-            [ "$pad" -lt 1 ] && pad=1
-            extra=$(printf "%*s%15s  %s" "$pad" "" "$bal" "$staking_emoji")
+            if [ -s "$tmpdir/${cname}.bal" ]; then
+                bal=$(cat "$tmpdir/${cname}.bal" 2>/dev/null)
+                name_len=${#cname}
+                [ -n "$marker" ] && name_len=$((name_len + 2))
+                pad=$(( max_name + 2 - name_len ))
+                [ "$pad" -lt 1 ] && pad=1
+                extra=$(printf "%*s%*s" "$pad" "" "$max_bal" "$bal")
+            fi
+        else
+            badge="🔴"
+            staking_slot="  "
         fi
 
-        printf "    %s %d) %b%s%s\n" "$badge" "$i" "$(_colorize_chain "$cname")" "$marker" "$extra"
+        printf "    %s %s %d) %b%s%s\n" "$staking_slot" "$badge" "$i" "$(_colorize_chain "$cname")" "$marker" "$extra"
         i=$((i + 1))
     done
 
