@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.9.1"
+SPARK_INSTALLER_VERSION="2.9.2"
 
 # Parse command-line arguments
 chain_name=""
@@ -1080,7 +1080,9 @@ _show_menu() {
                 bal=$(cat "$tmpdir/${cname}.bal" 2>/dev/null)
                 name_len=${#cname}
                 [ -n "$marker" ] && name_len=$((name_len + 2))
-                pad=$(( max_name + 2 - name_len ))
+                # +4 (not +2) reserves 2 cols for the asterisk on every row so
+                # marker rows don't push the balance column right by one.
+                pad=$(( max_name + 4 - name_len ))
                 [ "$pad" -lt 1 ] && pad=1
                 extra=$(printf "%*s%*s" "$pad" "" "$max_bal" "$bal")
             fi
