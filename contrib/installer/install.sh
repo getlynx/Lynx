@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.9.2"
+SPARK_INSTALLER_VERSION="2.10.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -469,6 +469,7 @@ lyc() { _spark_require_chain || return 1; if [ "$1" = "-e" ]; then nano "$SPARK_
 lc() { lyc "$@"; }
 lyr() { _spark_require_chain || return 1; if [ "$1" = "-d" ]; then echo "If you delete the debug log, the Staking results in Node Status will reset."; read -p "Do you want to continue? (y/N): " confirm; if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl stop $SPARK_CHAIN && rm -rf "$SPARK_DATADIR/debug.log" && systemctl daemon-reload 2>/dev/null && systemctl start $SPARK_CHAIN; else echo "Operation cancelled."; fi; else systemctl daemon-reload 2>/dev/null; systemctl restart $SPARK_CHAIN; fi; }
 lr() { lyr "$@"; }
+s() { _spark_require_chain || return 1; local cur; cur=$($SPARK_CLI setstaking 2>/dev/null); case "$cur" in true) $SPARK_CLI setstaking false >/dev/null 2>&1 ;; false) $SPARK_CLI setstaking true >/dev/null 2>&1 ;; *) echo "  Could not read staking state for $SPARK_CHAIN"; return 1 ;; esac; c; }
 hel() { _spark_require_chain || return 1; if [ -n "$1" ]; then $SPARK_CLI help | grep -i "$1"; else $SPARK_CLI help; fi; }
 he() { hel "$@"; }
 lss() { _spark_require_chain && systemctl status $SPARK_CHAIN; }
@@ -690,6 +691,7 @@ executeHelpCommand() {
     echo "    lyr [-d]               - Restart daemon (-d to purge debug)"
     echo "    lyc [-e]               - View/edit daemon conf (-e to edit)"
     echo "    gbi                    - Get blockchain info"
+    echo "    s                      - Toggle staking on/off for current chain"
     echo "    hel [keyword]          - Show daemon help (keyword search)"
     echo ""
     echo "  WALLET COMMANDS:"
