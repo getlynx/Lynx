@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.10.1"
+SPARK_INSTALLER_VERSION="2.11.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -1011,12 +1011,14 @@ _colorize_chain() {
     printf '\033[1;38;5;%sm%s\033[0m' "$color" "$1"
 }
 
-# Display the numbered menu. For each active chain, fetches wallet balance
-# and staking state via background RPC calls (5s timeout each) so menu
-# latency stays bounded by the slowest single RPC regardless of chain count.
-# The 5s ceiling is generous enough that healthy daemons under contention
-# still report in (1s was too tight and dropped columns under load), but
-# tight enough that a hung daemon can't stall the menu indefinitely.
+# Display the numbered menu. For each active chain, fetches wallet state
+# (balance + chain tip from getbalances) and staking state via background
+# RPC calls (5s timeout each) so menu latency stays bounded by the slowest
+# single RPC regardless of chain count. The 5s ceiling is generous enough
+# that healthy daemons under contention still report in (1s was too tight
+# and dropped columns under load), but tight enough that a hung daemon
+# can't stall the menu indefinitely. Lynx's getbalances embeds
+# lastprocessedblock.height inline, so balance + height come from one call.
 _show_menu() {
     echo ""
     echo "  Installed chains:"
@@ -1041,29 +1043,46 @@ _show_menu() {
             [ -n "$rpc_host" ] || exit 0
             cli_bin="/usr/local/bin/${cname}-cli"
             [ -x "$cli_bin" ] || exit 0
-            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalance 2>/dev/null > "$tmpdir/${cname}.bal"
-            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking  2>/dev/null > "$tmpdir/${cname}.stk"
+            # One getbalances call yields mine.trusted (balance) and
+            # lastprocessedblock.height (chain tip), replacing what used to
+            # be two RPCs. awk takes the first "trusted" line (mine.trusted,
+            # which precedes any watchonly block) and the lone "height" line
+            # under lastprocessedblock.
+            bals=$(timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalances 2>/dev/null)
+            if [ -n "$bals" ]; then
+                printf '%s\n' "$bals" | awk -F: -v balf="$tmpdir/${cname}.bal" -v hgtf="$tmpdir/${cname}.hgt" '
+                    /"trusted":/ && !b { v=$2; gsub(/[[:space:],]/,"",v); print v > balf; b=1 }
+                    /"height":/  && !h { v=$2; gsub(/[[:space:],]/,"",v); print v > hgtf; h=1 }
+                '
+            fi
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking 2>/dev/null > "$tmpdir/${cname}.stk"
         ) &
     done
     wait
 
     # Widest chain name (for name-column padding — _colorize_chain emits
-    # ANSI escapes so we can't use %-Ns) and widest balance string (so
-    # balances right-justify into a column that fits the largest value).
-    local max_name=0 max_bal=0 bal_len
+    # ANSI escapes so we can't use %-Ns), widest balance string, and widest
+    # height string so each column right-justifies to fit the largest value.
+    local max_name=0 max_bal=0 max_hgt=0 bal_len hgt_len
     for cname in "${chains[@]}"; do
         [ "${#cname}" -gt "$max_name" ] && max_name=${#cname}
         if [ -s "$tmpdir/${cname}.bal" ]; then
             bal_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.bal")
             [ "$bal_len" -gt "$max_bal" ] && max_bal=$bal_len
         fi
+        if [ -s "$tmpdir/${cname}.hgt" ]; then
+            hgt_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.hgt")
+            [ "$hgt_len" -gt "$max_hgt" ] && max_hgt=$hgt_len
+        fi
     done
     # Floor at "0.00000000" so the column doesn't collapse when no balances came back.
     [ "$max_bal" -lt 10 ] && max_bal=10
+    # Floor height column at 7 chars so it stays stable across early-chain heights.
+    [ "$max_hgt" -lt 7 ] && max_hgt=7
 
     # Staking-slot is two visible columns (one emoji or two spaces) so the
     # daemon badge always lines up vertically across rows.
-    local i=1 is_active marker badge bal stk staking_slot pad extra name_len
+    local i=1 is_active marker badge bal hgt stk staking_slot pad extra name_len
     for cname in "${chains[@]}"; do
         marker=""
         if [ -f "$CURRENT" ] && [ "$(cat "$CURRENT" 2>/dev/null)" = "$cname" ]; then
@@ -1083,13 +1102,16 @@ _show_menu() {
             esac
             if [ -s "$tmpdir/${cname}.bal" ]; then
                 bal=$(cat "$tmpdir/${cname}.bal" 2>/dev/null)
+                hgt=$(cat "$tmpdir/${cname}.hgt" 2>/dev/null)
                 name_len=${#cname}
                 [ -n "$marker" ] && name_len=$((name_len + 2))
                 # +4 (not +2) reserves 2 cols for the asterisk on every row so
                 # marker rows don't push the balance column right by one.
                 pad=$(( max_name + 4 - name_len ))
                 [ "$pad" -lt 1 ] && pad=1
-                extra=$(printf "%*s%*s" "$pad" "" "$max_bal" "$bal")
+                # Two spaces between balance and height so the columns read as
+                # distinct values rather than one run-on number.
+                extra=$(printf "%*s%*s  %*s" "$pad" "" "$max_bal" "$bal" "$max_hgt" "$hgt")
             fi
         else
             badge="🔴"
