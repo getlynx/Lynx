@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.10.0"
+SPARK_INSTALLER_VERSION="2.10.1"
 
 # Parse command-line arguments
 chain_name=""
@@ -1012,8 +1012,11 @@ _colorize_chain() {
 }
 
 # Display the numbered menu. For each active chain, fetches wallet balance
-# and staking state via background RPC calls (1s timeout each) so menu
-# latency stays ~1s regardless of chain count.
+# and staking state via background RPC calls (5s timeout each) so menu
+# latency stays bounded by the slowest single RPC regardless of chain count.
+# The 5s ceiling is generous enough that healthy daemons under contention
+# still report in (1s was too tight and dropped columns under load), but
+# tight enough that a hung daemon can't stall the menu indefinitely.
 _show_menu() {
     echo ""
     echo "  Installed chains:"
@@ -1038,8 +1041,8 @@ _show_menu() {
             [ -n "$rpc_host" ] || exit 0
             cli_bin="/usr/local/bin/${cname}-cli"
             [ -x "$cli_bin" ] || exit 0
-            timeout 1 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalance 2>/dev/null > "$tmpdir/${cname}.bal"
-            timeout 1 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking  2>/dev/null > "$tmpdir/${cname}.stk"
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalance 2>/dev/null > "$tmpdir/${cname}.bal"
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking  2>/dev/null > "$tmpdir/${cname}.stk"
         ) &
     done
     wait
