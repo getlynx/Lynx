@@ -25,7 +25,8 @@ The installer is versioned (`SPARK_INSTALLER_VERSION`) and the current version i
 - Configures firewall rules and SSH security
 - Monitors blockchain sync status and restarts the daemon as needed (good for low RAM deployments)
 - Adds shell aliases and the Spark console with daemon statistics and staking yield metrics
-- Installs the `chain` / `c` selector for switching between multiple installed chains from a single shell
+- Installs the `chain` / `c` selector for switching between multiple installed chains from a single shell — the menu shows each chain's wallet balance, current block height, and staking state at a glance
+- Adds an `s` toggle that flips staking on or off for the active chain
 
 **Prerequisites:**
 
@@ -176,7 +177,7 @@ If a binary for the specified chain has not been built and uploaded to the GitHu
 
 Both Spark and Beacon run multiple daemons per host. The difference is not *how many* daemons they manage but *how* they manage them — and which hardware they're aimed at.
 
-- **Spark** is shell-alias driven. The `chain` / `c` selector switches the active chain in the current shell, and per-chain aliases (`lyr`, `gbi`, `lyl`, etc.) act on whichever chain is selected. It's deliberately lean: no TUI process sitting in memory, minimal dependencies, and sync-time daemon restarts that make it forgiving on low-RAM Raspberry Pis and small VPSs.
+- **Spark** is shell-alias driven. The `chain` / `c` selector switches the active chain in the current shell — and the menu itself doubles as a multi-chain dashboard, listing each installed chain's balance, block height, and staking state. Per-chain aliases (`lyr`, `gbi`, `lyl`, `s`, etc.) act on whichever chain is selected. It's deliberately lean: no TUI process sitting in memory, minimal dependencies, and sync-time daemon restarts that make it forgiving on low-RAM Raspberry Pis and small VPSs.
 - **Beacon** is a TUI. It's more fun and more convenient — live dashboards, at-a-glance status for every daemon, keyboard-driven navigation — but it carries more runtime overhead and assumes the host has the resources to spare.
 
 | | Spark | Beacon |
