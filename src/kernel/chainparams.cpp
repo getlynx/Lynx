@@ -240,19 +240,7 @@ public:
         consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 1 * 60 * 60;
 
-LogPrintf ("CURRENT_CHAIN chainparams.cpp %s \n", CURRENT_CHAIN);
-
-// if (std::string(CURRENT_CHAIN) != "lynx") {
-
-    // spec = LoadChainSpec(std::string("/root/.") + CURRENT_CHAIN + "/chainspecs.txt", CURRENT_CHAIN);
-
-    // LogPrintf ("spec.nDefaultPort %d \n", spec.nDefaultPort[CURRENT_CHAIN]);
-
-
-
-
-
-
+//LogPrintf ("CURRENT_CHAIN chainparams.cpp %s \n", CURRENT_CHAIN);
 
         spec.psztimestamp["alioth"] = "Conformity wears the mask of patriotism.";
         spec.nonce["alioth"] = 2951643;
@@ -415,20 +403,11 @@ LogPrintf ("CURRENT_CHAIN chainparams.cpp %s \n", CURRENT_CHAIN);
         spec.timestamp["lynx"] = 1387779684;
 
 
-        
-
-
-// }
-
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.posLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
-// if (std::string(CURRENT_CHAIN) == "lynx") {
-        // consensus.initAuthUser = uint160S("1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d");
-        // consensus.nUUIDBlockStart = 3084941;
-// } else {
 
-LogPrintf ("spec.initauthuser %s \n", spec.initauthuser[CURRENT_CHAIN].c_str());
+//LogPrintf ("spec.initauthuser %s \n", spec.initauthuser[CURRENT_CHAIN].c_str());
 
         // consensus.initAuthUser = uint160S(spec.initauthuser);
         consensus.initAuthUser = uint160S(spec.initauthuser[CURRENT_CHAIN]);
@@ -439,11 +418,11 @@ LogPrintf ("spec.initauthuser %s \n", spec.initauthuser[CURRENT_CHAIN].c_str());
         consensus.fPowNoRetargeting = false;
         // consensus.lastPoWBlock = std::numeric_limits<int>::max();
 
-if (std::string(CURRENT_CHAIN) == "lynx") {
-    consensus.lastPoWBlock = 3085114;
-} else {
-    consensus.lastPoWBlock = 1500;
-}
+        if (std::string(CURRENT_CHAIN) == "lynx") {
+            consensus.lastPoWBlock = 3085114;
+        } else {
+            consensus.lastPoWBlock = 1500;
+        }
 
         consensus.nPosTargetTimespan = 5 * 60;
         consensus.nPosTargetSpacing = 5 * 60;
