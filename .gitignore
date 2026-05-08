@@ -83,3 +83,4 @@ src/wallet/test/.deps/
 deps/
 src/test/.deps/
 contrib/installer/MULTI_CHAIN_PLAN.md
+contrib/installer/docs-spark-page.md

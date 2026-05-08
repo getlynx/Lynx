@@ -5,6 +5,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 set -euo pipefail
 
+# Installer version (x.x.x format)
+SPARK_INSTALLER_VERSION="2.12.0"
+
 # Parse command-line arguments
 chain_name=""
 update_mode=""
@@ -221,6 +224,7 @@ fi
 #   - /usr/local/bin/spark-current-chain.sh (sourced helper)
 #   - /etc/spark/chains.conf (chain registry)
 #   - /run/spark/current-chain (current selection, tmpfs)
+#   - /run/spark/chain-colors (per-chain PS1 color cache, tmpfs)
 #   - /swapfile (if needed)
 #   - ~/.bashrc (Spark console aliases)
 #
@@ -242,6 +246,27 @@ fi
 # Journal logging function using systemd-cat
 log() {
     echo "$1" | systemd-cat -t install.sh 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] install.sh: $1" >&2
+}
+
+# Atomically refresh /usr/local/bin/install.sh from install.getlynx.io.
+# Downloads to a temp file first, verifies it looks like a bash script, then
+# mv-replaces. A CDN hiccup or HTML error page leaves the existing installer
+# untouched so the systemd timer keeps working.
+refreshInstallerFromCDN() {
+    local tmp=/usr/local/bin/install.sh.tmp
+    log "Updating install.sh at /usr/local/bin for systemd timer."
+    if ! curl -sfL --max-time 30 install.getlynx.io -o "$tmp"; then
+        log "Failed to fetch install.sh from install.getlynx.io. Keeping existing copy."
+        rm -f "$tmp"
+        return 0
+    fi
+    if ! head -n 1 "$tmp" 2>/dev/null | grep -q '^#!/bin/bash'; then
+        log "Downloaded install.sh does not start with a bash shebang. Keeping existing copy."
+        rm -f "$tmp"
+        return 0
+    fi
+    chmod +x "$tmp"
+    mv "$tmp" /usr/local/bin/install.sh
 }
 
 # Check if running as root
@@ -321,7 +346,7 @@ while [ "$_collision_tries" -lt 253 ]; do
     _taken_by=""
     for _conf_file in /var/lib/*/[a-z]*.conf; do
         [ -f "$_conf_file" ] || continue
-        if grep -q "^rpcbind=127\\.0\\.0\\.${rpc_octet}$" "$_conf_file" 2>/dev/null; then
+        if grep -Eq "^(main\.|test\.)?rpcbind=127\.0\.0\.${rpc_octet}$" "$_conf_file" 2>/dev/null; then
             # Extract chain name from path: /var/lib/<chain>/<chain>.conf
             _conf_chain=$(basename "$(dirname "$_conf_file")")
             if [ "$_conf_chain" != "$chain_lower" ]; then
@@ -359,414 +384,6 @@ uptime_seconds=$(cat /proc/uptime | cut -d' ' -f1 | cut -d'.' -f1)
 # Threshold for conditional logging (6 hours = 21600 seconds)
 log_threshold_seconds=21600
 
-# Create a nicely formatted command list bashrc file
-createCommandListConsole() {
-    local chain_upper=$(echo "${effective_chain}" | tr '[:lower:]' '[:upper:]')
-    cat <<'CMDEOF' | sed "s|WorkingDirectory=/var/lib/lynx|WorkingDirectory=${WorkingDirectory}|g; s|lynx-cli|${cli_name} ${cli_flags}|g; s|lynx\.conf|${conf_name}|g" | sed "/http/!{ s|LYNX|${chain_upper}|g; s|Lynx|${effective_chain}|g; }" | sed "s|ORIGINALCHAIN|Lynx|g; s|originalchain|lynx|g"
-# Function to display Lynx aliases in a nicely formatted MOTD
-executeHelpCommand() {
-    echo ""
-    echo ""
-    WorkingDirectory=/var/lib/lynx
-    # Count stakes won in the last 24 hours using wallet RPC
-    # Get timestamp from 24 hours ago
-    since_timestamp=$(date -d '24 hours ago' +%s)
-
-
-    # Count stakes from debug.log file for last 24 hours
-    # Get cutoff time in ISO format (YYYY-MM-DDTHH:MM:SSZ)
-    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ)
-
-    # Count CheckStake entries in debug.log from last 24 hours
-    # Uses grep to find stake entries, then awk to filter by timestamp
-    stakes_won=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '
-        {
-            # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
-            timestamp = substr($0, 1, 20) "Z"
-            if (timestamp >= cutoff) {
-                count++
-            }
-        }
-        END { print count+0 }')
-
-    # Default to 0 if command fails or returns empty
-    if [ -z "$stakes_won" ] || [ "$stakes_won" = "" ]; then
-        stakes_won="0"
-    fi
-
-    # Calculate total blocks in last 24 hours based on average block time
-    # Lynx has a 5-minute (300 second) average block time
-    # 24 hours = 1440 minutes / 5 minutes per block = 288 blocks
-    total_blocks=288
-
-    # Calculate percent yield (stakes won / total blocks * 100)
-    if [ "$total_blocks" -gt 0 ]; then
-        # Use awk for floating point arithmetic with 3 decimal places
-        percent_yield=$(awk "BEGIN {printf \"%.3f\", $stakes_won * 100 / $total_blocks}" 2>/dev/null || echo "0.000")
-    else
-        percent_yield="0.000"
-    fi
-
-    # Count stakes won in the last 7 days using debug.log
-    # Get cutoff time in ISO format (YYYY-MM-DDTHH:MM:SSZ) for 7 days ago
-    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ)
-
-    # Count CheckStake entries in debug.log from last 7 days
-    # Uses grep to find stake entries, then awk to filter by timestamp
-    stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '
-        {
-            # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
-            timestamp = substr($0, 1, 20) "Z"
-            if (timestamp >= cutoff) {
-                count++
-            }
-        }
-        END { print count+0 }')
-
-    # Default to 0 if command fails or returns empty
-    if [ -z "$stakes_won_7d" ] || [ "$stakes_won_7d" = "" ]; then
-        stakes_won_7d="0"
-    fi
-
-    # Calculate total blocks in last 7 days based on average block time
-    # Lynx has a 5-minute (300 second) average block time
-    # 7 days = 10080 minutes / 5 minutes per block = 2016 blocks
-    total_blocks_7d=2016
-
-    # Calculate percent yield for 7 days (stakes won / total blocks * 100)
-    if [ "$total_blocks_7d" -gt 0 ]; then
-        # Use awk for floating point arithmetic with 3 decimal places
-        percent_yield_7d=$(awk "BEGIN {printf \"%.3f\", $stakes_won_7d * 100 / $total_blocks_7d}" 2>/dev/null || echo "0.000")
-    else
-        percent_yield_7d="0.000"
-    fi
-
-    # Count immature UTXOs (confirmations < 31 from unspent outputs)
-    # Using listunspent to identify UTXO that are still maturing
-    immature_utxos=$(lynx-cli listunspent 2>/dev/null | awk '/"confirmations":/ {gsub(/[^0-9]/, "", $2); conf = $2 + 0; if (conf < 31 && conf > 0) count++} END {print count+0}')
-    if [ -z "$immature_utxos" ] || [ "$immature_utxos" = "" ]; then
-        immature_utxos="0"
-    fi
-
-    # Get current wallet balance
-    wallet_balance=$(lynx-cli getbalance 2>/dev/null || echo "0")
-    if [ -z "$wallet_balance" ]; then
-        wallet_balance="0"
-    fi
-
-    # Get Lynx version for display
-    lynx_version=$(lynx-cli -version 2>/dev/null | head -1 || echo "Unknown")
-    if [ -z "$lynx_version" ]; then
-        lynx_version="Unknown"
-    fi
-
-    local title="Lynx Spark for the ORIGINALCHAIN Data Storage Network"
-    local width=64
-    local pad=$(( (width - ${#title}) / 2 ))
-    printf "%*s%s\n" "$pad" "" "$title"
-    echo ""
-    echo "  NODE STATUS:"
-    echo "    🎯 Stakes won in last 24 hours: $stakes_won"
-    echo "    📊 24-hour yield rate (stakes/blocks): ${percent_yield}%"
-    echo "    🎯 Stakes won in last 7 days: $stakes_won_7d"
-    echo "    📊 7-day yield rate (stakes/blocks): ${percent_yield_7d}%"
-    echo "    🔄 Immature transactions (< 31 confirmations): $immature_utxos"
-    echo "    💰 Current wallet balance: $wallet_balance"
-    echo ""
-    echo "  DAEMON COMMANDS:"
-    echo "    lyl [lines] [-f]       - View daemon debug log (default 30)"
-    echo "    lyv                    - Show daemon version"
-    echo "    lyr [-d]               - Restart daemon (-d to purge debug)"
-    echo "    lyc [-e]               - View/edit daemon conf (-e to edit)"
-    echo "    gbi                    - Get blockchain info"
-    echo "    hel [keyword]          - Show daemon help (keyword search)"
-    echo ""
-    echo "  WALLET COMMANDS:"
-    echo "    gba                    - Get wallet balances"
-    echo "    gna                    - Generate new address"
-    echo "    lag                    - List address groupings"
-    echo "    sta [address] [amount] - Send to address (sender pays fee)"
-    echo "    swe [address]          - Sweep a wallet (receiver pays fee)"
-    echo "    bac                    - Manual wallet backup"
-    echo "    lba                    - List backup directory contents"
-    echo "    pri                    - Show wallet value in USD"
-    echo ""
-    echo "  SYSTEM COMMANDS:"
-    echo "    lss                    - Check systemd service status"
-    echo "    jou [lines] [-f]       - View install logs (default 30)"
-    echo "    upd                    - Install or update daemon to latest release"
-    echo "    reb                    - Update services, timers, firewall, and aliases"
-    echo "    usp [port]             - Change SSH port"
-    echo "    wdi                    - Change to daemon working directory"
-    echo "    ipt                    - List iptables rules"
-    echo ""
-    echo "  USEFUL COMMANDS:"
-    echo "    htop                   - Monitor system resources"
-    echo "    h                      - Show this help message again"
-    echo ""
-    echo "  📚 Complete project documentation: https://docs.getlynx.io/"
-    echo "  💾 Store files permanently: https://clevver.org/"
-    echo "  🔍 Blockchain explorer: https://explorer.getlynx.io/"
-    echo "  📈 Trade Lynx: https://freixlite.com/market/LYNX/LTC"
-    echo "  🔢 Lynx Version: $lynx_version"
-    echo ""
-    echo ""
-}
-
-# Function to display wallet value and LYNX price information
-executePriceCommand() {
-    echo ""
-    WorkingDirectory=/var/lib/lynx
-
-    # Get current wallet balance
-    wallet_balance=$(lynx-cli getbalance 2>/dev/null || echo "0")
-    if [ -z "$wallet_balance" ]; then
-        wallet_balance="0"
-    fi
-
-    # Fetch LYNX price from API with random endpoint selection and fallback
-    price_usd=""
-    api_endpoints=(
-        "https://api-one.ewm-cx.info/api/v1/price/getPriceByCoin?symbol=LYNX"
-        "https://api-two.ewm-cx.net/api/v1/price/getPriceByCoin?symbol=LYNX"
-    )
-
-    # Randomly select which endpoint to try first (0 or 1)
-    first_index=$((RANDOM % 2))
-    second_index=$((1 - first_index))
-
-    # Try the randomly selected endpoint first
-    api_response=$(curl -s --max-time 3 "${api_endpoints[$first_index]}" 2>/dev/null)
-    if [ -n "$api_response" ]; then
-        # Extract priceUSD from JSON using awk (no jq dependency)
-        extracted_price=$(echo "$api_response" | awk -F'"priceUSD":"' '{print $2}' | awk -F'"' '{print $1}')
-        # Only use the extracted price if it's not empty
-        if [ -n "$extracted_price" ] && [ "$extracted_price" != "" ]; then
-            price_usd="$extracted_price"
-        fi
-    fi
-
-    # If first endpoint failed or returned invalid price, try the backup endpoint
-    if [ -z "$price_usd" ] || [ "$price_usd" = "" ]; then
-        api_response=$(curl -s --max-time 3 "${api_endpoints[$second_index]}" 2>/dev/null)
-        if [ -n "$api_response" ]; then
-            # Extract priceUSD from JSON using awk (no jq dependency)
-            extracted_price=$(echo "$api_response" | awk -F'"priceUSD":"' '{print $2}' | awk -F'"' '{print $1}')
-            # Only use the extracted price if it's not empty
-            if [ -n "$extracted_price" ] && [ "$extracted_price" != "" ]; then
-                price_usd="$extracted_price"
-            fi
-        fi
-    fi
-
-    # Default to 0 if both endpoints failed
-    if [ -z "$price_usd" ] || [ "$price_usd" = "" ]; then
-        price_usd="0.00000000"
-    fi
-
-    # Count stakes won in the last 24 hours
-    # Gracefully handle missing debug.log or no staking data
-    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    if [ -f "$WorkingDirectory/debug.log" ]; then
-        stakes_won_24h=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '
-            {
-                # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
-                timestamp = substr($0, 1, 20) "Z"
-                if (timestamp >= cutoff) {
-                    count++
-                }
-            }
-            END { print count+0 }')
-    else
-        stakes_won_24h="0"
-    fi
-    # Ensure we have a valid number (default to 0 if empty or invalid)
-    if [ -z "$stakes_won_24h" ] || [ "$stakes_won_24h" = "" ] || ! [[ "$stakes_won_24h" =~ ^[0-9]+$ ]]; then
-        stakes_won_24h="0"
-    fi
-
-    # Count stakes won in the last 7 days
-    # Gracefully handle missing debug.log or no staking data
-    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    if [ -f "$WorkingDirectory/debug.log" ]; then
-        stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$WorkingDirectory/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '
-            {
-                # Extract timestamp from beginning of line (format: YYYY-MM-DDTHH:MM:SSZ)
-                timestamp = substr($0, 1, 20) "Z"
-                if (timestamp >= cutoff) {
-                    count++
-                }
-            }
-            END { print count+0 }')
-    else
-        stakes_won_7d="0"
-    fi
-    # Ensure we have a valid number (default to 0 if empty or invalid)
-    if [ -z "$stakes_won_7d" ] || [ "$stakes_won_7d" = "" ] || ! [[ "$stakes_won_7d" =~ ^[0-9]+$ ]]; then
-        stakes_won_7d="0"
-    fi
-
-    # Function to format USD with 2 decimals and comma separators
-    format_usd() {
-        local value=$1
-        # Format to 2 decimal places first
-        local formatted=$(awk "BEGIN {printf \"%.2f\", $value}" 2>/dev/null || echo "0.00")
-        # Split into integer and decimal parts
-        local int_part=$(echo "$formatted" | cut -d. -f1)
-        local dec_part=$(echo "$formatted" | cut -d. -f2)
-        # Add comma separators to integer part only
-        local int_with_commas=$(echo "$int_part" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1,\2/;ta')
-        # Combine integer and decimal parts
-        echo "${int_with_commas}.${dec_part}"
-    }
-
-    # Calculate wallet value in USD
-    wallet_value_raw=$(awk "BEGIN {printf \"%.2f\", $wallet_balance * $price_usd}" 2>/dev/null || echo "0.00")
-    wallet_value_usd=$(format_usd "$wallet_value_raw")
-
-    # Calculate staking yield in USD (each stake = 1 LYNX)
-    staking_yield_24h_raw=$(awk "BEGIN {printf \"%.2f\", $stakes_won_24h * $price_usd}" 2>/dev/null || echo "0.00")
-    staking_yield_24h_usd=$(format_usd "$staking_yield_24h_raw")
-
-    staking_yield_7d_raw=$(awk "BEGIN {printf \"%.2f\", $stakes_won_7d * $price_usd}" 2>/dev/null || echo "0.00")
-    staking_yield_7d_usd=$(format_usd "$staking_yield_7d_raw")
-
-    # Calculate estimated monthly yield (7-day * 4)
-    # Ensure safe arithmetic by defaulting to 0 if calculation fails
-    estimated_monthly_stakes=$((stakes_won_7d * 4)) 2>/dev/null || estimated_monthly_stakes=0
-    staking_yield_monthly_raw=$(awk "BEGIN {printf \"%.2f\", $staking_yield_7d_raw * 4}" 2>/dev/null || echo "0.00")
-    staking_yield_monthly_usd=$(format_usd "$staking_yield_monthly_raw")
-
-    # Calculate prices for different LYNX amounts
-    price_1_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 1 * $price_usd}" 2>/dev/null || echo "0.00")
-    price_1_lynx=$(format_usd "$price_1_lynx_raw")
-
-    price_10_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 10 * $price_usd}" 2>/dev/null || echo "0.00")
-    price_10_lynx=$(format_usd "$price_10_lynx_raw")
-
-    price_100_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 100 * $price_usd}" 2>/dev/null || echo "0.00")
-    price_100_lynx=$(format_usd "$price_100_lynx_raw")
-
-    price_1000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 1000 * $price_usd}" 2>/dev/null || echo "0.00")
-    price_1000_lynx=$(format_usd "$price_1000_lynx_raw")
-
-    price_10000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 10000 * $price_usd}" 2>/dev/null || echo "0.00")
-    price_10000_lynx=$(format_usd "$price_10000_lynx_raw")
-
-    price_100000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 100000 * $price_usd}" 2>/dev/null || echo "0.00")
-    price_100000_lynx=$(format_usd "$price_100000_lynx_raw")
-
-    price_1000000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 1000000 * $price_usd}" 2>/dev/null || echo "0.00")
-    price_1000000_lynx=$(format_usd "$price_1000000_lynx_raw")
-
-    price_10000000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 10000000 * $price_usd}" 2>/dev/null || echo "0.00")
-    price_10000000_lynx=$(format_usd "$price_10000000_lynx_raw")
-
-    price_100000000_lynx_raw=$(awk "BEGIN {printf \"%.2f\", 100000000 * $price_usd}" 2>/dev/null || echo "0.00")
-    price_100000000_lynx=$(format_usd "$price_100000000_lynx_raw")
-
-    echo "  PRICE INFORMATION:"
-    echo "    💵 Wallet value (USD): \$$wallet_value_usd"
-    echo ""
-    echo "    🎯 Staking Yield (USD):"
-    echo "        24-hour yield:     \$$staking_yield_24h_usd ($stakes_won_24h stakes)"
-    echo "        7-day yield:       \$$staking_yield_7d_usd ($stakes_won_7d stakes)"
-    echo "        Estimated monthly: \$$staking_yield_monthly_usd (~$estimated_monthly_stakes stakes)"
-    echo ""
-    echo "    💲 LYNX Price List (USD):"
-    echo "        1 LYNX:            \$$price_1_lynx"
-    echo "        10 LYNX:           \$$price_10_lynx"
-    echo "        100 LYNX:          \$$price_100_lynx"
-    echo "        1,000 LYNX:        \$$price_1000_lynx"
-    echo "        10,000 LYNX:       \$$price_10000_lynx"
-    echo "        100,000 LYNX:      \$$price_100000_lynx"
-    echo "        1,000,000 LYNX:    \$$price_1000000_lynx"
-    echo "        10,000,000 LYNX:   \$$price_10000000_lynx"
-    echo "        100,000,000 LYNX:  \$$price_100000000_lynx"
-    echo ""
-}
-
-# Function to update SSH port
-update_ssh_port() { 
-    if [ -z "$1" ]; then 
-        # Display current SSH port
-        local current_port
-        current_port=$(grep "^#*Port" /etc/ssh/sshd_config | head -1 | sed 's/^#*Port[[:space:]]*//')
-        if [ -z "$current_port" ]; then
-            current_port="22"
-        fi
-        echo "Current SSH port: $current_port"
-        echo ""
-        echo "Usage: usp <new_port>"
-        echo "Example: usp 2222"
-        return 0
-    fi
-    #
-    local new_port="$1"
-    local current_port
-    #
-    # Validate port number
-    if ! [[ "$new_port" =~ ^[0-9]+$ ]] || [ "$new_port" -lt 1 ] || [ "$new_port" -gt 65535 ]; then
-        echo "ERROR: Invalid port number. Must be between 1 and 65535."
-        return 1
-    fi
-    #
-    # Check for port conflicts in firewall script
-    local existing_ports
-    existing_ports=$(grep -o "dport [0-9]*" /usr/local/bin/firewall.sh | grep -o "[0-9]*" | sort -u)
-    #
-    if echo "$existing_ports" | grep -q "^${new_port}$"; then
-        echo "ERROR: Port $new_port is already in use in the firewall configuration."
-        echo "Current ports in firewall: $existing_ports"
-        echo "Please choose a different port number."
-        return 1
-    fi
-    #
-    # Get current SSH port
-    current_port=$(grep "^#*Port" /etc/ssh/sshd_config | head -1 | sed 's/^#*Port[[:space:]]*//')
-    if [ -z "$current_port" ]; then
-        current_port="22"
-    fi
-    #
-    echo "Current SSH port: $current_port"
-    echo "New SSH port: $new_port"
-    echo ""
-    echo "WARNING: This will change the SSH port and reboot the device!"
-    echo ""
-    read -p "Do you want to continue? (y/N): " confirm
-    #
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "Operation cancelled."
-        return 1
-    fi
-    #
-    echo "Updating sshd_config..."
-    sed -i "s/^#*Port.*/Port $new_port/" /etc/ssh/sshd_config
-    #
-    echo "Updating firewall script..."
-    sed -i "/# SSH_PORT_START/,/# SSH_PORT_END/s/iptables -A INPUT -p tcp --dport [0-9]* -j ACCEPT/iptables -A INPUT -p tcp --dport $new_port -j ACCEPT/" /usr/local/bin/firewall.sh
-    #
-    echo "Applying firewall rules..."
-    /usr/local/bin/firewall.sh
-    sleep 2
-    /usr/local/bin/firewall.sh
-    #
-    echo "Restarting SSH daemon..."
-    # Fallback: try both service names
-    if systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; then
-        echo "SSH daemon restarted successfully"
-    else
-        echo "ERROR: Failed to restart SSH daemon"
-        return 1
-    fi
-    #
-    echo ""
-    echo "SSH port updated successfully to $new_port"
-    echo "Connect to the new port: ssh -p $new_port root@$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 'YOUR_SERVER_IP')"
-}
-CMDEOF
-}
-
 # Add useful aliases and MOTD to /root/.bashrc
 # Uses a single shared block that sources the chain-selector helper.
 # Aliases reference $SPARK_* vars so they work for whichever chain is selected.
@@ -792,6 +409,9 @@ addAliasesToBashrcFile() {
     cat <<'SPARKEOF' >> "$BASHRC"
 # BEGIN spark-aliases
 #
+# Spark installer version
+SPARK_INSTALLER_VERSION="__SPARK_VERSION__"
+#
 # Bail out immediately for non-interactive shells (SFTP, scp, rsync, etc.)
 case $- in
     *i*) ;;
@@ -807,6 +427,13 @@ fi
 # (The script at /usr/local/bin/chain writes the file; we re-source to update env.)
 chain() { /usr/local/bin/chain "$@"; . /usr/local/bin/spark-current-chain.sh; }
 c()     { /usr/local/bin/chain "$@"; . /usr/local/bin/spark-current-chain.sh; }
+#
+# Shortcut: "c4" (no space) expands to "c 4", etc. The chain selector handles
+# the number and prints its normal "Switched to <chain>" confirmation.
+for _spark_cn in {1..99}; do
+    alias "c${_spark_cn}=c ${_spark_cn}"
+done
+unset _spark_cn
 #
 # Helper: ensure a chain is selected before running an alias
 _spark_require_chain() {
@@ -840,8 +467,9 @@ gi() { gbi; }
 lyl() { _spark_require_chain || return 1; if [ "$1" = "-f" ]; then tail -f "$SPARK_DATADIR/debug.log"; elif [ "${2:-}" = "-f" ]; then tail -n ${1:-30} -f "$SPARK_DATADIR/debug.log"; else tail -n ${1:-30} "$SPARK_DATADIR/debug.log"; fi; }
 lyc() { _spark_require_chain || return 1; if [ "$1" = "-e" ]; then nano "$SPARK_CONF" && read -p "Restart daemon to apply config changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then lyr; else echo "Daemon not restarted."; fi; else cat "$SPARK_CONF"; fi; }
 lc() { lyc "$@"; }
-lyr() { _spark_require_chain || return 1; if [ "$1" = "-d" ]; then echo "If you delete the debug log, the Staking results in Node Status will reset."; read -p "Do you want to continue? (y/N): " confirm; if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl stop $SPARK_CHAIN && rm -rf "$SPARK_DATADIR/debug.log" && systemctl start $SPARK_CHAIN; else echo "Operation cancelled."; fi; else systemctl restart $SPARK_CHAIN; fi; }
+lyr() { _spark_require_chain || return 1; if [ "$1" = "-d" ]; then echo "If you delete the debug log, the Staking results in Node Status will reset."; read -p "Do you want to continue? (y/N): " confirm; if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl stop $SPARK_CHAIN && rm -rf "$SPARK_DATADIR/debug.log" && systemctl daemon-reload 2>/dev/null && systemctl start $SPARK_CHAIN; else echo "Operation cancelled."; fi; else systemctl daemon-reload 2>/dev/null; systemctl restart $SPARK_CHAIN; fi; }
 lr() { lyr "$@"; }
+s() { _spark_require_chain || return 1; local cur; cur=$($SPARK_CLI setstaking 2>/dev/null); case "$cur" in true) $SPARK_CLI setstaking false >/dev/null 2>&1 ;; false) $SPARK_CLI setstaking true >/dev/null 2>&1 ;; *) echo "  Could not read staking state for $SPARK_CHAIN"; return 1 ;; esac; c; }
 hel() { _spark_require_chain || return 1; if [ -n "$1" ]; then $SPARK_CLI help | grep -i "$1"; else $SPARK_CLI help; fi; }
 he() { hel "$@"; }
 lss() { _spark_require_chain && systemctl status $SPARK_CHAIN; }
@@ -865,6 +493,134 @@ reb() { _spark_require_chain && bash <(curl -sL install.getlynx.io) rebuild --ch
 h() { executeHelpCommand; }
 pri() { executePriceCommand; }
 #
+# 1-second-timeout wrapper around $SPARK_CLI. Empty stdout + non-zero exit
+# on timeout or daemon error, so callers can distinguish "no value" from 0.
+_spark_rpc() {
+    timeout 1 $SPARK_CLI "$@" 2>/dev/null
+}
+#
+# Extract a numeric field value from pretty-printed bitcoin-cli JSON. Echoes
+# the first matching integer, or empty on no match.
+_spark_json_int() {
+    awk -v key="\"$1\":" '$1==key { gsub(/[^0-9]/, "", $2); print $2; exit }'
+}
+#
+# Query the daemon for "stakes won" and "blocks in window" in one sweep.
+#
+#   Output: "<stakes_24h> <stakes_7d> <blocks_24h> <blocks_7d>"
+#   On any RPC timeout/error the affected fields become "n/a".
+#
+# Stakes: listsinceblock starting at tip-2016. A stake counts only when BOTH
+#         (a) the tx has the coinstake marker — a send entry with vout==0,
+#         amount==0.00000000, at blockindex==1 (the PoS empty-output protocol
+#         marker that regular payments never have), AND (b) the wallet has a
+#         receive entry for the same txid (i.e., the reward actually landed
+#         here). Without (a) we'd miscount plain deposits that happened to be
+#         the first tx in a block; without (b) we'd count blocks where our
+#         UTXO was staked but the reward went to an external address.
+# Blocks: sampled from the 2016-block window between tip and anchor —
+#         block rate = (tip_time - anchor_time) / 2016, scaled to 24h/7d.
+# Cutoffs: derived from tip_time so ratios stay consistent if the chain is
+#          lagging wall-clock (a syncing node shouldn't show 0 stakes).
+_spark_wallet_snapshot() {
+    local tip tip_hash tip_time anchor anchor_hash anchor_time
+    local stakes_24h="n/a" stakes_7d="n/a" blocks_24h="n/a" blocks_7d="n/a"
+
+    tip=$(_spark_rpc getblockcount)
+    [[ "$tip" =~ ^[0-9]+$ ]] || { echo "n/a n/a n/a n/a"; return; }
+
+    tip_hash=$(_spark_rpc getblockhash "$tip")
+    [[ "$tip_hash" =~ ^[0-9a-f]{64}$ ]] || { echo "n/a n/a n/a n/a"; return; }
+
+    anchor=$((tip - 2016))
+    [ "$anchor" -lt 0 ] && anchor=0
+    anchor_hash=$(_spark_rpc getblockhash "$anchor")
+    [[ "$anchor_hash" =~ ^[0-9a-f]{64}$ ]] || { echo "n/a n/a n/a n/a"; return; }
+
+    tip_time=$(_spark_rpc getblockheader "$tip_hash" | _spark_json_int time)
+    anchor_time=$(_spark_rpc getblockheader "$anchor_hash" | _spark_json_int time)
+
+    # Derive block counts from the sampled window if both timestamps came back.
+    if [[ "$tip_time" =~ ^[0-9]+$ ]] && [[ "$anchor_time" =~ ^[0-9]+$ ]]; then
+        local span_blocks=$((tip - anchor)) span_time=$((tip_time - anchor_time))
+        if [ "$span_blocks" -gt 0 ] && [ "$span_time" -gt 0 ]; then
+            blocks_24h=$(awk "BEGIN {printf \"%d\", 86400 * $span_blocks / $span_time + 0.5}")
+            blocks_7d=$(awk "BEGIN {printf \"%d\", 604800 * $span_blocks / $span_time + 0.5}")
+        fi
+    fi
+
+    # Anchor stake-count window to tip_time when available so a lagging chain
+    # still reports meaningful ratios; fall back to wall-clock otherwise.
+    local ref_time
+    if [[ "$tip_time" =~ ^[0-9]+$ ]]; then
+        ref_time="$tip_time"
+    else
+        ref_time=$(date +%s)
+    fi
+    local cutoff_24h=$((ref_time - 86400)) cutoff_7d=$((ref_time - 604800))
+
+    local txns
+    txns=$(_spark_rpc listsinceblock "$anchor_hash")
+    if [ -n "$txns" ]; then
+        read -r stakes_24h stakes_7d < <(printf '%s\n' "$txns" | awk -v c24="$cutoff_24h" -v c7d="$cutoff_7d" '
+            BEGIN { n24=0; n7=0 }
+            /^[[:space:]]*\{[[:space:]]*$/ {
+                cat=""; bi=-1; t=0; txid=""; vout=-1; amt=""; next
+            }
+            /^[[:space:]]*\},?[[:space:]]*$/ {
+                if (txid != "") {
+                    # PoS coinstake marker: empty 0-value send at vout 0 of a blockindex-1 tx
+                    if (cat == "send" && vout == 0 && amt == "0.00000000" && bi == 1) {
+                        is_stake[txid] = 1
+                        stake_time[txid] = t
+                    }
+                    # Wallet received a paid output of this tx (reward landed here)
+                    if (cat == "receive") has_reward[txid] = 1
+                }
+                next
+            }
+            $1 == "\"category\":"   { v=$2; gsub(/[",]/, "", v); cat=v }
+            $1 == "\"blockindex\":" { v=$2; gsub(/,/, "", v);    bi=v+0 }
+            $1 == "\"vout\":"       { v=$2; gsub(/,/, "", v);    vout=v+0 }
+            $1 == "\"amount\":"     { v=$2; gsub(/,/, "", v);    amt=v }
+            $1 == "\"time\":"       { v=$2; gsub(/,/, "", v);    t=v+0 }
+            $1 == "\"txid\":"       { v=$2; gsub(/[",]/, "", v); txid=v }
+            END {
+                for (tx in is_stake) {
+                    if (has_reward[tx] && stake_time[tx] > 0) {
+                        if (stake_time[tx] >= c7d) n7++
+                        if (stake_time[tx] >= c24) n24++
+                    }
+                }
+                printf "%d %d\n", n24, n7
+            }
+        ')
+        [[ "$stakes_24h" =~ ^[0-9]+$ ]] || stakes_24h="n/a"
+        [[ "$stakes_7d"  =~ ^[0-9]+$ ]] || stakes_7d="n/a"
+    fi
+
+    echo "$stakes_24h $stakes_7d $blocks_24h $blocks_7d"
+}
+#
+# Format a decimal as USD with thousand-separators. Passes through "n/a".
+_spark_format_usd() {
+    [ "$1" = "n/a" ] && { echo "n/a"; return; }
+    local formatted int_part dec_part int_with_commas
+    formatted=$(awk "BEGIN {printf \"%.2f\", $1}" 2>/dev/null || echo "0.00")
+    int_part=$(echo "$formatted" | cut -d. -f1)
+    dec_part=$(echo "$formatted" | cut -d. -f2)
+    int_with_commas=$(echo "$int_part" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1,\2/;ta')
+    echo "${int_with_commas}.${dec_part}"
+}
+#
+# Multiply two decimals and format as USD. Returns "n/a" if either operand is "n/a".
+_spark_usd_product() {
+    { [ "$1" = "n/a" ] || [ "$2" = "n/a" ]; } && { echo "n/a"; return; }
+    local raw
+    raw=$(awk "BEGIN {printf \"%.2f\", $1 * $2}" 2>/dev/null || echo "0.00")
+    _spark_format_usd "$raw"
+}
+#
 # Function to display aliases in a nicely formatted MOTD (uses SPARK_* vars)
 executeHelpCommand() {
     _spark_require_chain || return 1
@@ -875,40 +631,42 @@ executeHelpCommand() {
     local chain_cap
     chain_cap=$(echo "$SPARK_CHAIN" | sed 's/./\U&/')
 
-    # Count stakes won in the last 24 hours from debug.log
-    local since_iso
-    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    local stakes_won=0
-    if [ -f "$SPARK_DATADIR/debug.log" ] && [ -n "$since_iso" ]; then
-        stakes_won=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
+    # Stake and block counts via wallet RPC. Each call has a 1s timeout;
+    # any unknown field is rendered as "n/a" rather than a misleading zero.
+    local stakes_won stakes_won_7d blocks_24h blocks_7d
+    read -r stakes_won stakes_won_7d blocks_24h blocks_7d < <(_spark_wallet_snapshot)
+    [ -n "$stakes_won" ]    || stakes_won="n/a"
+    [ -n "$stakes_won_7d" ] || stakes_won_7d="n/a"
+    [ -n "$blocks_24h" ]    || blocks_24h="n/a"
+    [ -n "$blocks_7d" ]     || blocks_7d="n/a"
+
+    # Yield% = stakes_won / blocks_in_window. Needs both numbers and a nonzero
+    # denominator; otherwise n/a.
+    local percent_yield percent_yield_7d
+    if [ "$stakes_won" = "n/a" ] || [ "$blocks_24h" = "n/a" ] || [ "$blocks_24h" = "0" ]; then
+        percent_yield="n/a"
+    else
+        percent_yield=$(awk "BEGIN {printf \"%.3f%%\", $stakes_won * 100 / $blocks_24h}")
     fi
-    [ -z "$stakes_won" ] && stakes_won="0"
-
-    local total_blocks=288
-    local percent_yield
-    percent_yield=$(awk "BEGIN {printf \"%.3f\", $stakes_won * 100 / $total_blocks}" 2>/dev/null || echo "0.000")
-
-    # Count stakes won in the last 7 days
-    local since_iso_7d
-    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    local stakes_won_7d=0
-    if [ -f "$SPARK_DATADIR/debug.log" ] && [ -n "$since_iso_7d" ]; then
-        stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
+    if [ "$stakes_won_7d" = "n/a" ] || [ "$blocks_7d" = "n/a" ] || [ "$blocks_7d" = "0" ]; then
+        percent_yield_7d="n/a"
+    else
+        percent_yield_7d=$(awk "BEGIN {printf \"%.3f%%\", $stakes_won_7d * 100 / $blocks_7d}")
     fi
-    [ -z "$stakes_won_7d" ] && stakes_won_7d="0"
 
-    local total_blocks_7d=2016
-    local percent_yield_7d
-    percent_yield_7d=$(awk "BEGIN {printf \"%.3f\", $stakes_won_7d * 100 / $total_blocks_7d}" 2>/dev/null || echo "0.000")
-
-    # Count immature UTXOs
-    local immature_utxos
-    immature_utxos=$($SPARK_CLI listunspent 2>/dev/null | awk '/"confirmations":/ {gsub(/[^0-9]/, "", $2); conf = $2 + 0; if (conf < 31 && conf > 0) count++} END {print count+0}')
-    [ -z "$immature_utxos" ] && immature_utxos="0"
+    # Immature UTXOs via listunspent; n/a if RPC times out.
+    local immature_utxos listunspent_json
+    listunspent_json=$(_spark_rpc listunspent)
+    if [ -n "$listunspent_json" ]; then
+        immature_utxos=$(printf '%s\n' "$listunspent_json" | awk '/"confirmations":/ {gsub(/[^0-9]/, "", $2); conf = $2 + 0; if (conf < 31 && conf > 0) count++} END {print count+0}')
+        [[ "$immature_utxos" =~ ^[0-9]+$ ]] || immature_utxos="n/a"
+    else
+        immature_utxos="n/a"
+    fi
 
     local wallet_balance
-    wallet_balance=$($SPARK_CLI getbalance 2>/dev/null || echo "0")
-    [ -z "$wallet_balance" ] && wallet_balance="0"
+    wallet_balance=$(_spark_rpc getbalance)
+    [ -n "$wallet_balance" ] || wallet_balance="n/a"
 
     local version_info
     version_info=$($SPARK_CLI -version 2>/dev/null | head -1 || echo "Unknown")
@@ -921,9 +679,9 @@ executeHelpCommand() {
     echo ""
     echo "  NODE STATUS:"
     echo "    🎯 Stakes won in last 24 hours: $stakes_won"
-    echo "    📊 24-hour yield rate (stakes/blocks): ${percent_yield}%"
+    echo "    📊 24-hour yield rate (stakes/blocks): $percent_yield"
     echo "    🎯 Stakes won in last 7 days: $stakes_won_7d"
-    echo "    📊 7-day yield rate (stakes/blocks): ${percent_yield_7d}%"
+    echo "    📊 7-day yield rate (stakes/blocks): $percent_yield_7d"
     echo "    🔄 Immature transactions (< 31 confirmations): $immature_utxos"
     echo "    💰 Current wallet balance: $wallet_balance"
     echo ""
@@ -933,6 +691,7 @@ executeHelpCommand() {
     echo "    lyr [-d]               - Restart daemon (-d to purge debug)"
     echo "    lyc [-e]               - View/edit daemon conf (-e to edit)"
     echo "    gbi                    - Get blockchain info"
+    echo "    s                      - Toggle staking on/off for current chain"
     echo "    hel [keyword]          - Show daemon help (keyword search)"
     echo ""
     echo "  WALLET COMMANDS:"
@@ -963,7 +722,8 @@ executeHelpCommand() {
     echo "  💾 Store files permanently: https://clevver.org/"
     echo "  🔍 Blockchain explorer: https://explorer.getlynx.io/"
     echo "  📈 Trade Lynx: https://freixlite.com/market/LYNX/LTC"
-    echo "  🔢 Version: $version_info"
+    echo "  🔢 Daemon: $version_info"
+    echo "  🔢 Spark: v${SPARK_INSTALLER_VERSION:-unknown}"
     echo ""
     echo ""
 }
@@ -974,8 +734,8 @@ executePriceCommand() {
     echo ""
 
     local wallet_balance
-    wallet_balance=$($SPARK_CLI getbalance 2>/dev/null || echo "0")
-    [ -z "$wallet_balance" ] && wallet_balance="0"
+    wallet_balance=$(_spark_rpc getbalance)
+    [ -n "$wallet_balance" ] || wallet_balance="n/a"
 
     # Fetch LYNX price from API with random endpoint selection and fallback
     local price_usd=""
@@ -1001,51 +761,50 @@ executePriceCommand() {
     fi
     [ -z "$price_usd" ] && price_usd="0.00000000"
 
-    # Count stakes from debug.log
-    local since_iso since_iso_7d stakes_won_24h=0 stakes_won_7d=0
-    since_iso=$(date -d '24 hours ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    since_iso_7d=$(date -d '7 days ago' -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-    if [ -f "$SPARK_DATADIR/debug.log" ]; then
-        stakes_won_24h=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
-        stakes_won_7d=$(grep "CheckStake(): New proof-of-stake block found" "$SPARK_DATADIR/debug.log" 2>/dev/null | awk -v cutoff="$since_iso_7d" '{timestamp = substr($0, 1, 20) "Z"; if (timestamp >= cutoff) count++} END {print count+0}')
+    # Stake counts via wallet RPC; n/a on timeout. Block counts in the
+    # snapshot aren't used here.
+    local stakes_won_24h stakes_won_7d _blocks_24h _blocks_7d
+    read -r stakes_won_24h stakes_won_7d _blocks_24h _blocks_7d < <(_spark_wallet_snapshot)
+    [ -n "$stakes_won_24h" ] || stakes_won_24h="n/a"
+    [ -n "$stakes_won_7d" ]  || stakes_won_7d="n/a"
+
+    local wallet_value_usd staking_yield_24h_usd staking_yield_7d_usd
+    wallet_value_usd=$(_spark_usd_product "$wallet_balance" "$price_usd")
+    staking_yield_24h_usd=$(_spark_usd_product "$stakes_won_24h" "$price_usd")
+    staking_yield_7d_usd=$(_spark_usd_product "$stakes_won_7d" "$price_usd")
+
+    local estimated_monthly_stakes staking_yield_monthly_usd
+    if [ "$stakes_won_7d" = "n/a" ]; then
+        estimated_monthly_stakes="n/a"
+        staking_yield_monthly_usd="n/a"
+    else
+        estimated_monthly_stakes=$((stakes_won_7d * 4))
+        staking_yield_monthly_usd=$(_spark_usd_product "$estimated_monthly_stakes" "$price_usd")
     fi
-    [[ "$stakes_won_24h" =~ ^[0-9]+$ ]] || stakes_won_24h=0
-    [[ "$stakes_won_7d" =~ ^[0-9]+$ ]] || stakes_won_7d=0
-
-    # Format USD helper
-    _format_usd() {
-        local formatted int_part dec_part int_with_commas
-        formatted=$(awk "BEGIN {printf \"%.2f\", $1}" 2>/dev/null || echo "0.00")
-        int_part=$(echo "$formatted" | cut -d. -f1)
-        dec_part=$(echo "$formatted" | cut -d. -f2)
-        int_with_commas=$(echo "$int_part" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1,\2/;ta')
-        echo "${int_with_commas}.${dec_part}"
-    }
-
-    local wallet_value_raw wallet_value_usd
-    wallet_value_raw=$(awk "BEGIN {printf \"%.2f\", $wallet_balance * $price_usd}" 2>/dev/null || echo "0.00")
-    wallet_value_usd=$(_format_usd "$wallet_value_raw")
-
-    local staking_yield_24h_raw staking_yield_24h_usd
-    staking_yield_24h_raw=$(awk "BEGIN {printf \"%.2f\", $stakes_won_24h * $price_usd}" 2>/dev/null || echo "0.00")
-    staking_yield_24h_usd=$(_format_usd "$staking_yield_24h_raw")
-
-    local staking_yield_7d_raw staking_yield_7d_usd
-    staking_yield_7d_raw=$(awk "BEGIN {printf \"%.2f\", $stakes_won_7d * $price_usd}" 2>/dev/null || echo "0.00")
-    staking_yield_7d_usd=$(_format_usd "$staking_yield_7d_raw")
-
-    local estimated_monthly_stakes staking_yield_monthly_raw staking_yield_monthly_usd
-    estimated_monthly_stakes=$((stakes_won_7d * 4)) 2>/dev/null || estimated_monthly_stakes=0
-    staking_yield_monthly_raw=$(awk "BEGIN {printf \"%.2f\", $staking_yield_7d_raw * 4}" 2>/dev/null || echo "0.00")
-    staking_yield_monthly_usd=$(_format_usd "$staking_yield_monthly_raw")
 
     echo "  PRICE INFORMATION:"
-    echo "    💵 Wallet value (USD): \$$wallet_value_usd"
+    if [ "$wallet_value_usd" = "n/a" ]; then
+        echo "    💵 Wallet value (USD): n/a"
+    else
+        echo "    💵 Wallet value (USD): \$$wallet_value_usd"
+    fi
     echo ""
     echo "    🎯 Staking Yield (USD):"
-    echo "        24-hour yield:     \$$staking_yield_24h_usd ($stakes_won_24h stakes)"
-    echo "        7-day yield:       \$$staking_yield_7d_usd ($stakes_won_7d stakes)"
-    echo "        Estimated monthly: \$$staking_yield_monthly_usd (~$estimated_monthly_stakes stakes)"
+    if [ "$staking_yield_24h_usd" = "n/a" ]; then
+        echo "        24-hour yield:     n/a"
+    else
+        echo "        24-hour yield:     \$$staking_yield_24h_usd ($stakes_won_24h stakes)"
+    fi
+    if [ "$staking_yield_7d_usd" = "n/a" ]; then
+        echo "        7-day yield:       n/a"
+    else
+        echo "        7-day yield:       \$$staking_yield_7d_usd ($stakes_won_7d stakes)"
+    fi
+    if [ "$staking_yield_monthly_usd" = "n/a" ]; then
+        echo "        Estimated monthly: n/a"
+    else
+        echo "        Estimated monthly: \$$staking_yield_monthly_usd (~$estimated_monthly_stakes stakes)"
+    fi
     echo ""
 
     local amounts=(1 10 100 1000 10000 100000 1000000 10000000 100000000)
@@ -1053,10 +812,13 @@ executePriceCommand() {
     echo "    💲 LYNX Price List (USD):"
     local i=0
     for amt in "${amounts[@]}"; do
-        local raw val
-        raw=$(awk "BEGIN {printf \"%.2f\", $amt * $price_usd}" 2>/dev/null || echo "0.00")
-        val=$(_format_usd "$raw")
-        printf "        %-22s \$%s\n" "${labels[$i]}:" "$val"
+        local val
+        val=$(_spark_usd_product "$amt" "$price_usd")
+        if [ "$val" = "n/a" ]; then
+            printf "        %-22s n/a\n" "${labels[$i]}:"
+        else
+            printf "        %-22s \$%s\n" "${labels[$i]}:" "$val"
+        fi
         i=$((i + 1))
     done
     echo ""
@@ -1127,6 +889,10 @@ cd /root
 #
 # END spark-aliases
 SPARKEOF
+
+    # Replace version placeholder with actual version (heredoc is single-quoted so
+    # variables aren't expanded inside it)
+    sed -i "s/__SPARK_VERSION__/$SPARK_INSTALLER_VERSION/" "$BASHRC"
 }
 
 # Function to clean up multiple consecutive empty lines in bashrc
@@ -1175,52 +941,188 @@ if [ ! -f "$REGISTRY" ] || [ ! -s "$REGISTRY" ]; then
     exit 1
 fi
 
-# Read registry into an array
-mapfile -t chains < "$REGISTRY"
+# Read registry into an array, sorted alphabetically so menu order is
+# independent of install order.
+mapfile -t chains < <(LC_ALL=C sort -u "$REGISTRY")
 
-# Resolve the RPC octet for a given chain name (mirrors install.sh logic)
-_get_rpc_ip() {
-    local cname="$1"
-    local octet
-    octet=$(printf '%s' "$cname" | cksum | awk '{print ($1 % 253) + 2}')
-    # Collision resolution: scan conf files like install.sh does
-    local tries=0
-    while [ "$tries" -lt 253 ]; do
-        local taken=""
-        for cf in /var/lib/*/[a-z]*.conf; do
-            [ -f "$cf" ] || continue
-            if grep -q "^rpcbind=127\\.0\\.0\\.${octet}$" "$cf" 2>/dev/null; then
-                local cc
-                cc=$(basename "$(dirname "$cf")")
-                if [ "$cc" != "$cname" ]; then
-                    taken="$cc"
-                    break
-                fi
-            fi
-        done
-        [ -z "$taken" ] && break
-        octet=$(( (octet % 253) + 2 ))
-        tries=$(( tries + 1 ))
+# Per-chain color with greedy collision resolution + cache.
+# 100-color palette from the xterm 256-color cube (no grays, no too-dark).
+# Chains are processed in registry order; each chain takes its hashed slot,
+# or walks forward to the next free slot if that slot is already claimed.
+# Resolved assignments cache at /run/spark/chain-colors (tmpfs) and regenerate
+# only when /etc/spark/chains.conf changes. Lookup is pure-bash (no forks).
+# Keep palette + resolver in sync with spark-current-chain.sh.
+_SPARK_PALETTE=(
+    20 21 26 27 32 33 38 39 44 45
+    50 51 56 57 62 63 68 69 74 75
+    80 81 86 87 92 93 98 99 104 105
+    110 111 116 117 122 123 128 129 134 135
+    140 141 146 147 152 153 158 159 164 165
+    170 171 176 177 182 183 190 191 196 197
+    202 203 208 209 214 215 220 221 226 227
+    22 28 34 40 46 82 118 154
+    124 130 136 142 148 160 166 172 178 184
+    198 199 200 201 204 205 206 207 210 211 212 213
+)
+# djb2 hash, pure bash — avoids forking cksum per chain during cache rebuild.
+_spark_hash_mod100() {
+    local s="$1" i c h=5381
+    for ((i=0; i<${#s}; i++)); do
+        printf -v c '%d' "'${s:i:1}"
+        h=$(( (h * 33 + c) & 0x7fffffff ))
     done
-    echo "127.0.0.${octet}"
+    printf '%d' $((h % 100))
+}
+_spark_rebuild_color_cache() {
+    local tmp="/run/spark/chain-colors.tmp.$$"
+    mkdir -p /run/spark 2>/dev/null || return 1
+    local -a used=()
+    local chain idx slot
+    : > "$tmp"
+    while IFS= read -r chain || [ -n "$chain" ]; do
+        [ -z "$chain" ] && continue
+        idx=$(_spark_hash_mod100 "$chain")
+        slot=$idx
+        while [ -n "${used[$slot]:-}" ]; do
+            slot=$(( (slot + 1) % 100 ))
+            [ "$slot" = "$idx" ] && break
+        done
+        used[$slot]=1
+        printf '%s %s\n' "$chain" "${_SPARK_PALETTE[$slot]}" >> "$tmp"
+    done < "$REGISTRY"
+    mv -f "$tmp" "/run/spark/chain-colors" 2>/dev/null
+}
+_chain_color() {
+    local cache="/run/spark/chain-colors"
+    if [ ! -f "$cache" ] || [ "$REGISTRY" -nt "$cache" ]; then
+        _spark_rebuild_color_cache
+    fi
+    local c col
+    while IFS=' ' read -r c col; do
+        [ "$c" = "$1" ] && { printf '%s' "$col"; return 0; }
+    done < "$cache" 2>/dev/null
+    local idx
+    idx=$(_spark_hash_mod100 "$1")
+    printf '%s' "${_SPARK_PALETTE[$idx]}"
+}
+_colorize_chain() {
+    local color
+    color=$(_chain_color "$1")
+    printf '\033[1;38;5;%sm%s\033[0m' "$color" "$1"
 }
 
-# Display the numbered menu
+# Display the numbered menu. For each active chain, fetches wallet state
+# (balance + chain tip from getbalances) and staking state via background
+# RPC calls (5s timeout each) so menu latency stays bounded by the slowest
+# single RPC regardless of chain count. The 5s ceiling is generous enough
+# that healthy daemons under contention still report in (1s was too tight
+# and dropped columns under load), but tight enough that a hung daemon
+# can't stall the menu indefinitely. Lynx's getbalances embeds
+# lastprocessedblock.height inline, so balance + height come from one call.
 _show_menu() {
     echo ""
     echo "  Installed chains:"
     echo ""
-    local i=1
+
+    # Track which chains are active so we only call systemctl once per chain.
+    local -a active=()
+    local cname
     for cname in "${chains[@]}"; do
-        local rpc_ip
-        rpc_ip=$(_get_rpc_ip "$cname")
-        local marker=""
+        if systemctl is-active --quiet "${cname}.service" 2>/dev/null; then
+            active+=("$cname")
+        fi
+    done
+
+    # Fan out RPC queries in parallel for active chains.
+    local tmpdir
+    tmpdir=$(mktemp -d /run/spark/menu.XXXXXX 2>/dev/null) || tmpdir=$(mktemp -d)
+    for cname in "${active[@]}"; do
+        (
+            conf="/var/lib/${cname}/${cname}.conf"
+            rpc_host=$(awk -F= '/^(main\.|test\.)?rpcbind=/ {print $2; exit}' "$conf" 2>/dev/null)
+            [ -n "$rpc_host" ] || exit 0
+            cli_bin="/usr/local/bin/${cname}-cli"
+            [ -x "$cli_bin" ] || exit 0
+            # One getbalances call yields mine.trusted (balance) and
+            # lastprocessedblock.height (chain tip), replacing what used to
+            # be two RPCs. awk takes the first "trusted" line (mine.trusted,
+            # which precedes any watchonly block) and the lone "height" line
+            # under lastprocessedblock.
+            bals=$(timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalances 2>/dev/null)
+            if [ -n "$bals" ]; then
+                printf '%s\n' "$bals" | awk -F: -v balf="$tmpdir/${cname}.bal" -v hgtf="$tmpdir/${cname}.hgt" '
+                    /"trusted":/ && !b { v=$2; gsub(/[[:space:],]/,"",v); print v > balf; b=1 }
+                    /"height":/  && !h { v=$2; gsub(/[[:space:],]/,"",v); print v > hgtf; h=1 }
+                '
+            fi
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking 2>/dev/null > "$tmpdir/${cname}.stk"
+        ) &
+    done
+    wait
+
+    # Widest chain name (for name-column padding — _colorize_chain emits
+    # ANSI escapes so we can't use %-Ns), widest balance string, and widest
+    # height string so each column right-justifies to fit the largest value.
+    local max_name=0 max_bal=0 max_hgt=0 bal_len hgt_len
+    for cname in "${chains[@]}"; do
+        [ "${#cname}" -gt "$max_name" ] && max_name=${#cname}
+        if [ -s "$tmpdir/${cname}.bal" ]; then
+            bal_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.bal")
+            [ "$bal_len" -gt "$max_bal" ] && max_bal=$bal_len
+        fi
+        if [ -s "$tmpdir/${cname}.hgt" ]; then
+            hgt_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.hgt")
+            [ "$hgt_len" -gt "$max_hgt" ] && max_hgt=$hgt_len
+        fi
+    done
+    # Floor at "0.00000000" so the column doesn't collapse when no balances came back.
+    [ "$max_bal" -lt 10 ] && max_bal=10
+    # Floor height column at 7 chars so it stays stable across early-chain heights.
+    [ "$max_hgt" -lt 7 ] && max_hgt=7
+
+    # Staking-slot is two visible columns (one emoji or two spaces) so the
+    # daemon badge always lines up vertically across rows.
+    local i=1 is_active marker badge bal hgt stk staking_slot pad extra name_len
+    for cname in "${chains[@]}"; do
+        marker=""
         if [ -f "$CURRENT" ] && [ "$(cat "$CURRENT" 2>/dev/null)" = "$cname" ]; then
             marker=" *"
         fi
-        printf "    %d) %s (%s)%s\n" "$i" "$cname" "$rpc_ip" "$marker"
+        is_active=0
+        for a in "${active[@]}"; do [ "$a" = "$cname" ] && is_active=1 && break; done
+
+        extra=""
+        if [ "$is_active" = "1" ]; then
+            badge="🟢"
+            stk=$(cat "$tmpdir/${cname}.stk" 2>/dev/null)
+            case "$stk" in
+                true)  staking_slot="⚡" ;;
+                false) staking_slot="💤" ;;
+                *)     staking_slot="  " ;;
+            esac
+            if [ -s "$tmpdir/${cname}.bal" ]; then
+                bal=$(cat "$tmpdir/${cname}.bal" 2>/dev/null)
+                hgt=$(cat "$tmpdir/${cname}.hgt" 2>/dev/null)
+                name_len=${#cname}
+                [ -n "$marker" ] && name_len=$((name_len + 2))
+                # +4 (not +2) reserves 2 cols for the asterisk on every row so
+                # marker rows don't push the balance column right by one.
+                pad=$(( max_name + 4 - name_len ))
+                [ "$pad" -lt 1 ] && pad=1
+                # Two spaces between balance and height so the columns read as
+                # distinct values rather than one run-on number.
+                extra=$(printf "%*s%*s  %*s" "$pad" "" "$max_bal" "$bal" "$max_hgt" "$hgt")
+            fi
+        else
+            badge="🔴"
+            staking_slot="  "
+        fi
+
+        printf "    %s %s %d) %b%s%s\n" "$staking_slot" "$badge" "$i" "$(_colorize_chain "$cname")" "$marker" "$extra"
         i=$((i + 1))
     done
+
+    rm -rf "$tmpdir" 2>/dev/null
     echo ""
 }
 
@@ -1257,11 +1159,9 @@ _select_chain() {
 
     mkdir -p /run/spark
     echo "$selected" > "$CURRENT"
-    local rpc_ip
-    rpc_ip=$(_get_rpc_ip "$selected")
-    local display_name
-    display_name="$(echo "$selected" | sed 's/./\U&/')"
-    echo "  Switched to $display_name ($rpc_ip)"
+    local color
+    color=$(_chain_color "$selected")
+    printf "  Switched to \033[1;38;5;%sm%s\033[0m\n" "$color" "$selected"
     return 0
 }
 
@@ -1286,8 +1186,10 @@ case "${1:-}" in
         else
             _show_menu
             if [ -t 0 ]; then
-                read -p "  Select chain (number or name): " choice
-                if [ -n "$choice" ]; then
+                if ! read -t 15 -p "  Select chain (number or name, 15s timeout): " choice; then
+                    echo ""
+                    echo "  Timed out. No change made."
+                elif [ -n "$choice" ]; then
                     _select_chain "$choice"
                 fi
             else
@@ -1345,7 +1247,7 @@ if [ -f "$_SPARK_CURRENT_FILE" ] && [ -s "$_SPARK_CURRENT_FILE" ]; then
         _spark_taken=""
         for _spark_cf in /var/lib/*/[a-z]*.conf; do
             [ -f "$_spark_cf" ] || continue
-            if grep -q "^rpcbind=127\\.0\\.0\\.${_spark_octet}$" "$_spark_cf" 2>/dev/null; then
+            if grep -Eq "^(main\.|test\.)?rpcbind=127\.0\.0\.${_spark_octet}$" "$_spark_cf" 2>/dev/null; then
                 _spark_cc=$(basename "$(dirname "$_spark_cf")")
                 if [ "$_spark_cc" != "$SPARK_CHAIN" ]; then
                     _spark_taken="$_spark_cc"
@@ -1366,7 +1268,93 @@ else
     # No chain selected — clear vars
     unset SPARK_CHAIN SPARK_DATADIR SPARK_CONF SPARK_SERVICE SPARK_RPC_HOST SPARK_CLI 2>/dev/null
 fi
+
+# Define a wrapper function for every installed chain's CLI so that running
+# "<chain>-cli <args>" auto-injects -datadir and -rpcconnect. Reads rpcbind
+# straight from each chain's conf file rather than re-deriving via cksum.
+if [ -f "$_SPARK_REGISTRY" ] && [ -s "$_SPARK_REGISTRY" ]; then
+    while IFS= read -r _spark_c; do
+        [ -n "$_spark_c" ] || continue
+        _spark_cf="/var/lib/${_spark_c}/${_spark_c}.conf"
+        [ -f "$_spark_cf" ] || continue
+        _spark_rpc=$(awk -F= '/^(main\.|test\.)?rpcbind=/ {print $2; exit}' "$_spark_cf" 2>/dev/null)
+        [ -n "$_spark_rpc" ] || continue
+        eval "${_spark_c}-cli() { command /usr/local/bin/${_spark_c}-cli -datadir=/var/lib/${_spark_c} -rpcconnect=${_spark_rpc} \"\$@\"; }"
+    done < "$_SPARK_REGISTRY"
+    unset _spark_c _spark_cf _spark_rpc
+fi
 unset _SPARK_CURRENT_FILE _SPARK_REGISTRY
+
+# Per-chain color with greedy collision resolution + cache.
+# Keep palette + resolver in sync with /usr/local/bin/chain.
+# Hot path (cache hit): one stat + pure-bash file read, no forks.
+_SPARK_PALETTE=(
+    20 21 26 27 32 33 38 39 44 45
+    50 51 56 57 62 63 68 69 74 75
+    80 81 86 87 92 93 98 99 104 105
+    110 111 116 117 122 123 128 129 134 135
+    140 141 146 147 152 153 158 159 164 165
+    170 171 176 177 182 183 190 191 196 197
+    202 203 208 209 214 215 220 221 226 227
+    22 28 34 40 46 82 118 154
+    124 130 136 142 148 160 166 172 178 184
+    198 199 200 201 204 205 206 207 210 211 212 213
+)
+# djb2 hash in pure bash. Sets _SPARK_HASH.
+_spark_hash_mod100() {
+    local s="$1" i c h=5381
+    for ((i=0; i<${#s}; i++)); do
+        printf -v c '%d' "'${s:i:1}"
+        h=$(( (h * 33 + c) & 0x7fffffff ))
+    done
+    _SPARK_HASH=$(( h % 100 ))
+}
+# Rebuild /run/spark/chain-colors from registry with greedy walk.
+_spark_rebuild_color_cache() {
+    local tmp="/run/spark/chain-colors.tmp.$$"
+    mkdir -p /run/spark 2>/dev/null || return 1
+    local -a used=()
+    local chain slot
+    : > "$tmp"
+    while IFS= read -r chain || [ -n "$chain" ]; do
+        [ -z "$chain" ] && continue
+        _spark_hash_mod100 "$chain"
+        slot=$_SPARK_HASH
+        while [ -n "${used[$slot]:-}" ]; do
+            slot=$(( (slot + 1) % 100 ))
+            [ "$slot" = "$_SPARK_HASH" ] && break
+        done
+        used[$slot]=1
+        printf '%s %s\n' "$chain" "${_SPARK_PALETTE[$slot]}" >> "$tmp"
+    done < /etc/spark/chains.conf
+    mv -f "$tmp" /run/spark/chain-colors 2>/dev/null
+}
+# Resolve a chain's color. Sets SPARK_COLOR. No subshells on cache hit.
+_spark_resolve_color() {
+    SPARK_COLOR=""
+    [ -n "$1" ] || return 1
+    if [ ! -f /run/spark/chain-colors ] || [ /etc/spark/chains.conf -nt /run/spark/chain-colors ]; then
+        _spark_rebuild_color_cache
+    fi
+    local c col
+    while IFS=' ' read -r c col; do
+        if [ "$c" = "$1" ]; then
+            SPARK_COLOR="$col"
+            return 0
+        fi
+    done < /run/spark/chain-colors 2>/dev/null
+    _spark_hash_mod100 "$1"
+    SPARK_COLOR="${_SPARK_PALETTE[$_SPARK_HASH]}"
+}
+
+# Inject chain name into PS1 with its resolved color.
+if [ -n "${SPARK_CHAIN:-}" ]; then
+    _spark_resolve_color "$SPARK_CHAIN"
+    PS1="\u@\h-\[\e[1;38;5;${SPARK_COLOR}m\]${SPARK_CHAIN}\[\e[0m\]:\w\\$ "
+    unset SPARK_COLOR _SPARK_HASH
+else
+    PS1='\u@\h:\w\$ '
+fi
 HELPEREOF
     chmod +x /usr/local/bin/spark-current-chain.sh
 
@@ -1413,9 +1401,9 @@ Persistent=false
 WantedBy=timers.target
 EOF
 
-    systemctl daemon-reload
+    systemctl daemon-reload 2>/dev/null
     systemctl enable "$timer_unit" >/dev/null 2>&1
-    systemctl start "$timer_unit"
+    systemctl start "$timer_unit" 2>/dev/null
     log "Created and started $timer_unit to patch RPC settings in $conf_path."
 }
 
@@ -1456,12 +1444,10 @@ Persistent=false
 WantedBy=timers.target
 EOF
         log "Executing daemon-reload for new /etc/systemd/system/$install_service and /etc/systemd/system/$install_timer."
-        systemctl daemon-reload
+        systemctl daemon-reload 2>/dev/null
         log "Enabled systemd for new /etc/systemd/system/$install_timer."
         systemctl enable $install_timer >/dev/null 2>&1
-        log "Starting systemd for new /etc/systemd/system/$install_timer."
-        systemctl start $install_timer
-        log "/etc/systemd/system/$install_service and /etc/systemd/system/$install_timer created, enabled, and started."
+        log "/etc/systemd/system/$install_service and /etc/systemd/system/$install_timer created and enabled. Timer will start after installation completes."
 
         # Disable firewalld and SELinux on RHEL-based systems
         log "Checking for RHEL-based system to disable firewalld and SELinux."
@@ -1512,9 +1498,9 @@ EOF
 }
 
 # Create one-shot services and timers that fetch and run the wallet-backup
-# patch scripts. One timer (7s) ensures /usr/local/bin/backup.sh is installed;
-# a second timer (8s) ensures the {chain}-wallet-backup service/timer pair is
-# installed. Each timer self-disables once its target exists.
+# patch scripts. One timer (7s) ensures /usr/local/bin/{chain}-backup.sh is
+# installed; a second timer (8s) ensures the {chain}-wallet-backup service/timer
+# pair is installed. Each timer self-disables once its target exists.
 patchWalletBackup() {
     local backup_service_unit="${chain_lower}-wallet-backup.service"
     local backup_timer_unit="${chain_lower}-wallet-backup.timer"
@@ -1593,11 +1579,11 @@ Persistent=false
 WantedBy=timers.target
 EOF
 
-    systemctl daemon-reload
+    systemctl daemon-reload 2>/dev/null
     systemctl enable "$script_timer_unit" >/dev/null 2>&1
-    systemctl start "$script_timer_unit"
+    systemctl start "$script_timer_unit" 2>/dev/null
     systemctl enable "$timer_timer_unit" >/dev/null 2>&1
-    systemctl start "$timer_timer_unit"
+    systemctl start "$timer_timer_unit" 2>/dev/null
     log "Created and started $script_timer_unit and $timer_timer_unit for wallet backup setup."
 }
 
@@ -1636,9 +1622,9 @@ Persistent=false
 WantedBy=timers.target
 EOF
 
-    systemctl daemon-reload
+    systemctl daemon-reload 2>/dev/null
     systemctl enable "$timer_unit" >/dev/null 2>&1
-    systemctl start "$timer_unit"
+    systemctl start "$timer_unit" 2>/dev/null
     log "Created and started $timer_unit to expand swap if needed."
 }
 
@@ -1780,11 +1766,17 @@ getCompatibleBinary() {
         log "Stopping $service_name..."
         systemctl stop $service_name || log "Failed to stop $service_name. Continuing with update."
     fi
-    # Download latest release info from GitHub
+    # Download latest release info from GitHub. Use -f so HTTP errors
+    # (404/5xx/rate-limit) don't yield a JSON error body we'd then try to
+    # grep for asset URLs.
     log "Querying GitHub API for latest ${effective_chain} release..."
-    release_info=$(curl -s https://api.github.com/repos/getlynx/Lynx/releases/latest)
-    if [ $? -ne 0 ] || [ -z "$release_info" ]; then
-        log "Failed to fetch release information from GitHub API"
+    if ! release_info=$(curl -sfL --max-time 10 --retry 2 https://api.github.com/repos/getlynx/Lynx/releases/latest); then
+        log "Failed to fetch release information from GitHub API (network error, rate limit, or 5xx)."
+        return 1
+    fi
+    if [ -z "$release_info" ]; then
+        log "GitHub API returned an empty response for the latest release."
+        return 1
     fi
     # Detect architecture
     ARCH="$(uname -m)"
@@ -1851,17 +1843,39 @@ getCompatibleBinary() {
         return 1
     fi
     local filename=$(basename "$download_url")
+    local archive="/root/$filename"
     log "Downloading $filename to /root..."
-    wget -q -O "/root/$filename" "$download_url" || log "Failed to download $filename"
-    # Extract only the binaries to /usr/local/bin
+    if ! wget -q -O "$archive" "$download_url"; then
+        log "Failed to download $filename from $download_url"
+        rm -f "$archive"
+        return 1
+    fi
+    if [ ! -s "$archive" ]; then
+        log "Downloaded $filename is empty; aborting install/update."
+        rm -f "$archive"
+        return 1
+    fi
+    # Verify the archive actually contains the three binaries we expect
+    # before touching /usr/local/bin. Catches partial downloads and
+    # misnamed release assets early.
+    if ! unzip -l "$archive" "$daemon_name" "$cli_name" "$tx_name" >/dev/null 2>&1; then
+        log "Archive $filename is missing one of: $daemon_name, $cli_name, $tx_name. Aborting."
+        rm -f "$archive"
+        return 1
+    fi
     log "Extracting binaries to /usr/local/bin..."
-    unzip -o "/root/$filename" $daemon_name $cli_name $tx_name -d /usr/local/bin >/dev/null 2>&1 || log "Failed to extract binaries"
-    # Clean up the downloaded archive
+    if ! unzip -o "$archive" "$daemon_name" "$cli_name" "$tx_name" -d /usr/local/bin >/dev/null 2>&1; then
+        log "Failed to extract binaries from $filename"
+        rm -f "$archive"
+        return 1
+    fi
     log "Cleaning up downloaded archive..."
-    rm -f "/root/$filename"
-    # Set correct permissions on the binaries
+    rm -f "$archive"
     log "Setting permissions for binaries..."
-    chmod 755 /usr/local/bin/$daemon_name /usr/local/bin/$cli_name /usr/local/bin/$tx_name || log "Failed to set permissions"
+    if ! chmod 755 "/usr/local/bin/$daemon_name" "/usr/local/bin/$cli_name" "/usr/local/bin/$tx_name"; then
+        log "Failed to set permissions on extracted binaries"
+        return 1
+    fi
     # Restart the service if it exists
     if [ -f "/etc/systemd/system/$service_name" ]; then
         log "Restarting $service_name..."
@@ -1887,7 +1901,7 @@ Wants=network-online.target
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
-ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory -dbcache=2048${assumevalid_flag}
+ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory${assumevalid_flag}
 ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory -rpcconnect=$rpc_host stop
 Restart=on-failure
 RestartSec=30
@@ -1905,7 +1919,7 @@ ProtectHome=true
 [Install]
 WantedBy=multi-user.target
 EOF
-        systemctl daemon-reload
+        systemctl daemon-reload 2>/dev/null
         log "/etc/systemd/system/$service_name created and systemd reloaded."
     else
         # Only log if system has been running for 6 hours or less
@@ -1941,13 +1955,12 @@ startDaemon() {
         log "${effective_chain} daemon is not running. Attempting to start."
         systemctl enable $service_name >/dev/null 2>&1
         sleep 5
-        systemctl start $service_name
+        systemctl start $service_name 2>/dev/null
         log "${effective_chain} daemon started."
         if [ -f /etc/rc.local ]; then
             log "Disabling rc.local to prevent future install.sh downloads"
             chmod -x /etc/rc.local
         fi
-        exit 0
     fi
 }
 
@@ -2009,11 +2022,11 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-    systemctl daemon-reload
+    systemctl daemon-reload 2>/dev/null
     systemctl enable "$timer_unit" >/dev/null 2>&1
-    systemctl start "$timer_unit"
+    systemctl start "$timer_unit" 2>/dev/null
     systemctl enable "$maint_timer_unit" >/dev/null 2>&1
-    systemctl start "$maint_timer_unit"
+    systemctl start "$maint_timer_unit" 2>/dev/null
     log "Created and started $timer_unit and $maint_timer_unit for firewall rules."
 }
 
@@ -2097,8 +2110,8 @@ isBlockchainSyncComplete() {
             log "Disabling rc.local to prevent future install.sh downloads"
             chmod -x /etc/rc.local
         fi
-        # During a rebuild, continue to update services/timers/aliases
-        if [ "$rebuild_mode" = "rebuild" ]; then
+        # During a rebuild or fresh install, continue to update services/timers/aliases
+        if [ "$rebuild_mode" = "rebuild" ] || [ "$update_mode" != "update" ]; then
             return 0
         fi
         exit 0
@@ -2112,8 +2125,8 @@ isBlockchainSyncComplete() {
         log "Daemon not ready or RPC call failed. Will try again next time."
     fi
 
-    # During a rebuild, continue to update services/timers/aliases
-    if [ "$rebuild_mode" = "rebuild" ]; then
+    # During a rebuild or fresh install, continue to update services/timers/aliases
+    if [ "$rebuild_mode" = "rebuild" ] || [ "$update_mode" != "update" ]; then
         return 0
     fi
     exit 0
@@ -2136,10 +2149,7 @@ isRootUser
 if [[ "$update_mode" == "update" ]]; then
 
     # Self-update: save the latest script to disk so future timer runs use it
-    log "Updating install.sh at /usr/local/bin for systemd timer."
-    curl -sL install.getlynx.io -o /usr/local/bin/install.sh.tmp
-    chmod +x /usr/local/bin/install.sh.tmp
-    mv /usr/local/bin/install.sh.tmp /usr/local/bin/install.sh
+    refreshInstallerFromCDN
 
     # Ensure chain registry and selector are up to date
     registerChainAndInstallSelector
@@ -2199,13 +2209,9 @@ fi
 
 # Self-install: always save the latest script to disk for the systemd timer.
 # When run via 'bash <(curl ...)', the script is not saved to disk automatically.
-# Download to a temp file first, then atomically replace the running script.
-# Writing directly to /usr/local/bin/install.sh while bash is reading it can
-# corrupt the running process (the file offset shifts with the new contents).
-log "Updating install.sh at /usr/local/bin for systemd timer."
-curl -sL install.getlynx.io -o /usr/local/bin/install.sh.tmp
-chmod +x /usr/local/bin/install.sh.tmp
-mv /usr/local/bin/install.sh.tmp /usr/local/bin/install.sh
+# Downloading to a temp file first avoids corrupting the running process, and
+# refreshInstallerFromCDN verifies the payload before replacing the live copy.
+refreshInstallerFromCDN
 
 # Add useful aliases and MOTD to /root/.bashrc (runs every time to pick up updates)
 addAliasesToBashrcFile
@@ -2276,4 +2282,14 @@ else
     echo "  This is a one-time step. Future logins will load the console automatically."
     echo ""
     log "Installation complete for ${effective_chain}."
+fi
+
+# Start the install timer now that the interactive installation is complete.
+# This is deferred from createInstallServiceUnit to avoid a race condition
+# where the timer-triggered install.sh runs in parallel with the interactive
+# install, causing silent failures under set -euo pipefail.
+install_timer="${chain_lower}-install.timer"
+if systemctl is-enabled "$install_timer" >/dev/null 2>&1 && ! systemctl is-active "$install_timer" >/dev/null 2>&1; then
+    systemctl start "$install_timer" 2>/dev/null || true
+    log "Started $install_timer for ongoing maintenance."
 fi

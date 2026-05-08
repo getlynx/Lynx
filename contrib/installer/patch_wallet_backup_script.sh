@@ -1,5 +1,5 @@
 #!/bin/bash
-# patch_wallet_backup_script.sh - Install /usr/local/bin/backup.sh if missing
+# patch_wallet_backup_script.sh - Install /usr/local/bin/{chain}-backup.sh if missing
 #
 # Called by the {chain}-patch-wallet-backup-script.timer systemd unit. Expects
 # these environment variables to be set by the service unit:
@@ -22,8 +22,8 @@ for var in CHAIN_LOWER EFFECTIVE_CHAIN CLI_NAME CLI_FLAGS CONF_NAME WORKING_DIRE
 done
 
 # If the backup script is already installed, disable the timer and exit
-if [ -f /usr/local/bin/backup.sh ]; then
-    logger -t patch_wallet_backup_script "/usr/local/bin/backup.sh already exists. Disabling timer."
+if [ -f "/usr/local/bin/${CHAIN_LOWER}-backup.sh" ]; then
+    logger -t patch_wallet_backup_script "/usr/local/bin/${CHAIN_LOWER}-backup.sh already exists. Disabling timer."
     systemctl stop "$TIMER_UNIT" 2>/dev/null || true
     systemctl disable "$TIMER_UNIT" 2>/dev/null || true
     exit 0
@@ -34,8 +34,8 @@ mkdir -p "/var/lib/${CHAIN_LOWER}-backup"
 chown root:root "/var/lib/${CHAIN_LOWER}-backup"
 chmod 700 "/var/lib/${CHAIN_LOWER}-backup"
 
-# Install backup.sh with chain-specific substitutions
-cat <<'BACKUPEOF' | sed "s|/var/lib/lynx-backup|/var/lib/${CHAIN_LOWER}-backup|g; s|/var/lib/lynx|${WORKING_DIRECTORY}|g; s|lynx-cli|${CLI_NAME} ${CLI_FLAGS}|g; s|lynx\.conf|${CONF_NAME}|g; s|--quiet lynx;|--quiet ${CHAIN_LOWER};|g; s|Lynx|${EFFECTIVE_CHAIN}|g" > /usr/local/bin/backup.sh
+# Install {chain}-backup.sh with chain-specific substitutions
+cat <<'BACKUPEOF' | sed "s|/var/lib/lynx-backup|/var/lib/${CHAIN_LOWER}-backup|g; s|/var/lib/lynx|${WORKING_DIRECTORY}|g; s|lynx-cli|${CLI_NAME} ${CLI_FLAGS}|g; s|lynx\.conf|${CONF_NAME}|g; s|--quiet lynx;|--quiet ${CHAIN_LOWER};|g; s|Lynx|${EFFECTIVE_CHAIN}|g" > "/usr/local/bin/${CHAIN_LOWER}-backup.sh"
 #!/bin/bash
 
 # Lynx Wallet Backup Script
@@ -129,9 +129,9 @@ else
 fi
 BACKUPEOF
 
-chmod +x /usr/local/bin/backup.sh
-chown root:root /usr/local/bin/backup.sh
-logger -t patch_wallet_backup_script "Installed /usr/local/bin/backup.sh."
+chmod +x "/usr/local/bin/${CHAIN_LOWER}-backup.sh"
+chown root:root "/usr/local/bin/${CHAIN_LOWER}-backup.sh"
+logger -t patch_wallet_backup_script "Installed /usr/local/bin/${CHAIN_LOWER}-backup.sh."
 
 # Self-disable timer
 systemctl stop "$TIMER_UNIT" 2>/dev/null || true
