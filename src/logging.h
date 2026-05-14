@@ -56,7 +56,7 @@ namespace BCLog {
         MEMPOOLREJ  = (1 << 16),
         LIBEVENT    = (1 << 17),
         COINDB      = (1 << 18),
-        QT          = (1 << 19),
+        PHANTOM     = (1 << 19),
         LEVELDB     = (1 << 20),
         VALIDATION  = (1 << 21),
         I2P         = (1 << 22),
