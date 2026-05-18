@@ -1624,6 +1624,7 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
             
                                 // it = mapTxSpends.erase(it);
                                 spend_entries_removed++;
+                                ++it;
                             } else {
                                 // LogPrint(BCLog::WALLETDB, "          Keeping spend entry for other tx: %s\n", 
                                 //          it->second.ToString().substr(0, 16));
