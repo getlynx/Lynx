@@ -1220,8 +1220,6 @@ static std::atomic<bool> phantom_running{false};
 
 gnPhantomIntervalMs = args.GetIntArg("-orphancleanup", gnPhantomIntervalMs);
 
-/*
-
 node.scheduler->scheduleEvery([&node] {
 
     std::thread([&node] {
@@ -1379,8 +1377,6 @@ node.scheduler->scheduleEvery([&node] {
 // }, std::chrono::hours{4});
 }, std::chrono::milliseconds{gnPhantomIntervalMs});
 // }, std::chrono::seconds{2});
-
-*/
 
 
     GetMainSignals().RegisterBackgroundSignalScheduler(*node.scheduler);
