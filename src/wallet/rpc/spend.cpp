@@ -500,6 +500,38 @@ RPCHelpMan sendtoaddress()
     };
 }
 
+RPCHelpMan burn()
+{
+    return RPCHelpMan{"burn",
+        "\nBurn 100 " + CURRENCY_UNIT + " by committing the amount to a provably unspendable OP_RETURN output." +
+        HELP_REQUIRING_PASSPHRASE,
+        {},
+        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id of the burn."},
+        RPCExamples{
+            HelpExampleCli("burn", "") +
+            HelpExampleRpc("burn", "")
+        },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    std::shared_ptr<CWallet> const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!pwallet) return UniValue::VNULL;
+
+    pwallet->BlockUntilSyncedToCurrentChain();
+
+    LOCK(pwallet->cs_wallet);
+
+    EnsureWalletIsUnlocked(*pwallet);
+
+    CScript script = CScript() << OP_RETURN << std::vector<unsigned char>{0x00};
+    std::vector<CRecipient> recipients{ CRecipient{script, 100 * COIN, /*fSubtractFeeFromAmount=*/false} };
+
+    CCoinControl coin_control;
+    mapValue_t map_value;
+    return SendMoney(*pwallet, coin_control, recipients, map_value, /*verbose=*/false);
+},
+    };
+}
+
 RPCHelpMan sendmany()
 {
     return RPCHelpMan{"sendmany",
