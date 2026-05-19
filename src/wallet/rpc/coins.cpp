@@ -604,6 +604,8 @@ RPCHelpMan listunspent()
         nMaxDepth = request.params[1].getInt<int>();
     }
 
+    /*
+
         // Phantom-UTXO diagnostic. Walks mapTxSpends and mapWallet around a
         // RebuildTxSpends() call for a caller-supplied outpoint, so the
         // missing-then-restored mapTxSpends entry can be observed in the log.
@@ -730,7 +732,7 @@ if (nMaxDepth == 99999998) {
             return "Error: Wallet is currently rescanning. Abort existing rescan or wait.";
         }
         
-        if (!RemoveWallet(context, pwallet0, /*load_on_start=*/std::nullopt, unload_warnings)) {
+        if (!RemoveWallet(context, pwallet0, std::nullopt, unload_warnings)) {
             return "Error: Failed to unload wallet (may be already unloaded)";
         }
     }
@@ -792,7 +794,7 @@ if (nMaxDepth == 99999998) {
     return result;
 }
 
-
+*/
 
     const std::shared_ptr<const CWallet> pwallet = GetWalletForJSONRPCRequest(request);
     if (!pwallet) return UniValue::VNULL;

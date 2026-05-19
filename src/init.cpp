@@ -183,7 +183,7 @@ static const char* DEFAULT_ASMAP_FILENAME="ip_asn.map";
 static const char* BITCOIN_PID_FILENAME = "bitcoind.pid";
 
 bool gblnDisableStaking;
-int64_t gnPhantomIntervalMs = 60000;   
+int64_t gnPhantomIntervalMs = 3600000;   
 
 static fs::path GetPidFile(const ArgsManager& args)
 {
