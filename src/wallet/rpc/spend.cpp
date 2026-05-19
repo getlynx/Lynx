@@ -503,18 +503,80 @@ RPCHelpMan sendtoaddress()
 RPCHelpMan burn()
 {
     return RPCHelpMan{"burn",
-        "\nBurn 100 " + CURRENCY_UNIT + " by committing the amount to a provably unspendable OP_RETURN output." +
+        "\nBurn the specified amount of " + CURRENCY_UNIT + " by committing it to a provably unspendable OP_RETURN output." +
         HELP_REQUIRING_PASSPHRASE,
-        {},
-        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id of the burn."},
+        {
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The amount in " + CURRENCY_UNIT + " to burn. eg 100"},
+            {"acknowledge_destruction", RPCArg::Type::BOOL, RPCArg::Optional::NO, "Must be set to true to confirm permanent destruction of the burn amount."},
+            {"tag", RPCArg::Type::STR, RPCArg::Default{std::string("\x00", 1)}, "ASCII text to embed in the OP_RETURN output. Useful as a burn marker for later on-chain identification."},
+            {"verbose", RPCArg::Type::BOOL, RPCArg::Default{false}, "If true, return extra information about the transaction."},
+            {"dry_run", RPCArg::Type::BOOL, RPCArg::Default{false}, "If true, build and sign the transaction but do not broadcast it. The signed transaction hex is returned instead of broadcasting."},
+        },
+        {
+            RPCResult{"if verbose is not set or set to false, and dry_run is not set or false",
+                RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR_HEX, "txid", "The transaction id of the broadcast burn."},
+                },
+            },
+            RPCResult{"if verbose is not set or set to false, and dry_run is true",
+                RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::BOOL, "dry_run", "Always true in this form."},
+                    {RPCResult::Type::STR_HEX, "hex", "The signed transaction hex (not broadcast)."},
+                },
+            },
+            RPCResult{"if verbose is set to true",
+                RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::BOOL, "dry_run", "True if the transaction was built and signed but not broadcast."},
+                    {RPCResult::Type::STR_HEX, "txid", "The transaction id of the burn."},
+                    {RPCResult::Type::STR_HEX, "hex", /*optional=*/true, "The signed transaction hex (present when dry_run is true)."},
+                    {RPCResult::Type::STR, "fee_reason", "The transaction fee reason."},
+                    {RPCResult::Type::NUM, "burn_vout", "The index of the OP_RETURN output carrying the burn."},
+                    {RPCResult::Type::STR_AMOUNT, "burn_amount", "The amount burned in " + CURRENCY_UNIT + "."},
+                    {RPCResult::Type::STR_AMOUNT, "change_amount", "The change returned to the wallet in " + CURRENCY_UNIT + "."},
+                    {RPCResult::Type::STR_AMOUNT, "fee", "The transaction fee paid in " + CURRENCY_UNIT + "."},
+                },
+            },
+        },
         RPCExamples{
-            HelpExampleCli("burn", "") +
-            HelpExampleRpc("burn", "")
+            HelpExampleCli("burn", "100 true") +
+            HelpExampleCli("burn", "100 true \"LYNX-BURN-2026\"") +
+            HelpExampleCli("burn", "100 true \"LYNX-BURN-2026\" true") +
+            HelpExampleCli("burn", "100 true \"\" false true") +
+            HelpExampleRpc("burn", "100, true, \"LYNX-BURN-2026\", true, false")
         },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     std::shared_ptr<CWallet> const pwallet = GetWalletForJSONRPCRequest(request);
     if (!pwallet) return UniValue::VNULL;
+
+    const CAmount amount = AmountFromValue(request.params[0]);
+    if (amount <= 0) {
+        throw JSONRPCError(RPC_TYPE_ERROR, "Burn amount must be positive");
+    }
+
+    if (!request.params[1].get_bool()) {
+        throw JSONRPCError(RPC_MISC_ERROR,
+            "Refusing to burn: pass acknowledge_destruction=true to confirm permanent destruction of these coins.");
+    }
+
+    std::string tag_str = request.params[2].isNull() ? "" : request.params[2].get_str();
+    if (tag_str.empty()) {
+        tag_str = std::string("\x00", 1);
+    }
+    std::vector<unsigned char> tag_data(tag_str.begin(), tag_str.end());
+
+    CScript script = CScript() << OP_RETURN << tag_data;
+    if (script.size() > MAX_OP_RETURN_RELAY) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("tag produces an OP_RETURN script of %u bytes, exceeding the maximum of %u",
+                      (unsigned)script.size(), MAX_OP_RETURN_RELAY));
+    }
+
+    const bool verbose = request.params[3].isNull() ? false : request.params[3].get_bool();
+    const bool dry_run = request.params[4].isNull() ? false : request.params[4].get_bool();
 
     pwallet->BlockUntilSyncedToCurrentChain();
 
@@ -522,12 +584,60 @@ RPCHelpMan burn()
 
     EnsureWalletIsUnlocked(*pwallet);
 
-    CScript script = CScript() << OP_RETURN << std::vector<unsigned char>{0x00};
-    std::vector<CRecipient> recipients{ CRecipient{script, 100 * COIN, /*fSubtractFeeFromAmount=*/false} };
+    if (pwallet->IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Error: Private keys are disabled for this wallet");
+    }
+
+    std::vector<CRecipient> recipients{ CRecipient{script, amount, /*fSubtractFeeFromAmount=*/false} };
 
     CCoinControl coin_control;
     mapValue_t map_value;
-    return SendMoney(*pwallet, coin_control, recipients, map_value, /*verbose=*/false);
+
+    constexpr int RANDOM_CHANGE_POSITION = -1;
+    auto res = CreateTransaction(*pwallet, recipients, RANDOM_CHANGE_POSITION, coin_control, /*sign=*/true);
+    if (!res) {
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, util::ErrorString(res).original);
+    }
+    const CTransactionRef& tx = res->tx;
+    if (!dry_run) {
+        pwallet->CommitTransaction(tx, std::move(map_value), /*orderForm=*/{});
+    }
+
+    if (!verbose) {
+        UniValue terse(UniValue::VOBJ);
+        if (dry_run) {
+            terse.pushKV("dry_run", true);
+            terse.pushKV("hex", EncodeHexTx(*tx));
+        } else {
+            terse.pushKV("txid", tx->GetHash().GetHex());
+        }
+        return terse;
+    }
+
+    int burn_vout = -1;
+    CAmount burn_value = 0;
+    CAmount change_value = 0;
+    for (size_t i = 0; i < tx->vout.size(); ++i) {
+        if (tx->vout[i].scriptPubKey.IsUnspendable()) {
+            burn_vout = static_cast<int>(i);
+            burn_value = tx->vout[i].nValue;
+        } else {
+            change_value += tx->vout[i].nValue;
+        }
+    }
+
+    UniValue entry(UniValue::VOBJ);
+    entry.pushKV("dry_run", dry_run);
+    entry.pushKV("txid", tx->GetHash().GetHex());
+    if (dry_run) {
+        entry.pushKV("hex", EncodeHexTx(*tx));
+    }
+    entry.pushKV("fee_reason", StringForFeeReason(res->fee_calc.reason));
+    entry.pushKV("burn_vout", burn_vout);
+    entry.pushKV("burn_amount", ValueFromAmount(burn_value));
+    entry.pushKV("change_amount", ValueFromAmount(change_value));
+    entry.pushKV("fee", ValueFromAmount(res->fee));
+    return entry;
 },
     };
 }
