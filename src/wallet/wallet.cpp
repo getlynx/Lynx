@@ -42,6 +42,7 @@
 #include <wallet/context.h>
 #include <wallet/external_signer_scriptpubkeyman.h>
 #include <wallet/fees.h>
+#include <wallet/spend.h>
 
 #include <univalue.h>
 
@@ -753,6 +754,71 @@ void CWallet::AddToSpends(const CWalletTx& wtx, WalletBatch* batch)
 
     for (const CTxIn& txin : wtx.tx->vin)
         AddToSpends(txin.prevout, wtx.GetHash(), batch);
+}
+
+CWallet::RebuildTxSpendsResult CWallet::RebuildTxSpends()
+{
+    AssertLockHeld(cs_wallet);
+    RebuildTxSpendsResult r{};
+    r.spends_before = mapTxSpends.size();
+    mapTxSpends.clear();
+    for (const auto& [wtxid, wtx] : mapWallet) {
+        AddToSpends(wtx);
+        ++r.wtxs_processed;
+    }
+    r.spends_after = mapTxSpends.size();
+    // mapTxSpends drives IsSpent, which drives every cached credit/debit
+    // figure. Now that the spend map is correct, force every wtx to recompute
+    // its cached balances from scratch.
+    for (auto& [wtxid, wtx] : mapWallet) {
+        wtx.MarkDirty();
+    }
+    return r;
+}
+
+void CWallet::ProbePhantom(const COutPoint& phantom_outpoint)
+{
+    AssertLockHeld(cs_wallet);
+
+    auto before = mapTxSpends.equal_range(phantom_outpoint);
+    size_t before_hits = std::distance(before.first, before.second);
+
+    uint256 t2_txid;
+    bool t2_found = false;
+    for (const auto& [wtxid, wtx] : mapWallet) {
+        for (const auto& in : wtx.tx->vin) {
+            if (in.prevout == phantom_outpoint) {
+                t2_txid = wtxid;
+                t2_found = true;
+                break;
+            }
+        }
+        if (t2_found) break;
+    }
+
+    LogPrint(BCLog::PHANTOM, "probe BEFORE: outpoint=%s:%u  mapTxSpends_hits=%zu  T2_in_mapWallet=%s  T2=%s\n",
+              phantom_outpoint.hash.GetHex(), phantom_outpoint.n,
+              before_hits,
+              t2_found ? "yes" : "NO",
+              t2_found ? t2_txid.GetHex() : "n/a");
+
+    auto r = RebuildTxSpends();
+    LogPrint(BCLog::PHANTOM, "probe REBUILD: spends_before=%zu spends_after=%zu delta=%lld wtxs=%zu\n",
+              r.spends_before, r.spends_after,
+              (long long)r.spends_after - (long long)r.spends_before,
+              r.wtxs_processed);
+
+    auto after = mapTxSpends.equal_range(phantom_outpoint);
+    size_t after_hits = 0;
+    bool points_at_t2 = false;
+    for (auto it = after.first; it != after.second; ++it) {
+        ++after_hits;
+        if (t2_found && it->second == t2_txid) points_at_t2 = true;
+    }
+
+    LogPrint(BCLog::PHANTOM, "probe AFTER:  mapTxSpends_hits=%zu  points_at_T2=%s\n",
+              after_hits,
+              points_at_t2 ? "yes" : "NO");
 }
 
 bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
@@ -1504,7 +1570,7 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
 
     for (const CTransactionRef& ptx : Assert(block.data)->vtx) {
         const uint256 tx_hash = ptx->GetHash();
-        
+
         // LogPrint(BCLog::WALLETDB, "  Processing transaction: %s (IsCoinStake: %s)\n", 
         //         tx_hash.ToString().substr(0, 16), ptx->IsCoinStake() ? "true" : "false");
         
@@ -1550,8 +1616,15 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
                             if (it->second == tx_hash) {
                                 // LogPrint(BCLog::WALLETDB, "          Removing spend entry for tx: %s\n", 
                                 //         it->second.ToString().substr(0, 16));
-                                it = mapTxSpends.erase(it);
+
+ LogPrint(BCLog::PHANTOM, "blockDisconnected erase: txid=%s vout=%u amount=%.8f\n",
+            it->first.hash.ToString(),
+            it->first.n,
+            mapWallet.at(it->first.hash).tx->vout[it->first.n].nValue / 1e8);                                
+            
+                                // it = mapTxSpends.erase(it);
                                 spend_entries_removed++;
+                                ++it;
                             } else {
                                 // LogPrint(BCLog::WALLETDB, "          Keeping spend entry for other tx: %s\n", 
                                 //          it->second.ToString().substr(0, 16));
@@ -1564,7 +1637,7 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
         } else {
             // LogPrint(BCLog::WALLETDB, "    Not found in wallet\n");
         }
-        
+
         SyncTransaction(ptx, TxStateInactive{});
 
         for (const CTxIn& tx_in : ptx->vin) {
@@ -1593,8 +1666,9 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
         }
     }
     
-    //LogPrint(BCLog::WALLETDB, "BLOCK DISCONNECTED SUMMARY: Wallet transactions: %d, Confirmed: %d, Coinstake: %d, Spend entries removed: %d\n", 
+    //LogPrint(BCLog::WALLETDB, "BLOCK DISCONNECTED SUMMARY: Wallet transactions: %d, Confirmed: %d, Coinstake: %d, Spend entries removed: %d\n",
     //         wallet_tx_count, confirmed_tx_count, coinstake_tx_count, spend_entries_removed);
+
 }
 
 void CWallet::updatedBlockTip()

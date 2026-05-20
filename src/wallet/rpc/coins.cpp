@@ -2,19 +2,32 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <coins.h>
 #include <core_io.h>
 #include <hash.h>
 #include <key_io.h>
 #include <rpc/util.h>
 #include <util/moneystr.h>
 #include <wallet/coincontrol.h>
+#include <wallet/context.h>
+#include <wallet/db.h>
+#include <wallet/load.h>
 #include <wallet/receive.h>
 #include <wallet/rpc/util.h>
 #include <wallet/spend.h>
 #include <wallet/wallet.h>
 
+#include <pos/manager.h>
+
+
+
+#include <logging.h>
+
 #include <univalue.h>
 
+
+
+    
 
 namespace wallet {
 static CAmount GetReceived(const CWallet& wallet, const UniValue& params, bool by_label) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
@@ -496,6 +509,20 @@ RPCHelpMan getbalances()
     };
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 RPCHelpMan listunspent()
 {
     return RPCHelpMan{
@@ -522,6 +549,8 @@ RPCHelpMan listunspent()
                             {"include_immature_coinbase", RPCArg::Type::BOOL, RPCArg::Default{false}, "Include immature coinbase UTXOs"}
                         },
                         RPCArgOptions{.oneline_description="query_options"}},
+                    {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, "Phantom UTXO txid (only used by the 99999995 probe path)"},
+                    {"vout", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Phantom UTXO vout (only used by the 99999995 probe path)"},
                 },
                 RPCResult{
                     RPCResult::Type::ARR, "", "",
@@ -565,9 +594,6 @@ RPCHelpMan listunspent()
 
 
 
-    const std::shared_ptr<const CWallet> pwallet = GetWalletForJSONRPCRequest(request);
-    if (!pwallet) return UniValue::VNULL;
-
     int nMinDepth = 1;
     if (!request.params[0].isNull()) {
         nMinDepth = request.params[0].getInt<int>();
@@ -577,6 +603,205 @@ RPCHelpMan listunspent()
     if (!request.params[1].isNull()) {
         nMaxDepth = request.params[1].getInt<int>();
     }
+
+    /*
+
+        // Phantom-UTXO diagnostic. Walks mapTxSpends and mapWallet around a
+        // RebuildTxSpends() call for a caller-supplied outpoint, so the
+        // missing-then-restored mapTxSpends entry can be observed in the log.
+        // Requires txid (param 5) and vout (param 6).
+        if (nMaxDepth == 99999995) {
+            std::shared_ptr<CWallet> pwallet0 = GetWalletForJSONRPCRequest(request);
+            if (!pwallet0) return UniValue::VNULL;
+            if (request.params[5].isNull() || request.params[6].isNull()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "99999995 probe requires txid and vout");
+            }
+            const uint256 phantom_txid = ParseHashV(request.params[5], "txid");
+            const int phantom_n = std::stoi(request.params[6].get_str());
+            if (phantom_n < 0) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "vout cannot be negative");
+            }
+            LOCK(pwallet0->cs_wallet);
+            pwallet0->ProbePhantom(COutPoint{phantom_txid, (uint32_t)phantom_n});
+            UniValue result(UniValue::VOBJ);
+            result.pushKV("status", "ok");
+            return result;
+        }
+
+        // In-place rebuild of mapTxSpends to clear phantom UTXOs without an
+        // unload/load cycle. IsSpent is driven by mapTxSpends, so a phantom
+        // (wallet-says-unspent, chainstate-says-spent) survives any number of
+        // cache invalidations until the spend map itself is repaired. This
+        // mirrors what wallet load does.
+        if (nMaxDepth == 99999996) {
+            std::shared_ptr<CWallet> pwallet0 = GetWalletForJSONRPCRequest(request);
+            if (!pwallet0) return UniValue::VNULL;
+            LOCK(pwallet0->cs_wallet);
+            pwallet0->RebuildTxSpends();
+            UniValue result(UniValue::VOBJ);
+            result.pushKV("status", "ok");
+            return result;
+        }
+
+
+if (nMaxDepth == 99999997) {
+    const std::shared_ptr<const CWallet> pwallet = GetWalletForJSONRPCRequest(request);
+    if (!pwallet) return UniValue::VNULL;
+
+    // Keep listunspent results coherent with current chain state.
+    pwallet->BlockUntilSyncedToCurrentChain();
+
+    CoinFilterParams filter_coins;
+    filter_coins.min_amount = 0;
+
+    std::vector<COutput> vecOutputs;
+    {
+        CCoinControl cctl;
+        cctl.m_avoid_address_reuse = false;
+        cctl.m_min_depth = nMinDepth;
+        cctl.m_max_depth = nMaxDepth;
+        cctl.m_include_unsafe_inputs = true;
+        LOCK(pwallet->cs_wallet);
+        vecOutputs = AvailableCoinsListUnspent(*pwallet, &cctl, filter_coins).All();
+    }
+
+    // Build a map of all outpoints to check, then let the chain interface
+    // resolve them against the actual chainstate (mirrors what pos.cpp does
+    // with CoinsTip().GetCoin but goes through the wallet-safe Chain API).
+    std::map<COutPoint, Coin> coin_map;
+    for (const COutput& out : vecOutputs) {
+        coin_map[out.outpoint]; // insert empty Coin; findCoins will fill it
+    }
+    pwallet->chain().findCoins(coin_map);
+
+    UniValue phantom_utxos(UniValue::VARR);
+    size_t checked_utxos{0};
+    size_t phantom_utxo_count{0};
+    for (const COutput& out : vecOutputs) {
+        ++checked_utxos;
+        // findCoins leaves the Coin empty (IsSpent()==true and nHeight==0)
+        // when it cannot locate the outpoint in the chainstate — the same
+        // condition that CoinsTip().GetCoin() returns false for in pos.cpp.
+        const Coin& coiStakeCoin = coin_map.at(out.outpoint);
+        if (coiStakeCoin.IsSpent()) {
+            ++phantom_utxo_count;
+            UniValue entry(UniValue::VOBJ);
+            entry.pushKV("txid", out.outpoint.hash.GetHex());
+            entry.pushKV("vout", static_cast<int>(out.outpoint.n));
+            entry.pushKV("amount", ValueFromAmount(out.txout.nValue));
+            entry.pushKV("confirmations", out.depth);
+            phantom_utxos.push_back(entry);
+        }
+    }
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("status", phantom_utxo_count > 0 ? "phantom_utxo_detected" : "ok");
+    result.pushKV("has_phantom_utxo", phantom_utxo_count > 0);
+    result.pushKV("checked_utxos", static_cast<uint64_t>(checked_utxos));
+    result.pushKV("phantom_utxo_count", static_cast<uint64_t>(phantom_utxo_count));
+    if (phantom_utxo_count > 0) {
+        result.pushKV("phantom_utxos", phantom_utxos);
+    }
+    return result;
+}
+
+
+
+
+
+if (nMaxDepth == 99999998) {
+
+// DIAGNOSTIC: Programmatic wallet unload + reload
+    // Pattern 1: UNLOAD (exactly matching unloadwallet RPC)
+    
+    std::shared_ptr<CWallet> pwallet0 = GetWalletForJSONRPCRequest(request);
+    if (!pwallet0) {
+        return "Wallet not found";
+    }
+    
+    std::string wallet_name = pwallet0->GetName();
+    WalletContext& context = EnsureWalletContext(request.context);
+    
+    LogPrintf("Starting wallet unload/reload for: %s\n", wallet_name);
+    
+    // === UNLOAD PHASE (exact copy of unloadwallet RPC internals) ===
+    std::vector<bilingual_str> unload_warnings;
+    {
+        WalletRescanReserver reserver(*pwallet0);
+        if (!reserver.reserve()) {
+            return "Error: Wallet is currently rescanning. Abort existing rescan or wait.";
+        }
+        
+        if (!RemoveWallet(context, pwallet0, std::nullopt, unload_warnings)) {
+            return "Error: Failed to unload wallet (may be already unloaded)";
+        }
+    }
+
+    // reserver goes out of scope here, just like in unloadwallet
+    
+    // Build partial result here (before UnloadWallet call, like unloadwallet does)
+    UniValue unload_result(UniValue::VOBJ);
+    PushWarnings(unload_warnings, unload_result);
+    
+    // This is exactly what unloadwallet does - call it with move semantics right before final cleanup
+    UnloadWallet(std::move(pwallet0));
+    
+    LogPrintf("Unload completed for: %s\n", wallet_name);
+    
+    // === RELOAD PHASE (exact copy of loadwallet RPC internals) ===
+    std::string name = wallet_name;
+    
+    DatabaseOptions options;
+    DatabaseStatus status;
+    ReadDatabaseArgs(*context.args, options);
+    options.require_existing = true;
+    bilingual_str error;
+    std::vector<bilingual_str> load_warnings;
+    std::optional<bool> load_on_start = std::nullopt;
+    
+    // Check wallet is not already loaded (exact pattern from loadwallet)
+    {
+        LOCK(context.wallets_mutex);
+        if (std::any_of(context.wallets.begin(), context.wallets.end(), 
+            [&name](const auto& wallet) { return wallet->GetName() == name; })) {
+            return "Error: Wallet still loaded (unload incomplete)";
+        }
+    }
+
+    std::shared_ptr<CWallet> reloaded = LoadWallet(context, name, load_on_start, options, status, error, load_warnings);
+    
+    if (!reloaded) {
+        return "Error: Failed to reload wallet. " + error.original;
+    }
+    
+    LogPrintf("Reload completed for: %s\n", wallet_name);
+    
+    // === BUILD FINAL RESULT ===
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("wallet_name", reloaded->GetName());
+    result.pushKV("status", "success");
+    result.pushKV("message", "Wallet unload/reload cycle completed. All transaction states and balances reconstructed from disk.");
+    
+    // Combine warnings from both phases
+    UniValue all_warnings(UniValue::VARR);
+    for (const auto& w : unload_warnings) all_warnings.push_back(w.original);
+    for (const auto& w : load_warnings) all_warnings.push_back(w.original);
+    if (all_warnings.size() > 0) {
+        result.pushKV("warnings", all_warnings);
+    }
+    
+    return result;
+}
+
+*/
+
+    const std::shared_ptr<const CWallet> pwallet = GetWalletForJSONRPCRequest(request);
+    if (!pwallet) return UniValue::VNULL;
+
+
+
+
 
     std::set<CTxDestination> destinations;
     if (!request.params[2].isNull()) {
