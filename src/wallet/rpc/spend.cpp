@@ -508,36 +508,29 @@ RPCHelpMan burn()
         HELP_REQUIRING_PASSPHRASE,
         {
             {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The amount in " + CURRENCY_UNIT + " to burn. eg 100"},
-            {"acknowledge_destruction", RPCArg::Type::BOOL, RPCArg::Default{false}, "Must be set to true to confirm permanent destruction of the burn amount. The default of false blocks the burn with a clear refusal message."},
+            {"dry_run", RPCArg::Type::BOOL, RPCArg::Default{true}, "If true (the default), build and sign the transaction but do not broadcast it. Set false to actually destroy the coins."},
             {"tag", RPCArg::Type::STR, RPCArg::Default{std::string("\x00", 1)}, "ASCII text to embed in the OP_RETURN output. Useful as a burn marker for later on-chain identification."},
-            {"dry_run", RPCArg::Type::BOOL, RPCArg::Default{false}, "If true, build and sign the transaction but do not broadcast it. The signed transaction hex is returned instead of broadcasting."},
         },
-        {
-            RPCResult{"if acknowledge_destruction is omitted or false",
-                RPCResult::Type::OBJ, "", "",
-                {
-                    {RPCResult::Type::STR, "message", "Refusal message instructing the caller how to confirm."},
-                },
-            },
-            RPCResult{"if acknowledge_destruction is true",
-                RPCResult::Type::OBJ, "", "",
-                {
-                    {RPCResult::Type::BOOL, "dry_run", "True if the transaction was built and signed but not broadcast."},
-                    {RPCResult::Type::STR_HEX, "txid", "The transaction id of the burn."},
-                    {RPCResult::Type::STR_HEX, "hex", /*optional=*/true, "The signed transaction hex (present when dry_run is true)."},
-                    {RPCResult::Type::STR, "fee_reason", "The transaction fee reason."},
-                    {RPCResult::Type::NUM, "burn_vout", "The index of the OP_RETURN output carrying the burn."},
-                    {RPCResult::Type::STR_AMOUNT, "burn_amount", "The amount burned in " + CURRENCY_UNIT + "."},
-                    {RPCResult::Type::STR_AMOUNT, "change_amount", "The change returned to the wallet in " + CURRENCY_UNIT + "."},
-                    {RPCResult::Type::STR_AMOUNT, "fee", "The transaction fee paid in " + CURRENCY_UNIT + "."},
-                },
+        RPCResult{
+            RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_AMOUNT, "amount", "The amount requested to burn in " + CURRENCY_UNIT + "."},
+                {RPCResult::Type::BOOL, "dry_run", "True if the transaction was built and signed but not broadcast."},
+                {RPCResult::Type::STR, "tag", "The tag embedded in the OP_RETURN output."},
+                {RPCResult::Type::STR_HEX, "txid", "The transaction id of the burn."},
+                {RPCResult::Type::STR_HEX, "hex", "The signed transaction hex."},
+                {RPCResult::Type::STR, "fee_reason", "The transaction fee reason."},
+                {RPCResult::Type::NUM, "burn_vout", "The index of the OP_RETURN output carrying the burn."},
+                {RPCResult::Type::STR_AMOUNT, "burn_amount", "The amount burned in " + CURRENCY_UNIT + "."},
+                {RPCResult::Type::STR_AMOUNT, "change_amount", "The change returned to the wallet in " + CURRENCY_UNIT + "."},
+                {RPCResult::Type::STR_AMOUNT, "fee", "The transaction fee paid in " + CURRENCY_UNIT + "."},
             },
         },
         RPCExamples{
-            HelpExampleCli("burn", "100 true") +
-            HelpExampleCli("burn", "100 true \"LYNX-BURN-2026\"") +
-            HelpExampleCli("burn", "100 true \"LYNX-BURN-2026\" true") +
-            HelpExampleRpc("burn", "100, true, \"LYNX-BURN-2026\", true")
+            HelpExampleCli("burn", "100") +
+            HelpExampleCli("burn", "100 false") +
+            HelpExampleCli("burn", "100 false \"LYNX-BURN-2026\"") +
+            HelpExampleRpc("burn", "100, false, \"LYNX-BURN-2026\"")
         },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
@@ -549,14 +542,10 @@ RPCHelpMan burn()
         throw JSONRPCError(RPC_TYPE_ERROR, "Burn amount must be positive");
     }
 
-    const bool acknowledged = request.params[1].isNull() ? false : request.params[1].get_bool();
-    if (!acknowledged) {
-        UniValue refusal(UniValue::VOBJ);
-        refusal.pushKV("message", "second argument true to confirm");
-        return refusal;
-    }
+    const bool dry_run = request.params[1].isNull() ? true : request.params[1].get_bool();
 
-    std::string tag_str = request.params[2].isNull() ? "" : request.params[2].get_str();
+    const std::string tag_input = request.params[2].isNull() ? "" : request.params[2].get_str();
+    std::string tag_str = tag_input;
     if (tag_str.empty()) {
         tag_str = std::string("\x00", 1);
     }
@@ -568,8 +557,6 @@ RPCHelpMan burn()
             strprintf("tag produces an OP_RETURN script of %u bytes, exceeding the maximum of %u",
                       (unsigned)script.size(), MAX_OP_RETURN_RELAY));
     }
-
-    const bool dry_run = request.params[3].isNull() ? false : request.params[3].get_bool();
 
     pwallet->BlockUntilSyncedToCurrentChain();
 
@@ -609,11 +596,11 @@ RPCHelpMan burn()
     }
 
     UniValue entry(UniValue::VOBJ);
+    entry.pushKV("amount", ValueFromAmount(amount));
     entry.pushKV("dry_run", dry_run);
+    entry.pushKV("tag", tag_input);
     entry.pushKV("txid", tx->GetHash().GetHex());
-    if (dry_run) {
-        entry.pushKV("hex", EncodeHexTx(*tx));
-    }
+    entry.pushKV("hex", EncodeHexTx(*tx));
     entry.pushKV("fee_reason", StringForFeeReason(res->fee_calc.reason));
     entry.pushKV("burn_vout", burn_vout);
     entry.pushKV("burn_amount", ValueFromAmount(burn_value));
