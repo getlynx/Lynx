@@ -1139,12 +1139,12 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 
     // CURRENT_CHAIN_CONF
 
-    LogPrintf ("CURRENCY_UNIT %s \n", CURRENCY_UNIT);
+    LogPrint (BCLog::UTIL, "CURRENCY_UNIT %s \n", CURRENCY_UNIT);
 
-    LogPrintf("CLIENT_NAME = %s\n", CLIENT_NAME.c_str());
+    LogPrint (BCLog::UTIL, "CLIENT_NAME = %s\n", CLIENT_NAME.c_str());
 
     // LogPrintf("BITCOIN_CONF_FILENAME = %s\n", BITCOIN_CONF_FILENAME);
-    LogPrintf("CURRENT_CHAIN_CONF = %s\n", CURRENT_CHAIN_CONF);
+    LogPrint (BCLog::UTIL, "CURRENT_CHAIN_CONF = %s\n", CURRENT_CHAIN_CONF);
 
     const ArgsManager& args = *Assert(node.args);
     const CChainParams& chainparams = Params();
