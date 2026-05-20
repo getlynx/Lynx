@@ -9,6 +9,7 @@
 #include <rpc/rawtransaction_util.h>
 #include <rpc/util.h>
 #include <util/fees.h>
+#include <util/moneystr.h>
 #include <util/rbf.h>
 #include <util/translation.h>
 #include <util/vector.h>
@@ -507,26 +508,18 @@ RPCHelpMan burn()
         HELP_REQUIRING_PASSPHRASE,
         {
             {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The amount in " + CURRENCY_UNIT + " to burn. eg 100"},
-            {"acknowledge_destruction", RPCArg::Type::BOOL, RPCArg::Optional::NO, "Must be set to true to confirm permanent destruction of the burn amount."},
+            {"acknowledge_destruction", RPCArg::Type::BOOL, RPCArg::Default{false}, "Must be set to true to confirm permanent destruction of the burn amount. The default of false blocks the burn with a clear refusal message."},
             {"tag", RPCArg::Type::STR, RPCArg::Default{std::string("\x00", 1)}, "ASCII text to embed in the OP_RETURN output. Useful as a burn marker for later on-chain identification."},
-            {"verbose", RPCArg::Type::BOOL, RPCArg::Default{false}, "If true, return extra information about the transaction."},
             {"dry_run", RPCArg::Type::BOOL, RPCArg::Default{false}, "If true, build and sign the transaction but do not broadcast it. The signed transaction hex is returned instead of broadcasting."},
         },
         {
-            RPCResult{"if verbose is not set or set to false, and dry_run is not set or false",
+            RPCResult{"if acknowledge_destruction is omitted or false",
                 RPCResult::Type::OBJ, "", "",
                 {
-                    {RPCResult::Type::STR_HEX, "txid", "The transaction id of the broadcast burn."},
+                    {RPCResult::Type::STR, "message", "Refusal message instructing the caller how to confirm."},
                 },
             },
-            RPCResult{"if verbose is not set or set to false, and dry_run is true",
-                RPCResult::Type::OBJ, "", "",
-                {
-                    {RPCResult::Type::BOOL, "dry_run", "Always true in this form."},
-                    {RPCResult::Type::STR_HEX, "hex", "The signed transaction hex (not broadcast)."},
-                },
-            },
-            RPCResult{"if verbose is set to true",
+            RPCResult{"if acknowledge_destruction is true",
                 RPCResult::Type::OBJ, "", "",
                 {
                     {RPCResult::Type::BOOL, "dry_run", "True if the transaction was built and signed but not broadcast."},
@@ -544,8 +537,7 @@ RPCHelpMan burn()
             HelpExampleCli("burn", "100 true") +
             HelpExampleCli("burn", "100 true \"LYNX-BURN-2026\"") +
             HelpExampleCli("burn", "100 true \"LYNX-BURN-2026\" true") +
-            HelpExampleCli("burn", "100 true \"\" false true") +
-            HelpExampleRpc("burn", "100, true, \"LYNX-BURN-2026\", true, false")
+            HelpExampleRpc("burn", "100, true, \"LYNX-BURN-2026\", true")
         },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
@@ -557,9 +549,11 @@ RPCHelpMan burn()
         throw JSONRPCError(RPC_TYPE_ERROR, "Burn amount must be positive");
     }
 
-    if (!request.params[1].get_bool()) {
-        throw JSONRPCError(RPC_MISC_ERROR,
-            "Refusing to burn: pass acknowledge_destruction=true to confirm permanent destruction of these coins.");
+    const bool acknowledged = request.params[1].isNull() ? false : request.params[1].get_bool();
+    if (!acknowledged) {
+        UniValue refusal(UniValue::VOBJ);
+        refusal.pushKV("message", "second argument true to confirm");
+        return refusal;
     }
 
     std::string tag_str = request.params[2].isNull() ? "" : request.params[2].get_str();
@@ -575,8 +569,7 @@ RPCHelpMan burn()
                       (unsigned)script.size(), MAX_OP_RETURN_RELAY));
     }
 
-    const bool verbose = request.params[3].isNull() ? false : request.params[3].get_bool();
-    const bool dry_run = request.params[4].isNull() ? false : request.params[4].get_bool();
+    const bool dry_run = request.params[3].isNull() ? false : request.params[3].get_bool();
 
     pwallet->BlockUntilSyncedToCurrentChain();
 
@@ -601,17 +594,6 @@ RPCHelpMan burn()
     const CTransactionRef& tx = res->tx;
     if (!dry_run) {
         pwallet->CommitTransaction(tx, std::move(map_value), /*orderForm=*/{});
-    }
-
-    if (!verbose) {
-        UniValue terse(UniValue::VOBJ);
-        if (dry_run) {
-            terse.pushKV("dry_run", true);
-            terse.pushKV("hex", EncodeHexTx(*tx));
-        } else {
-            terse.pushKV("txid", tx->GetHash().GetHex());
-        }
-        return terse;
     }
 
     int burn_vout = -1;
