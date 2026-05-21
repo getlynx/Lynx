@@ -153,7 +153,9 @@ std::string CRPCTable::help(const std::string& strCommand, const JSONRPCRequest&
 			}
                     }
                 } else {
-                    strRet += strHelp + "\n";
+                    if (strCommand != "" || strHelp.substr(0,4) != "burn") {
+                        strRet += strHelp + "\n";
+                    }
                 }
 
             } else { 
