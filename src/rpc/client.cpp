@@ -261,6 +261,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "bumpfee", 1, "fee_rate"},
     { "bumpfee", 1, "replaceable"},
     { "bumpfee", 1, "outputs"},
+    { "burn", 0, "amount" },
+    { "burn", 1, "dry_run" },
     { "psbtbumpfee", 1, "options" },
     { "psbtbumpfee", 1, "conf_target"},
     { "psbtbumpfee", 1, "fee_rate"},

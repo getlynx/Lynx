@@ -99,7 +99,7 @@ LogPrint (BCLog::STORAGE, "json 3 \n");
 LogPrint (BCLog::STORAGE, "json 4 %d \n", filelen);
 
     // check file length
-    int maxfilelength = 25 * 1024 * 1024;
+    int maxfilelength = 50 * 1024 * 1024;
     if (filelen > maxfilelength) {
         LogPrint (BCLog::STORAGE, "File length exceeds max file length. filelen: %d maxfilelength: %d\n", filelen, maxfilelength);
         error_level = ERR_FILELENGTH;

@@ -793,7 +793,7 @@ fs::path GetDefaultDataDir()
 
     // return pathRet / ".panther";
 
-    LogPrintf ("CURRENT_CHAIN_DATADIR = %s\n", CURRENT_CHAIN_DATADIR);
+    LogPrint (BCLog::UTIL, "CURRENT_CHAIN_DATADIR = %s\n", CURRENT_CHAIN_DATADIR);
 
     return pathRet / CURRENT_CHAIN_DATADIR;
 

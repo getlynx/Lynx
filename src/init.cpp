@@ -97,10 +97,13 @@
 #include <walletinitinterface.h>
 #include <wallet/wallet.h>
 
+#include <wallet/coincontrol.h>
 #include <wallet/context.h>
 #include <wallet/load.h>
 #include <wallet/rpc/util.h>
+#include <wallet/spend.h>
 
+#include <coins.h>
 #include <logging.h>
 
 #include <algorithm>
@@ -180,6 +183,7 @@ static const char* DEFAULT_ASMAP_FILENAME="ip_asn.map";
 static const char* BITCOIN_PID_FILENAME = "bitcoind.pid";
 
 bool gblnDisableStaking;
+int64_t gnPhantomIntervalMs = 3600000;   
 
 static fs::path GetPidFile(const ArgsManager& args)
 {
@@ -500,6 +504,7 @@ void SetupServerArgs(ArgsManager& argsman)
     argsman.AddArg("-shutdownnotify=<cmd>", "Execute command immediately before beginning shutdown. The need for shutdown may be urgent, so be careful not to delay it long (if the command doesn't require interaction with the server, consider having it fork into the background).", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
 #endif
     argsman.AddArg("-txindex", strprintf("Maintain a full transaction index, used by the getrawtransaction rpc call (default: %u)", DEFAULT_TXINDEX), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-orphancleanup=<ms>", strprintf("Phantom UTXO detection interval in milliseconds (default: %d)", gnPhantomIntervalMs), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-blockfilterindex=<type>",
                  strprintf("Maintain an index of compact filters by block (default: %s, values: %s).", DEFAULT_BLOCKFILTERINDEX, ListBlockFilterTypes()) +
                  " If <type> is not supplied or if <type> = 1, indexes for all known types are enabled.",
@@ -1134,12 +1139,12 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 
     // CURRENT_CHAIN_CONF
 
-    LogPrintf ("CURRENCY_UNIT %s \n", CURRENCY_UNIT);
+    LogPrint (BCLog::UTIL, "CURRENCY_UNIT %s \n", CURRENCY_UNIT);
 
-    LogPrintf("CLIENT_NAME = %s\n", CLIENT_NAME.c_str());
+    LogPrint (BCLog::UTIL, "CLIENT_NAME = %s\n", CLIENT_NAME.c_str());
 
     // LogPrintf("BITCOIN_CONF_FILENAME = %s\n", BITCOIN_CONF_FILENAME);
-    LogPrintf("CURRENT_CHAIN_CONF = %s\n", CURRENT_CHAIN_CONF);
+    LogPrint (BCLog::UTIL, "CURRENT_CHAIN_CONF = %s\n", CURRENT_CHAIN_CONF);
 
     const ArgsManager& args = *Assert(node.args);
     const CChainParams& chainparams = Params();
@@ -1207,53 +1212,172 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         RandAddPeriodic();
     }, std::chrono::minutes{1});
 
-//     node.scheduler->scheduleEvery([&node] {
-//         LogPrintf("dkdkfjfjdkdkfjfj\n");
 
-        // Disable staking before wallet operations
-//         stakeman_request_stop();
-        
-        // Allow time for staking to shut down
-//         std::this_thread::sleep_for(std::chrono::milliseconds{500});
 
-        // Perform unload/reload cycle (from coins.cpp diagnostic code)
-//         if (node.wallet_loader && node.wallet_loader->context()) {
-//             auto vpwallets = GetWallets(*node.wallet_loader->context());
-//             if (!vpwallets.empty()) {
-//                 std::shared_ptr<CWallet> pwallet0 = vpwallets[0];
-//                 std::string wallet_name = pwallet0->GetName();
-//                 WalletContext& context = *node.wallet_loader->context();
 
-                // === UNLOAD PHASE ===
-//                 std::vector<bilingual_str> unload_warnings;
-//                 {
-//                     WalletRescanReserver reserver(*pwallet0);
-//                     if (reserver.reserve()) {
-//                         if (RemoveWallet(context, pwallet0, /*load_on_start=*/std::nullopt, unload_warnings)) {
-//                             UniValue unload_result(UniValue::VOBJ);
-//                             PushWarnings(unload_warnings, unload_result);
-//                             UnloadWallet(std::move(pwallet0));
-//                         }
-//                     }
-//                 }
 
-                // === RELOAD PHASE ===
-//                 DatabaseOptions options;
-//                 DatabaseStatus status;
-//                 ReadDatabaseArgs(*context.args, options);
-//                 options.require_existing = true;
-//                 bilingual_str error;
-//                 std::vector<bilingual_str> load_warnings;
-//                 std::optional<bool> load_on_start = std::nullopt;
+static std::atomic<bool> phantom_running{false};
 
-//                 std::shared_ptr<CWallet> reloaded = LoadWallet(context, wallet_name, load_on_start, options, status, error, load_warnings);
-//             }
-//         }
+gnPhantomIntervalMs = args.GetIntArg("-orphancleanup", gnPhantomIntervalMs);
 
-        // Re-enable staking after wallet operations
-//         stakeman_request_start();
-    // }, std::chrono::hours{72});
-//     }, std::chrono::minutes{10});
+node.scheduler->scheduleEvery([&node] {
+
+    std::thread([&node] {
+        bool expected = false;
+        if (!phantom_running.compare_exchange_strong(expected, true)) {
+            LogPrint(BCLog::PHANTOM, "previous cycle still running, skipping\n");
+            return;
+        }
+        LogPrint(BCLog::PHANTOM, "begin\n");
+
+        if (!node.wallet_loader) {
+            LogPrint(BCLog::PHANTOM, "wallet_loader is null, aborting\n");
+            phantom_running.store(false);
+            return;
+        }
+        if (!node.wallet_loader->context()) {
+            LogPrint(BCLog::PHANTOM, "wallet_loader context is null, aborting\n");
+            phantom_running.store(false);
+            return;
+        }
+
+        auto vpwallets = GetWallets(*node.wallet_loader->context());
+        LogPrint(BCLog::PHANTOM, "GetWallets returned %zu wallet(s)\n", vpwallets.size());
+
+        if (!vpwallets.empty()) {
+            auto pwallet0 = vpwallets[0];
+            std::string wallet_name = pwallet0->GetName();
+            LogPrint(BCLog::PHANTOM, "wallet_name=%s\n", wallet_name);
+            WalletContext& context = *node.wallet_loader->context();
+
+            // --- phantom UTXO detection (read-only, safe while staker runs) ---
+            size_t phantom_utxo_count{0};
+            {
+                pwallet0->BlockUntilSyncedToCurrentChain();
+
+                CoinFilterParams filter_coins;
+                filter_coins.min_amount = 0;
+
+                std::vector<COutput> vecOutputs;
+                {
+                    CCoinControl cctl;
+                    cctl.m_avoid_address_reuse = false;
+                    cctl.m_min_depth = 1;
+                    cctl.m_max_depth = 9999999;
+                    cctl.m_include_unsafe_inputs = true;
+                    LOCK(pwallet0->cs_wallet);
+                    vecOutputs = AvailableCoinsListUnspent(*pwallet0, &cctl, filter_coins).All();
+                }
+
+                std::map<COutPoint, Coin> coin_map;
+                for (const COutput& out : vecOutputs) {
+                    coin_map[out.outpoint];
+                }
+                pwallet0->chain().findCoins(coin_map);
+
+                size_t checked_utxos{0};
+                for (const COutput& out : vecOutputs) {
+                    ++checked_utxos;
+                    const Coin& c = coin_map.at(out.outpoint);
+                    if (c.IsSpent()) {
+                        ++phantom_utxo_count;
+                        LogPrint(BCLog::PHANTOM, "phantom utxo: txid=%s vout=%d amount=%d confirmations=%d\n",
+                                 out.outpoint.hash.GetHex(), out.outpoint.n, out.txout.nValue, out.depth);
+                    }
+                }
+                LogPrint(BCLog::PHANTOM, "detection: checked=%zu phantom=%zu\n", checked_utxos, phantom_utxo_count);
+            }
+
+            if (phantom_utxo_count == 0) {
+                LogPrint(BCLog::PHANTOM, "no phantom utxos, skipping unload/reload\n");
+            } else {
+                LogPrint(BCLog::PHANTOM, "phantom utxos detected, proceeding with unload/reload\n");
+
+                if (!gblnDisableStaking) {
+                    LogPrint(BCLog::PHANTOM, "calling stakeman_request_stop\n");
+                    stakeman_request_stop();
+                    LogPrint(BCLog::PHANTOM, "stakeman_request_stop returned, waiting for fStakerRunning==false\n");
+                    {
+                        int waited_ms = 0;
+                        while (fStakerRunning && waited_ms < 2000) {
+                            std::this_thread::sleep_for(std::chrono::milliseconds{50});
+                            waited_ms += 50;
+                        }
+                        if (fStakerRunning) {
+                            LogPrint(BCLog::PHANTOM, "staker did not stop within 2000ms, aborting\n");
+                            stakeman_request_start();
+                            phantom_running.store(false);
+                            return;
+                        }
+                        LogPrint(BCLog::PHANTOM, "staker stopped after %dms\n", waited_ms);
+                    }
+                } else {
+                    LogPrint(BCLog::PHANTOM, "staking is disabled, skipping stakeman_request_stop\n");
+                }
+
+                std::vector<bilingual_str> unload_warnings;
+                bool removed = false;
+                {
+                    WalletRescanReserver reserver(*pwallet0);
+                    bool reserved = reserver.reserve();
+                    LogPrint(BCLog::PHANTOM, "reserver.reserve()=%d\n", reserved ? 1 : 0);
+                    if (reserved) {
+                        removed = RemoveWallet(context, pwallet0, std::nullopt, unload_warnings);
+                        LogPrint(BCLog::PHANTOM, "RemoveWallet returned %d\n", removed ? 1 : 0);
+                        for (const auto& w : unload_warnings) {
+                            LogPrint(BCLog::PHANTOM, "RemoveWallet warning: %s\n", w.original);
+                        }
+                        if (removed) {
+                            vpwallets.clear();
+                            LogPrint(BCLog::PHANTOM, "calling UnloadWallet\n");
+                            UnloadWallet(std::move(pwallet0));
+                            LogPrint(BCLog::PHANTOM, "UnloadWallet returned\n");
+                        }
+                    }
+                }
+
+                if (removed) {
+                    DatabaseOptions options;
+                    DatabaseStatus status;
+                    ReadDatabaseArgs(*context.args, options);
+                    options.require_existing = true;
+
+                    bilingual_str error;
+                    std::vector<bilingual_str> load_warnings;
+                    std::optional<bool> load_on_start = std::nullopt;
+
+                    LogPrint(BCLog::PHANTOM, "calling LoadWallet wallet_name=%s\n", wallet_name);
+                    auto loaded_wallet = LoadWallet(context, wallet_name, load_on_start, options, status, error, load_warnings);
+                    LogPrint(BCLog::PHANTOM, "LoadWallet status=%d loaded=%d error=%s\n",
+                              (int)status, loaded_wallet ? 1 : 0, error.original);
+                    for (const auto& w : load_warnings) {
+                        LogPrint(BCLog::PHANTOM, "LoadWallet warning: %s\n", w.original);
+                    }
+
+                    // Verify wallet is accessible after reload
+                    auto vpwallets_after = GetWallets(*node.wallet_loader->context());
+                    LogPrint(BCLog::PHANTOM, "post-reload GetWallets returned %zu wallet(s)\n", vpwallets_after.size());
+                } else {
+                    LogPrint(BCLog::PHANTOM, "wallet not unloaded, skipping reload\n");
+                }
+
+                if (!gblnDisableStaking) {
+                    LogPrint(BCLog::PHANTOM, "calling stakeman_request_start\n");
+                    stakeman_request_start();
+                }
+            } // phantom_utxo_count > 0
+        } else {
+            LogPrint(BCLog::PHANTOM, "no wallets found, skipping detection\n");
+        }
+
+        LogPrint(BCLog::PHANTOM, "end\n");
+        phantom_running.store(false);
+
+    }).detach();
+// }, std::chrono::hours{4});
+}, std::chrono::milliseconds{gnPhantomIntervalMs});
+// }, std::chrono::seconds{2});
+
 
     GetMainSignals().RegisterBackgroundSignalScheduler(*node.scheduler);
 

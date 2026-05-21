@@ -170,7 +170,7 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::MEMPOOLREJ, "mempoolrej"},
     {BCLog::LIBEVENT, "libevent"},
     {BCLog::COINDB, "coindb"},
-    {BCLog::QT, "qt"},
+    {BCLog::PHANTOM, "phantom"},
     {BCLog::LEVELDB, "leveldb"},
     {BCLog::VALIDATION, "validation"},
     {BCLog::I2P, "i2p"},
@@ -266,8 +266,8 @@ std::string LogCategoryToStr(BCLog::LogFlags category)
         return "libevent";
     case BCLog::LogFlags::COINDB:
         return "coindb";
-    case BCLog::LogFlags::QT:
-        return "qt";
+    case BCLog::LogFlags::PHANTOM:
+        return "phantom";
     case BCLog::LogFlags::LEVELDB:
         return "leveldb";
     case BCLog::LogFlags::VALIDATION:

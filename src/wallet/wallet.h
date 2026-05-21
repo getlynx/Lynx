@@ -489,6 +489,20 @@ public:
 
     bool IsSpent(const COutPoint& outpoint) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
+    //! Clear and rebuild mapTxSpends in-place from the current contents of
+    //! mapWallet. Mirrors what the wallet load path does, so callers get the
+    //! same heal as an unload/load cycle without dropping in-memory state.
+    //! Also MarkDirty's every CWalletTx so cached balances are recomputed
+    //! against the rebuilt spend map.
+    struct RebuildTxSpendsResult { size_t spends_before; size_t spends_after; size_t wtxs_processed; };
+    RebuildTxSpendsResult RebuildTxSpends() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    //! Diagnostic for the phantom-UTXO scenario. Logs the state of mapTxSpends
+    //! and mapWallet around a RebuildTxSpends() call for a specific outpoint,
+    //! so the missing-then-restored mapTxSpends entry (and the T2 spending tx
+    //! sitting in mapWallet) can be observed directly.
+    void ProbePhantom(const COutPoint& phantom_outpoint) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
     // Whether this or any known scriptPubKey with the same single key has been spent.
     bool IsSpentKey(const CScript& scriptPubKey) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     void SetSpentKeyState(WalletBatch& batch, const uint256& hash, unsigned int n, bool used, std::set<CTxDestination>& tx_destinations) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);

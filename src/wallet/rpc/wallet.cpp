@@ -859,6 +859,7 @@ RPCHelpMan walletlock();
 RPCHelpMan encryptwallet();
 
 // spend
+RPCHelpMan burn();
 RPCHelpMan sendtoaddress();
 RPCHelpMan sendmany();
 RPCHelpMan settxfee();
@@ -892,6 +893,7 @@ Span<const CRPCCommand> GetWalletRPCCommands()
         {"wallet", &abortrescan},
         {"wallet", &addmultisigaddress},
         {"wallet", &backupwallet},
+        {"wallet", &burn},
         {"wallet", &bumpfee},
         {"wallet", &psbtbumpfee},
         {"wallet", &createwallet},
