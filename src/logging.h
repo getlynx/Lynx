@@ -53,7 +53,7 @@ namespace BCLog {
         RAND        = (1 << 13),
         PRUNE       = (1 << 14),
         PROXY       = (1 << 15),
-        MEMPOOLREJ  = (1 << 16),
+        STARTUP     = (1 << 16),
         LIBEVENT    = (1 << 17),
         COINDB      = (1 << 18),
         PHANTOM     = (1 << 19),

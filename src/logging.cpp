@@ -167,7 +167,7 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::RAND, "rand"},
     {BCLog::PRUNE, "prune"},
     {BCLog::PROXY, "proxy"},
-    {BCLog::MEMPOOLREJ, "mempoolrej"},
+    {BCLog::STARTUP, "startup"},
     {BCLog::LIBEVENT, "libevent"},
     {BCLog::COINDB, "coindb"},
     {BCLog::PHANTOM, "phantom"},
@@ -260,8 +260,8 @@ std::string LogCategoryToStr(BCLog::LogFlags category)
         return "prune";
     case BCLog::LogFlags::PROXY:
         return "proxy";
-    case BCLog::LogFlags::MEMPOOLREJ:
-        return "mempoolrej";
+    case BCLog::LogFlags::STARTUP:
+        return "startup";
     case BCLog::LogFlags::LIBEVENT:
         return "libevent";
     case BCLog::LogFlags::COINDB:
