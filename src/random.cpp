@@ -99,7 +99,7 @@ static void ReportHardwareRand()
         LogPrintf("Using RdSeed as an additional entropy source\n");
     }
     if (g_rdrand_supported) {
-        LogPrintf("Using RdRand as an additional entropy source\n");
+        LogPrint(BCLog::STARTUP, "Using RdRand as an additional entropy source\n");
     }
 }
 
