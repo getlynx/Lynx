@@ -3415,7 +3415,7 @@ std::shared_ptr<CWallet> CWallet::Create(WalletContext& context, const std::stri
     walletInstance->m_spend_zero_conf_change = args.GetBoolArg("-spendzeroconfchange", DEFAULT_SPEND_ZEROCONF_CHANGE);
     walletInstance->m_signal_rbf = args.GetBoolArg("-walletrbf", DEFAULT_WALLET_RBF);
 
-    walletInstance->WalletLogPrintf("Wallet completed loading in %15dms\n", Ticks<std::chrono::milliseconds>(SteadyClock::now() - start));
+    LogPrint(BCLog::STARTUP, "%s Wallet completed loading in %15dms\n", walletInstance->GetDisplayName(), Ticks<std::chrono::milliseconds>(SteadyClock::now() - start));
 
     // Try to top up keypool. No-op if the wallet is locked.
     walletInstance->TopUpKeyPool();
@@ -3427,9 +3427,9 @@ std::shared_ptr<CWallet> CWallet::Create(WalletContext& context, const std::stri
     {
         LOCK(walletInstance->cs_wallet);
         walletInstance->SetBroadcastTransactions(args.GetBoolArg("-walletbroadcast", DEFAULT_WALLETBROADCAST));
-        walletInstance->WalletLogPrintf("setKeyPool.size() = %u\n",      walletInstance->GetKeyPoolSize());
-        walletInstance->WalletLogPrintf("mapWallet.size() = %u\n",       walletInstance->mapWallet.size());
-        walletInstance->WalletLogPrintf("m_address_book.size() = %u\n",  walletInstance->m_address_book.size());
+        LogPrint(BCLog::STARTUP, "%s setKeyPool.size() = %u\n",     walletInstance->GetDisplayName(), walletInstance->GetKeyPoolSize());
+        LogPrint(BCLog::STARTUP, "%s mapWallet.size() = %u\n",      walletInstance->GetDisplayName(), walletInstance->mapWallet.size());
+        LogPrint(BCLog::STARTUP, "%s m_address_book.size() = %u\n", walletInstance->GetDisplayName(), walletInstance->m_address_book.size());
     }
 
     return walletInstance;

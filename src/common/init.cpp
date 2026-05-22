@@ -4,6 +4,7 @@
 
 #include <chainparams.h>
 #include <common/init.h>
+#include <init/common.h>
 #include <logging.h>
 #include <lynxconfig.h>
 #include <logging.h>
@@ -43,6 +44,15 @@ std::optional<ConfigError> InitConfig(ArgsManager& args, SettingsAbortFn setting
         if (!args.ReadConfigFiles(error, true)) {
             return ConfigError{ConfigStatus::FAILED, strprintf(_("Error reading configuration file: %s"), error)};
         }
+
+        // Emit the version line before any chain/setup messages so it appears
+        // first in the flushed log buffer.
+        init::LogPackageVersion();
+
+        // Enable -debug categories before SelectParams so that LogPrint(BCLog::X, ...)
+        // inside chainparams construction is honored.
+        init::SetLoggingCategories(args);
+        init::SetLoggingLevel(args);
 
         // Check for chain settings (Params() calls are only valid after this clause)
         SelectParams(args.GetChainType());

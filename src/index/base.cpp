@@ -219,7 +219,7 @@ void BaseIndex::ThreadSync()
     }
 
     if (pindex) {
-        LogPrintf("%s is enabled at height %d\n", GetName(), pindex->nHeight);
+        LogPrint(BCLog::STARTUP, "%s is enabled at height %d\n", GetName(), pindex->nHeight);
     } else {
         LogPrintf("%s is enabled\n", GetName());
     }

@@ -816,7 +816,8 @@ void InitParameterInteraction(ArgsManager& args)
 void InitLogging(const ArgsManager& args)
 {
     init::SetLoggingOptions(args);
-    init::LogPackageVersion();
+    // LogPackageVersion is now called earlier inside common::InitConfig so the
+    // version line appears first in the flushed buffer.
 }
 
 namespace { // Variables internal to initialization process only
@@ -984,8 +985,7 @@ bool AppInitParameterInteraction(const ArgsManager& args, bool use_syscall_sandb
         InitWarning(strprintf(_("Reducing -maxconnections from %d to %d, because of system limitations."), nUserMaxConnections, nMaxConnections));
 
     // ********************************************************* Step 3: parameter-to-internal-flags
-    init::SetLoggingCategories(args);
-    init::SetLoggingLevel(args);
+    // (logging categories/levels were enabled earlier in common::InitConfig)
 
     nConnectTimeout = args.GetIntArg("-timeout", DEFAULT_CONNECT_TIMEOUT);
     if (nConnectTimeout <= 0) {
@@ -1139,12 +1139,12 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 
     // CURRENT_CHAIN_CONF
 
-    LogPrint (BCLog::UTIL, "CURRENCY_UNIT %s \n", CURRENCY_UNIT);
+    LogPrint (BCLog::CHAIN, "CURRENCY_UNIT %s \n", CURRENCY_UNIT);
 
-    LogPrint (BCLog::UTIL, "CLIENT_NAME = %s\n", CLIENT_NAME.c_str());
+    LogPrint (BCLog::CHAIN, "CLIENT_NAME = %s\n", CLIENT_NAME.c_str());
 
     // LogPrintf("BITCOIN_CONF_FILENAME = %s\n", BITCOIN_CONF_FILENAME);
-    LogPrint (BCLog::UTIL, "CURRENT_CHAIN_CONF = %s\n", CURRENT_CHAIN_CONF);
+    LogPrint (BCLog::CHAIN, "CURRENT_CHAIN_CONF = %s\n", CURRENT_CHAIN_CONF);
 
     const ArgsManager& args = *Assert(node.args);
     const CChainParams& chainparams = Params();
@@ -1164,7 +1164,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         return false;
     }
 
-    LogPrintf("Using at most %i automatic connections (%i file descriptors available)\n", nMaxConnections, nFD);
+    LogPrint(BCLog::STARTUP, "Using at most %i automatic connections (%i file descriptors available)\n", nMaxConnections, nFD);
 
     // Warn about relative -datadir path.
     if (args.IsArgSet("-datadir") && !args.GetPathArg("-datadir").is_absolute()) {
@@ -1196,7 +1196,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     // Number of script-checking threads <= MAX_SCRIPTCHECK_THREADS
     script_threads = std::min(script_threads, MAX_SCRIPTCHECK_THREADS);
 
-    LogPrintf("Script verification uses %d additional threads\n", script_threads);
+    LogPrint(BCLog::STARTUP, "Script verification uses %d additional threads\n", script_threads);
     if (script_threads >= 1) {
         StartScriptCheckWorkerThreads(script_threads);
     }
@@ -1448,7 +1448,7 @@ node.scheduler->scheduleEvery([&node] {
             const uint256 asmap_version = SerializeHash(asmap);
             LogPrintf("Using asmap version %s for IP bucketing\n", asmap_version.ToString());
         } else {
-            LogPrintf("Using /16 prefix for IP bucketing\n");
+            LogPrint(BCLog::STARTUP, "Using /16 prefix for IP bucketing\n");
         }
 
         // Initialize netgroup manager
@@ -1676,16 +1676,16 @@ node.scheduler->scheduleEvery([&node] {
     // cache size calculations
     CacheSizes cache_sizes = CalculateCacheSizes(args, g_enabled_filter_types.size());
 
-    LogPrintf("Cache configuration:\n");
-    LogPrintf("* Using %.1f MiB for block index database\n", cache_sizes.block_tree_db * (1.0 / 1024 / 1024));
+    LogPrint(BCLog::STARTUP, "Cache configuration:\n");
+    LogPrint(BCLog::STARTUP, "* Using %.1f MiB for block index database\n", cache_sizes.block_tree_db * (1.0 / 1024 / 1024));
     if (args.GetBoolArg("-txindex", DEFAULT_TXINDEX)) {
-        LogPrintf("* Using %.1f MiB for transaction index database\n", cache_sizes.tx_index * (1.0 / 1024 / 1024));
+        LogPrint(BCLog::STARTUP, "* Using %.1f MiB for transaction index database\n", cache_sizes.tx_index * (1.0 / 1024 / 1024));
     }
     for (BlockFilterType filter_type : g_enabled_filter_types) {
-        LogPrintf("* Using %.1f MiB for %s block filter index database\n",
+        LogPrint(BCLog::STARTUP, "* Using %.1f MiB for %s block filter index database\n",
                   cache_sizes.filter_index * (1.0 / 1024 / 1024), BlockFilterTypeName(filter_type));
     }
-    LogPrintf("* Using %.1f MiB for chain state database\n", cache_sizes.coins_db * (1.0 / 1024 / 1024));
+    LogPrint(BCLog::STARTUP, "* Using %.1f MiB for chain state database\n", cache_sizes.coins_db * (1.0 / 1024 / 1024));
 
     assert(!node.mempool);
     assert(!node.chainman);
@@ -1703,7 +1703,7 @@ node.scheduler->scheduleEvery([&node] {
     if (mempool_opts.max_size_bytes < 0 || mempool_opts.max_size_bytes < descendant_limit_bytes) {
         return InitError(strprintf(_("-maxmempool must be at least %d MB"), std::ceil(descendant_limit_bytes / 1'000'000.0)));
     }
-    LogPrintf("* Using %.1f MiB for in-memory UTXO set (plus up to %.1f MiB of unused mempool space)\n", cache_sizes.coins * (1.0 / 1024 / 1024), mempool_opts.max_size_bytes * (1.0 / 1024 / 1024));
+    LogPrint(BCLog::STARTUP, "* Using %.1f MiB for in-memory UTXO set (plus up to %.1f MiB of unused mempool space)\n", cache_sizes.coins * (1.0 / 1024 / 1024), mempool_opts.max_size_bytes * (1.0 / 1024 / 1024));
 
     for (bool fLoaded = false; !fLoaded && !ShutdownRequested();) {
         node.mempool = std::make_unique<CTxMemPool>(mempool_opts);
@@ -1741,7 +1741,7 @@ node.scheduler->scheduleEvery([&node] {
             std::tie(status, error) = catch_exceptions([&]{ return VerifyLoadedChainstate(chainman, options);});
             if (status == node::ChainstateLoadStatus::SUCCESS) {
                 fLoaded = true;
-                LogPrintf(" block index %15dms\n", Ticks<std::chrono::milliseconds>(SteadyClock::now() - load_block_index_start_time));
+                LogPrint(BCLog::STARTUP, " block index %15dms\n", Ticks<std::chrono::milliseconds>(SteadyClock::now() - load_block_index_start_time));
             }
         }
 
@@ -1819,7 +1819,7 @@ node.scheduler->scheduleEvery([&node] {
 
     // ********************************************************* Step 10: data directory maintenance
 
-    LogPrintf("Setting NODE_NETWORK on non-prune mode\n");
+    LogPrint(BCLog::STARTUP, "Setting NODE_NETWORK on non-prune mode\n");
     nLocalServices = ServiceFlags(nLocalServices | NODE_NETWORK);
 
     // ********************************************************* Step 11: import blocks
@@ -1911,7 +1911,7 @@ node.scheduler->scheduleEvery([&node] {
     //// debug print
     {
         LOCK(cs_main);
-        LogPrintf("block tree size = %u\n", chainman.BlockIndex().size());
+        LogPrint(BCLog::STARTUP, "block tree size = %u\n", chainman.BlockIndex().size());
         chain_active_height = chainman.ActiveChain().Height();
         if (tip_info) {
             tip_info->block_height = chain_active_height;
@@ -1923,7 +1923,7 @@ node.scheduler->scheduleEvery([&node] {
             tip_info->header_time = chainman.m_best_header->GetBlockTime();
         }
     }
-    LogPrintf("nBestHeight = %d\n", chain_active_height);
+    LogPrint(BCLog::STARTUP, "nBestHeight = %d\n", chain_active_height);
     if (node.peerman) node.peerman->SetBestHeight(chain_active_height);
 
     // Map ports with UPnP or NAT-PMP.

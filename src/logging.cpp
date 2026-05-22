@@ -164,9 +164,9 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::SELECTCOINS, "selectcoins"},
     {BCLog::REINDEX, "reindex"},
     {BCLog::CMPCTBLOCK, "cmpctblock"},
-    {BCLog::RAND, "rand"},
+    {BCLog::PEER, "peer"},
     {BCLog::PRUNE, "prune"},
-    {BCLog::PROXY, "proxy"},
+    {BCLog::CHAIN, "chain"},
     {BCLog::STARTUP, "startup"},
     {BCLog::LIBEVENT, "libevent"},
     {BCLog::COINDB, "coindb"},
@@ -254,12 +254,12 @@ std::string LogCategoryToStr(BCLog::LogFlags category)
         return "reindex";
     case BCLog::LogFlags::CMPCTBLOCK:
         return "cmpctblock";
-    case BCLog::LogFlags::RAND:
-        return "rand";
+    case BCLog::LogFlags::PEER:
+        return "peer";
     case BCLog::LogFlags::PRUNE:
         return "prune";
-    case BCLog::LogFlags::PROXY:
-        return "proxy";
+    case BCLog::LogFlags::CHAIN:
+        return "chain";
     case BCLog::LogFlags::STARTUP:
         return "startup";
     case BCLog::LogFlags::LIBEVENT:

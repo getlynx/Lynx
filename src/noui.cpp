@@ -53,7 +53,7 @@ bool noui_ThreadSafeQuestion(const bilingual_str& /* ignored interactive message
 
 void noui_InitMessage(const std::string& message)
 {
-    LogPrintf("init message: %s\n", message);
+    LogPrint(BCLog::STARTUP, "init message: %s\n", message);
 }
 
 void noui_connect()
@@ -77,7 +77,7 @@ bool noui_ThreadSafeQuestionRedirect(const bilingual_str& /* ignored interactive
 
 void noui_InitMessageRedirect(const std::string& message)
 {
-    LogPrintf("init message: %s\n", message);
+    LogPrint(BCLog::STARTUP, "init message: %s\n", message);
 }
 
 void noui_test_redirect()
