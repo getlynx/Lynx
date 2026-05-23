@@ -62,7 +62,7 @@ struct tallyitem
 {
     CAmount nAmount{0};
     int nConf{std::numeric_limits<int>::max()};
-    std::vector<uint256> txids;
+    std::set<uint256> txids;
     bool fIsWatchonly{false};
     tallyitem() = default;
 };
@@ -124,7 +124,7 @@ static UniValue ListReceived(const CWallet& wallet, const UniValue& params, cons
             tallyitem& item = mapTally[address];
             item.nAmount += txout.nValue;
             item.nConf = std::min(item.nConf, nDepth);
-            item.txids.push_back(wtx.GetHash());
+            item.txids.insert(wtx.GetHash());
             if (mine & ISMINE_WATCH_ONLY)
                 item.fIsWatchonly = true;
         }
