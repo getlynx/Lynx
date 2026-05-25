@@ -210,7 +210,7 @@ const char* pszTimestamp = nullptr;
     pszTimestamp = spec.psztimestamp[CURRENT_CHAIN].c_str();
 // }
 
-LogPrint (BCLog::UTIL, "pszTimestamp %s \n", pszTimestamp);
+LogPrint(BCLog::CHAIN, "pszTimestamp %s \n", pszTimestamp);
 
     const CScript genesisOutputScript = CScript() << ParseHex("040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9") << OP_CHECKSIG;
     return CreateGenesisBlock(pszTimestamp, genesisOutputScript, nTime, nNonce, nBits, nVersion, genesisReward);
@@ -503,12 +503,12 @@ public:
         pchMessageStart[3] = spec.pchMessageStart[CURRENT_CHAIN][3];
         nDefaultPort = spec.nDefaultPort[CURRENT_CHAIN];
 
-LogPrint (BCLog::UTIL, "nDefaultPort %d \n", nDefaultPort);
+LogPrint(BCLog::CHAIN, "nDefaultPort %d \n", nDefaultPort);
 
-LogPrint (BCLog::UTIL, "pchMessageStart[0] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][0]);
-LogPrint (BCLog::UTIL, "pchMessageStart[1] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][1]);
-LogPrint (BCLog::UTIL, "pchMessageStart[2] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][2]);
-LogPrint (BCLog::UTIL, "pchMessageStart[3] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][3]);
+LogPrint(BCLog::CHAIN, "pchMessageStart[0] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][0]);
+LogPrint(BCLog::CHAIN, "pchMessageStart[1] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][1]);
+LogPrint(BCLog::CHAIN, "pchMessageStart[2] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][2]);
+LogPrint(BCLog::CHAIN, "pchMessageStart[3] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][3]);
 
 // }
 

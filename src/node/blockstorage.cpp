@@ -322,11 +322,11 @@ bool BlockManager::LoadBlockIndexDB()
     // Load block file info
     m_block_tree_db->ReadLastBlockFile(m_last_blockfile);
     m_blockfile_info.resize(m_last_blockfile + 1);
-    LogPrintf("%s: last block file = %i\n", __func__, m_last_blockfile);
+    LogPrint(BCLog::STARTUP, "%s: last block file = %i\n", __func__, m_last_blockfile);
     for (int nFile = 0; nFile <= m_last_blockfile; nFile++) {
         m_block_tree_db->ReadBlockFileInfo(nFile, m_blockfile_info[nFile]);
     }
-    LogPrintf("%s: last block file info: %s\n", __func__, m_blockfile_info[m_last_blockfile].ToString());
+    LogPrint(BCLog::STARTUP, "%s: last block file info: %s\n", __func__, m_blockfile_info[m_last_blockfile].ToString());
     for (int nFile = m_last_blockfile + 1; true; nFile++) {
         CBlockFileInfo info;
         if (m_block_tree_db->ReadBlockFileInfo(nFile, info)) {
@@ -337,7 +337,7 @@ bool BlockManager::LoadBlockIndexDB()
     }
 
     // Check presence of blk files
-    LogPrintf("Checking all blk files are present...\n");
+    LogPrint(BCLog::STARTUP, "Checking all blk files are present...\n");
     std::set<int> setBlkDataFiles;
     for (const auto& [_, block_index] : m_block_index) {
         if (block_index.nStatus & BLOCK_HAVE_DATA) {
