@@ -232,6 +232,9 @@ unsigned int GetNextWorkRequiredDigiShield(const CBlockIndex* pindexLast, const 
     const arith_uint256 bnProofOfWorkLimit = UintToArith256(params.powLimit);
     unsigned int nProofOfWorkLimit = UintToArith256(params.powLimit).GetCompact();
 
+    if (params.fPowNoRetargeting)
+        return nProofOfWorkLimit;
+
     int blockstogoback = 0;
     int64_t retargetTimespan = params.GetPowTargetSpacing(pindexLast->nHeight+1);
     int64_t retargetSpacing = params.GetPowTargetSpacing(pindexLast->nHeight+1);
