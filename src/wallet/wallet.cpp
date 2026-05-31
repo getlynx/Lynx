@@ -1640,6 +1640,10 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
 
         SyncTransaction(ptx, TxStateInactive{});
 
+        if (ptx->IsCoinStake() && mapWallet.count(tx_hash) > 0) {
+            AbandonTransaction(tx_hash);
+        }
+
         for (const CTxIn& tx_in : ptx->vin) {
             // No other wallet transactions conflicted with this transaction
             if (mapTxSpends.count(tx_in.prevout) < 1) continue;
