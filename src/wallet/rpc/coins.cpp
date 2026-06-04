@@ -227,6 +227,62 @@ RPCHelpMan getbalance()
     };
 }
 
+RPCHelpMan getblockrate()
+{
+    return RPCHelpMan{"getblockrate",
+        "\nEstimate the expected number of days between block-staking wins, based on\n"
+        "the wallet's current staking-eligible UTXO set and the current PoS difficulty.\n",
+        {},
+        RPCResult{RPCResult::Type::NUM, "", "Expected days between wins."},
+        RPCExamples{HelpExampleCli("getblockrate", "") + HelpExampleRpc("getblockrate", "")},
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    const std::shared_ptr<CWallet> pwallet = GetWalletForJSONRPCRequest(request);
+    if (!pwallet) return UniValue::VNULL;
+    pwallet->BlockUntilSyncedToCurrentChain();
+
+    interfaces::Chain& chain = pwallet->chain();
+
+    // Sum staking-eligible UTXOs (age / locked / spendable, same checks the staker uses).
+    const Consensus::Params& consensus = Params().GetConsensus();
+    CAmount totalStakeSats = 0;
+    {
+        LOCK(pwallet->cs_wallet);
+        const int64_t now = GetTime();
+        for (const auto& output : AvailableCoins(*pwallet).All()) {
+            const int input_age = now - output.time;
+            if (input_age < consensus.nStakeMinAge || input_age > consensus.nStakeMaxAge) continue;
+            if (pwallet->IsLockedCoin(output.outpoint)) continue;
+            if (!(pwallet->IsMine(output.txout) & ISMINE_SPENDABLE)) continue;
+            totalStakeSats += output.txout.nValue;
+        }
+    }
+    if (totalStakeSats == 0) return UniValue(0.0);
+
+    // Get nBits at chain tip via the wallet's chain interface.
+    auto height_opt = chain.getHeight();
+    if (!height_opt) return UniValue(0.0);
+    CBlock tip_block;
+    if (!chain.findBlock(chain.getBlockHash(*height_opt), interfaces::FoundBlock().data(tip_block))) return UniValue(0.0);
+
+    unsigned int nBits = tip_block.nBits;
+    int nShift = (nBits >> 24) & 0xff;
+    double dDiff = double(0x0000ffff) / double(nBits & 0x00ffffff);
+    while (nShift < 29) { dDiff *= 256.0; ++nShift; }
+    while (nShift > 29) { dDiff /= 256.0; --nShift; }
+
+    // expected_attempts_to_win = difficulty * 2^32 / stake_in_sats
+    // 16 s per attempt, 86,400 s per day
+    constexpr double kTwoPow32 = 4294967296.0;
+    constexpr double kSecondsPerAttempt = 16.0;
+    constexpr double kSecondsPerDay = 86400.0;
+
+    double expected_seconds = kSecondsPerAttempt * dDiff * kTwoPow32 / double(totalStakeSats);
+    return UniValue(expected_seconds / kSecondsPerDay);
+},
+    };
+}
+
 RPCHelpMan getunconfirmedbalance()
 {
     return RPCHelpMan{"getunconfirmedbalance",
