@@ -455,6 +455,8 @@ spec.genesismerkleroot["bidha"] = "0xab44c95608c9971475915ed3d31326569dee3b30b61
             consensus.lastPoWBlock = 7500;   // matches InfiniLooP's nLastPOWBlock
         } else {
             consensus.lastPoWBlock = 1500;
+            consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+            consensus.fPowNoRetargeting = true;        
         }
 
         consensus.nPosTargetTimespan = 5 * 60;
