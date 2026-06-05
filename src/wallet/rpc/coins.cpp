@@ -2,7 +2,10 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <cmath>
+
 #include <coins.h>
+#include <consensus/consensus.h>
 #include <core_io.h>
 #include <hash.h>
 #include <key_io.h>
@@ -243,8 +246,16 @@ RPCHelpMan getblockrate()
 
     interfaces::Chain& chain = pwallet->chain();
 
-    // Sum staking-eligible UTXOs (age / locked / spendable, same checks the staker uses).
+    // Get current chain tip (height + tip block for nBits).
+    auto height_opt = chain.getHeight();
+    if (!height_opt) return UniValue(0.0);
+    const int currentHeight = *height_opt;
+    CBlock tip_block;
+    if (!chain.findBlock(chain.getBlockHash(currentHeight), interfaces::FoundBlock().data(tip_block))) return UniValue(0.0);
+
+    // Sum staking-eligible UTXOs (age / depth / locked / spendable — same checks the staker applies).
     const Consensus::Params& consensus = Params().GetConsensus();
+    const int requiredDepth = std::min((int)COINBASE_MATURITY, currentHeight / 2);
     CAmount totalStakeSats = 0;
     {
         LOCK(pwallet->cs_wallet);
@@ -252,18 +263,13 @@ RPCHelpMan getblockrate()
         for (const auto& output : AvailableCoins(*pwallet).All()) {
             const int input_age = now - output.time;
             if (input_age < consensus.nStakeMinAge || input_age > consensus.nStakeMaxAge) continue;
+            if (output.depth < requiredDepth) continue;
             if (pwallet->IsLockedCoin(output.outpoint)) continue;
             if (!(pwallet->IsMine(output.txout) & ISMINE_SPENDABLE)) continue;
             totalStakeSats += output.txout.nValue;
         }
     }
     if (totalStakeSats == 0) return UniValue(0.0);
-
-    // Get nBits at chain tip via the wallet's chain interface.
-    auto height_opt = chain.getHeight();
-    if (!height_opt) return UniValue(0.0);
-    CBlock tip_block;
-    if (!chain.findBlock(chain.getBlockHash(*height_opt), interfaces::FoundBlock().data(tip_block))) return UniValue(0.0);
 
     unsigned int nBits = tip_block.nBits;
     int nShift = (nBits >> 24) & 0xff;
@@ -278,7 +284,8 @@ RPCHelpMan getblockrate()
     constexpr double kSecondsPerDay = 86400.0;
 
     double expected_seconds = kSecondsPerAttempt * dDiff * kTwoPow32 / double(totalStakeSats);
-    return UniValue(expected_seconds / kSecondsPerDay);
+    double days = expected_seconds / kSecondsPerDay;
+    return UniValue(UniValue::VNUM, strprintf("%.7f", days));
 },
     };
 }
