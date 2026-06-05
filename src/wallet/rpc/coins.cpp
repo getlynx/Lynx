@@ -246,12 +246,10 @@ RPCHelpMan getblockrate()
 
     interfaces::Chain& chain = pwallet->chain();
 
-    // Get current chain tip (height + tip block for nBits).
+    // Get current chain tip.
     auto height_opt = chain.getHeight();
     if (!height_opt) return UniValue(0.0);
     const int currentHeight = *height_opt;
-    CBlock tip_block;
-    if (!chain.findBlock(chain.getBlockHash(currentHeight), interfaces::FoundBlock().data(tip_block))) return UniValue(0.0);
 
     // Sum staking-eligible UTXOs (age / depth / locked / spendable — same checks the staker applies).
     const Consensus::Params& consensus = Params().GetConsensus();
@@ -271,11 +269,24 @@ RPCHelpMan getblockrate()
     }
     if (totalStakeSats == 0) return UniValue(0.0);
 
-    unsigned int nBits = tip_block.nBits;
-    int nShift = (nBits >> 24) & 0xff;
-    double dDiff = double(0x0000ffff) / double(nBits & 0x00ffffff);
-    while (nShift < 29) { dDiff *= 256.0; ++nShift; }
-    while (nShift > 29) { dDiff /= 256.0; --nShift; }
+    // Average dDiff over the last 24 blocks to damp LWMA-output wobble.
+    constexpr int kAverageWindow = 24;
+    const int startHeight = std::max(0, currentHeight - (kAverageWindow - 1));
+    double dDiffSum = 0.0;
+    int sampleCount = 0;
+    for (int h = startHeight; h <= currentHeight; ++h) {
+        CBlock blk;
+        if (!chain.findBlock(chain.getBlockHash(h), interfaces::FoundBlock().data(blk))) continue;
+        unsigned int nBits = blk.nBits;
+        int nShift = (nBits >> 24) & 0xff;
+        double dDiff = double(0x0000ffff) / double(nBits & 0x00ffffff);
+        while (nShift < 29) { dDiff *= 256.0; ++nShift; }
+        while (nShift > 29) { dDiff /= 256.0; --nShift; }
+        dDiffSum += dDiff;
+        ++sampleCount;
+    }
+    if (sampleCount == 0) return UniValue(0.0);
+    const double dDiff = dDiffSum / double(sampleCount);
 
     // expected_attempts_to_win = difficulty * 2^32 / stake_in_sats
     // 16 s per attempt, 86,400 s per day
