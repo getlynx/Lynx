@@ -269,8 +269,8 @@ RPCHelpMan getblockrate()
     }
     if (totalStakeSats == 0) return UniValue(0.0);
 
-    // Average dDiff over the last 24 blocks to damp LWMA-output wobble.
-    constexpr int kAverageWindow = 24;
+    // Average dDiff over the last 96 blocks to damp LWMA-output wobble.
+    constexpr int kAverageWindow = 96;
     const int startHeight = std::max(0, currentHeight - (kAverageWindow - 1));
     double dDiffSum = 0.0;
     int sampleCount = 0;
