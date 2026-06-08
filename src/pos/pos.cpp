@@ -282,8 +282,8 @@ bool blnfncCheckProofOfStake(
 {
     LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Starting PoS validation for block height %d, txid %s\n", ibliCurrentBlock ? ibliCurrentBlock->nHeight : -1, itxnStakeTransaction.GetHash().ToString());
 
-    if (std::string(CURRENT_CHAIN) == "bidha") {
-        // bidha is a read-only observer of the infiniloop chain; infiniloop's PoS kernel,
+    if (std::string(CURRENT_CHAIN) == "infiniloop") {
+        // infiniloop is a read-only observer of the infiniloop chain; infiniloop's PoS kernel,
         // stake modifier, and script rules differ from Lynx's. Trust the network's validation.
         return true;
     }
@@ -356,7 +356,7 @@ bool blnfncCheckProofOfStake(
     // std::vector<uint8_t> vchAmount(8);
 
     // If invalid script
-    if (std::string(CURRENT_CHAIN) != "bidha" && !VerifyScript(scrScriptSig, scrScriptPubKey, scwScriptWitness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&itxnStakeTransaction, 0, mntStakeAmount, MissingDataBehavior::FAIL), &sceScriptError)) {
+    if (std::string(CURRENT_CHAIN) != "infiniloop" && !VerifyScript(scrScriptSig, scrScriptPubKey, scwScriptWitness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&itxnStakeTransaction, 0, mntStakeAmount, MissingDataBehavior::FAIL), &sceScriptError)) {
         LogPrintf("ERROR: %s: verify-script-failed, txn %s, reason %s\n", __func__, itxnStakeTransaction.GetHash().ToString(), ScriptErrorString(sceScriptError));
         LogPrint(BCLog::POS, "blnfncCheckProofOfStake: Script verification failed\n");
         return false;
@@ -472,7 +472,7 @@ uint256 ComputeStakeModifier(const CBlockIndex* pindexPrev, const uint256& kerne
 // Check whether the coinstake timestamp meets protocol
 bool CheckCoinStakeTimestamp(int64_t nTimeBlock)
 {
-    if (std::string(CURRENT_CHAIN) == "bidha") {
+    if (std::string(CURRENT_CHAIN) == "infiniloop") {
         return true;   // infiniloop has no stake-timestamp-mask rule
     }
     bool isValid = (nTimeBlock & nStakeTimestampMask) == 0;

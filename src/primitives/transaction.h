@@ -229,7 +229,7 @@ inline void UnserializeTransaction(TxType& tx, Stream& s) {
     const bool fAllowWitness = !(s.GetVersion() & SERIALIZE_TRANSACTION_NO_WITNESS);
 
     s >> tx.nVersion;
-    if (std::string(CURRENT_CHAIN) == "bidha") {
+    if (std::string(CURRENT_CHAIN) == "infiniloop") {
         s >> tx.nTime;
     }
     unsigned char flags = 0;
@@ -271,7 +271,7 @@ inline void SerializeTransaction(const TxType& tx, Stream& s) {
     const bool fAllowWitness = !(s.GetVersion() & SERIALIZE_TRANSACTION_NO_WITNESS);
 
     s << tx.nVersion;
-    if (std::string(CURRENT_CHAIN) == "bidha") {
+    if (std::string(CURRENT_CHAIN) == "infiniloop") {
         s << tx.nTime;
     }
     unsigned char flags = 0;
@@ -323,7 +323,7 @@ public:
     const std::vector<CTxOut> vout;
     const int32_t nVersion;
     const uint32_t nLockTime;
-    const uint32_t nTime;   // bidha: serialized after nVersion; 0/unused on other chains
+    const uint32_t nTime;   // infiniloop: serialized after nVersion; 0/unused on other chains
 
 private:
     /** Memory only. */
@@ -405,7 +405,7 @@ struct CMutableTransaction
     std::vector<CTxOut> vout;
     int32_t nVersion;
     uint32_t nLockTime;
-    uint32_t nTime{0};   // bidha: serialized after nVersion; 0/unused on other chains
+    uint32_t nTime{0};   // infiniloop: serialized after nVersion; 0/unused on other chains
 
     explicit CMutableTransaction();
     explicit CMutableTransaction(const CTransaction& tx);

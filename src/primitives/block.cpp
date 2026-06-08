@@ -10,7 +10,7 @@
 
 uint256 CBlockHeader::GetHash() const
 {
-    if (std::string(CURRENT_CHAIN) == "bidha" && nVersion <= 6) {
+    if (std::string(CURRENT_CHAIN) == "infiniloop" && nVersion <= 6) {
         return GetPoWHash();
     }
     return SerializeHash(*this);

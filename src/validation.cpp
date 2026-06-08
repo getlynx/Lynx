@@ -2622,14 +2622,14 @@ LogPrint (BCLog::STORAGE, "is_opreturn_an_authdata from validation.cpp \n");
     {
         CAmount stakeReward = GetProofOfStakeReward(pindex->nHeight, params.GetConsensus());
         CAmount stakeActual = block.vtx[1]->GetValueOut() - nValueIn;
-        if (std::string(CURRENT_CHAIN) != "bidha" && stakeActual > stakeReward) {
+        if (std::string(CURRENT_CHAIN) != "infiniloop" && stakeActual > stakeReward) {
 		LogPrintf("ERROR: ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)\n", stakeActual, stakeReward);
 		return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-amount");
 	}
     }
 
     bool queue_ok = control.Wait();
-    if (std::string(CURRENT_CHAIN) != "bidha" && !queue_ok) {
+    if (std::string(CURRENT_CHAIN) != "infiniloop" && !queue_ok) {
         LogPrintf("ERROR: %s: CheckQueue failed\n", __func__);
         return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "block-validation-failed");
     }
@@ -3975,7 +3975,7 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
     // Check proof of work
     const Consensus::Params& consensusParams = chainman.GetConsensus();
     bool checkTarget = nHeight >= consensusParams.HardFork3Height + 5; // few blocks extra to clear the window
-    if (std::string(CURRENT_CHAIN) != "bidha" && checkTarget && (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams)))
+    if (std::string(CURRENT_CHAIN) != "infiniloop" && checkTarget && (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams)))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", "incorrect proof of work");
 
     // Check against checkpoints
