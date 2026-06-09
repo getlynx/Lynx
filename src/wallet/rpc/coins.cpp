@@ -234,7 +234,8 @@ RPCHelpMan getblockrate()
 {
     return RPCHelpMan{"getblockrate",
         "\nEstimate the expected number of days between block-staking wins, based on\n"
-        "the wallet's current staking-eligible UTXO set and the current PoS difficulty.\n",
+        "the wallet's current staking-eligible UTXO set and an average of the most\n"
+        "recent 96 difficulties.\n",
         {
             {"until_next", RPCArg::Type::BOOL, RPCArg::Default{false},
              "If true, return estimated days until the next win (interval minus time since the last win)."},
