@@ -235,14 +235,24 @@ RPCHelpMan getblockrate()
     return RPCHelpMan{"getblockrate",
         "\nEstimate the expected number of days between block-staking wins, based on\n"
         "the wallet's current staking-eligible UTXO set and the current PoS difficulty.\n",
-        {},
+        {
+            {"until_next", RPCArg::Type::BOOL, RPCArg::Default{false},
+             "If true, return estimated days until the next win (interval minus time since the last win)."},
+        },
         RPCResult{RPCResult::Type::NUM, "", "Expected days between wins."},
-        RPCExamples{HelpExampleCli("getblockrate", "") + HelpExampleRpc("getblockrate", "")},
+        RPCExamples{
+            "\nExpected days between wins\n"
+            + HelpExampleCli("getblockrate", "")
+            + "\nExpected days until the next win\n"
+            + HelpExampleCli("getblockrate", "true")
+            + HelpExampleRpc("getblockrate", "true")},
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     const std::shared_ptr<CWallet> pwallet = GetWalletForJSONRPCRequest(request);
     if (!pwallet) return UniValue::VNULL;
     pwallet->BlockUntilSyncedToCurrentChain();
+
+    const bool untilNext = !request.params[0].isNull() && request.params[0].get_bool();
 
     interfaces::Chain& chain = pwallet->chain();
 
@@ -296,6 +306,23 @@ RPCHelpMan getblockrate()
 
     double expected_seconds = kSecondsPerAttempt * dDiff * kTwoPow32 / double(totalStakeSats);
     double days = expected_seconds / kSecondsPerDay;
+
+    if (untilNext) {
+        // Subtract time elapsed since this node's most recent block win (newest
+        // confirmed coinstake we own) from the expected interval.
+        int64_t lastWinTime = 0;
+        {
+            LOCK(pwallet->cs_wallet);
+            for (const auto& [hash, wtx] : pwallet->mapWallet) {
+                if (!wtx.IsCoinStake()) continue;
+                if (pwallet->GetTxDepthInMainChain(wtx) <= 0) continue;
+                lastWinTime = std::max<int64_t>(lastWinTime, wtx.GetTxTime());
+            }
+        }
+        if (lastWinTime > 0)
+            days = std::max(0.0, days - (GetTime() - lastWinTime) / kSecondsPerDay);
+    }
+
     return UniValue(UniValue::VNUM, strprintf("%.7f", days));
 },
     };
