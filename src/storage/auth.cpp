@@ -220,7 +220,7 @@ bool set_auth_user(std::string& privatewif)
     CKey key = DecodeSecret(privatewif);
     if (!key.IsValid()) {
         LogPrint (BCLog::STORAGE, "\n");
-        LogPrint (BCLog::STORAGE, "The private key provided via 'lynx-cli setauth' has NOT passed validation.\n");        
+        LogPrint (BCLog::STORAGE, "The private key provided via '" CURRENT_CHAIN "-cli setauth' has NOT passed validation.\n");        
         LogPrint (BCLog::STORAGE, "setauth set_auth_user privkey privatewif %s \n", privatewif);
         LogPrint (BCLog::STORAGE, "\n");
       return false;
@@ -232,20 +232,20 @@ bool set_auth_user(std::string& privatewif)
 
     // Dump authUser to log
     LogPrint (BCLog::STORAGE, "\n");
-    LogPrint (BCLog::STORAGE, "The private key provided via 'lynx-cli setauth' has passed validation.\n");        
+    LogPrint (BCLog::STORAGE, "The private key provided via '" CURRENT_CHAIN "-cli setauth' has passed validation.\n");        
     LogPrint (BCLog::STORAGE, "setauth set_auth_user privkey privatewif %s \n", privatewif);
     LogPrint (BCLog::STORAGE, "setauth set_auth_user pubkey authUser %s\n", authUser.ToString());
 
     LogPrint (BCLog::STORAGE, "\n");
     LogPrint (BCLog::STORAGE, "NOTE THE FOLLOWING PROJECT PROTOCOL FOR ENABLING USER PUTFILE FUNCTIONALITY (set_auth_user)\n");
-    LogPrint (BCLog::STORAGE, "1) The super-user will lynx-cli setauth with the private motherkey.\n");
+    LogPrint (BCLog::STORAGE, "1) The super-user will " CURRENT_CHAIN "-cli setauth with the private motherkey.\n");
     LogPrint (BCLog::STORAGE, "The above will succeed because the public motherkey is added to global variable authList at daemon startup.\n");
-    LogPrint (BCLog::STORAGE, "2) The super-user will lynx-cli setauth with the user privatekey.\n");
+    LogPrint (BCLog::STORAGE, "2) The super-user will " CURRENT_CHAIN "-cli setauth with the user privatekey.\n");
     LogPrint (BCLog::STORAGE, "The above will fail because the user publickey does not exist in authList.\n");
     LogPrint (BCLog::STORAGE, "However, the user publickey associated with the user privatekey will be sent to the log.\n");
-    LogPrint (BCLog::STORAGE, "3) The super-user will lynx-cli addauth with the user publickey from the log.\n");
+    LogPrint (BCLog::STORAGE, "3) The super-user will " CURRENT_CHAIN "-cli addauth with the user publickey from the log.\n");
     LogPrint (BCLog::STORAGE, "Now the user publickey exists in authList\n");
-    LogPrint (BCLog::STORAGE, "4) The user will lynx-cli setauth with the user privatekey.\n");
+    LogPrint (BCLog::STORAGE, "4) The user will " CURRENT_CHAIN "-cli setauth with the user privatekey.\n");
     LogPrint (BCLog::STORAGE, "The above will succeed because the user publickey exists in authList\n");
     LogPrint (BCLog::STORAGE, "Now, the user is authenticated and putfile functionality is enabled for that user.\n");
     LogPrint (BCLog::STORAGE, "\n");

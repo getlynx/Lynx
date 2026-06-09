@@ -9,7 +9,7 @@
 void write_lynx_config(std::string& configpath, std::string passwordMain, std::string usernameMain, std::string passwordTest, std::string usernameTest)
 {
     std::ofstream config(configpath);
-    config << "# Changes to this file will take effect after the Lynx daemon is restarted" << std::endl;
+    config << "# Changes to this file will take effect after the " << CURRENT_CHAIN << " daemon is restarted" << std::endl;
     config << "# Lynx Documentation --> https://docs.getlynx.io/" << std::endl;
     config << "" << std::endl;
     config << "# Accept connections from outside" << std::endl;

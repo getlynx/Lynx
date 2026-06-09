@@ -183,7 +183,7 @@ bool check_mempool_for_customuuid (const CTxMemPool& mempool, std::string strCus
 static RPCHelpMan store()
 {
     return RPCHelpMan{"store",
-        "\nStore a file on the Lynx blockchain.\n",
+        "\nStore a file on the " CURRENT_CHAIN " blockchain.\n",
          {
              {"filepath", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Full path of file to be uploaded"},
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Custom unique identifier (32 characters, hexadecimal format, must be unique across all files)"},
@@ -203,7 +203,7 @@ static RPCHelpMan store()
                           {RPCResult::Type::STR, "identifier", "Universally unique asset identifier"},
                           {RPCResult::Type::STR, "tenant", "Hashed public tenant key"},
                           {RPCResult::Type::NUM, "filesize", "filesize (B)"},
-                          {RPCResult::Type::STR, "storagefee", "Storage transaction fee in lynx"},
+                          {RPCResult::Type::STR, "storagefee", "Storage transaction fee in " + CURRENCY_UNIT},
                           {RPCResult::Type::STR, "storagetime", "Storage date and time"},
                           {RPCResult::Type::NUM, "currentblock", "Current block"},
                           {RPCResult::Type::STR, "stakingstatus", "enabled | disabled"},
@@ -214,7 +214,7 @@ static RPCHelpMan store()
 
 
             RPCExamples{
-            "\nStore /home/username/documents/research.pdf on the Lynx blockchain.\n"
+            "\nStore /home/username/documents/research.pdf on the " CURRENT_CHAIN " blockchain.\n"
             + HelpExampleCli("store", "/home/username/documents/research.pdf")
         + HelpExampleRpc("store", "/home/username/documents/research.pdf")
                 },
@@ -874,7 +874,7 @@ LogPrint (BCLog::STORAGE, "json 2 gstrAssetFilename uuid %s %s\n", gstrAssetFile
 static RPCHelpMan fetchall()
 {
     return RPCHelpMan{"fetchall",
-        "\nRetrieve asset(s) stored on the Lynx blockchain in reverse chronological order\nLearn more at https://docs.getlynx.io/\n",
+        "\nRetrieve asset(s) stored on the " CURRENT_CHAIN " blockchain in reverse chronological order\nLearn more at https://docs.getlynx.io/\n",
          {
              {"count", RPCArg::Type::STR, RPCArg::Optional::NO, "The number of assets to fetch (enter 0 to signify all)."}, 
              {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "Fully qualified asset download path."},
@@ -1028,7 +1028,7 @@ static RPCHelpMan fetchall()
 static RPCHelpMan fetch()
 {
     return RPCHelpMan{"fetch",
-        "\nRetrieve an asset stored on the Lynx blockchain.\nLearn more at https://docs.getlynx.io/\n",
+        "\nRetrieve an asset stored on the " CURRENT_CHAIN " blockchain.\nLearn more at https://docs.getlynx.io/\n",
          {
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The 64-character unique identifier of the asset."},
              {"path", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "The full path where you want to download the asset."},

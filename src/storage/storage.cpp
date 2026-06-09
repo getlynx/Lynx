@@ -1226,7 +1226,7 @@ void estimate_coins_for_opreturn(CWallet* wallet, int& suitable_inputs)
     LogPrint (BCLog::STORAGE, "\n");
     LogPrint (BCLog::STORAGE, "DETERMINE NUMBER OF TRANSACTIONS IN ACTIVE WALLET SUITABLE FOR PUTFILE TRANSACTIONS (estimate_coins_for_opreturn)\n");
     LogPrint (BCLog::STORAGE, "For a given putfile operation, each group of 256 chunks requires a separate transaction from the active wallet.\n");
-    LogPrint (BCLog::STORAGE, "A given suitable transaction will be associated with lynx coins to be used to pay for the chunk storage.\n");
+    LogPrint (BCLog::STORAGE, "A given suitable transaction will be associated with %s coins to be used to pay for the chunk storage.\n", CURRENCY_UNIT);
     LogPrint (BCLog::STORAGE, "A count of the transactions in the active wallet follow.\n");
     LogPrint (BCLog::STORAGE, "After that, the number of satoshis associated with each transaction are given, regardless of suitability.\n");
     LogPrint (BCLog::STORAGE, "Several things can make a transaction unsuitable (for instance, less than 100,000,000 satoshis).\n");
