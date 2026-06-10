@@ -453,6 +453,7 @@ spec.genesismerkleroot["infiniloop"] = "0xab44c95608c9971475915ed3d31326569dee3b
             consensus.lastPoWBlock = 3085114;
         } else if (std::string(CURRENT_CHAIN) == "infiniloop") {
             consensus.lastPoWBlock = 7500;   // matches InfiniLooP's nLastPOWBlock
+            consensus.infiniloopTransitionHeight = 3000000;
         } else {
             consensus.lastPoWBlock = 1500;
             consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");

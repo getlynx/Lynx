@@ -827,10 +827,6 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
 
     FastRandomContext rng_fast;
     CMutableTransaction txNew; // The resulting transaction that we make
-    if (std::string(CURRENT_CHAIN) == "infiniloop") {
-        txNew.nVersion = 1;
-        txNew.nTime = (uint32_t)GetTime();
-    }
 
     CoinSelectionParams coin_selection_params{rng_fast}; // Parameters for coin selection, init with dummy
     coin_selection_params.m_avoid_partial_spends = coin_control.m_avoid_partial_spends;
@@ -930,9 +926,6 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
 
     // Static vsize overhead + outputs vsize. 4 nVersion, 4 nLocktime, 1 input count, 1 witness overhead (dummy, flag, stack size)
     coin_selection_params.tx_noinputs_size = 10 + GetSizeOfCompactSize(vecSend.size()); // bytes for output count
-    if (std::string(CURRENT_CHAIN) == "infiniloop") {
-        coin_selection_params.tx_noinputs_size += 4; // infiniloop: nTime adds 4 bytes between nVersion and vin
-    }
 
     // vouts to the payees
     for (const auto& recipient : vecSend)

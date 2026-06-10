@@ -4514,9 +4514,6 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         for (unsigned int n = 0; n < nCount; n++) {
             vRecv >> headers[n];
             ReadCompactSize(vRecv); // ignore tx count; assume it is 0.
-            if (std::string(CURRENT_CHAIN) == "infiniloop") {
-                ReadCompactSize(vRecv); // discard trailing vchBlockSig count varint (infiniloop sends CBlock, not CBlockHeader, in `headers` message)
-            }
         }
 
         ProcessHeadersMessage(pfrom, *peer, std::move(headers), /*via_compact_block=*/false);

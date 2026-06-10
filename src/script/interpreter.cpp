@@ -1323,10 +1323,6 @@ public:
     void Serialize(S &s) const {
         // Serialize nVersion
         ::Serialize(s, txTo.nVersion);
-        // infiniloop: include nTime to match infiniloop's CTransaction serialization
-        if (std::string(CURRENT_CHAIN) == "infiniloop") {
-            ::Serialize(s, txTo.nTime);
-        }
         // Serialize vin
         unsigned int nInputs = fAnyoneCanPay ? 1 : txTo.vin.size();
         ::WriteCompactSize(s, nInputs);

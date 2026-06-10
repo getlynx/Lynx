@@ -57,6 +57,9 @@ bool blnfncCheckProofOfStake(Chainstate& chain_state, BlockValidationState& stat
  */
 bool CheckCoinStakeTimestamp(int64_t nTimeBlock);
 
+/** Height of the block currently being validated; read by infiniloop transition gates. */
+extern int g_currentValidatingBlockHeight;
+
 /**
  * Wrapper around CheckStakeKernelHash()
  * Also checks existence of kernel input and min age

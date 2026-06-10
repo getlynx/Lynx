@@ -12,6 +12,7 @@
 #include <chrono>
 #include <limits>
 #include <map>
+#include <string>
 #include <vector>
 
 namespace Consensus {
@@ -166,6 +167,10 @@ struct Params {
     int nStakeMinAge{0};
     int nStakeMaxAge{0};
     int lastPoWBlock{0};
+    int infiniloopTransitionHeight{0};
+    bool IsLegacyInfiniloopBlock(int height) const {
+        return std::string(CURRENT_CHAIN) == "infiniloop" && height < infiniloopTransitionHeight;
+    }
     /** The best chain should have at least this much work */
     uint256 nMinimumChainWork;
     /** By default assume that the signatures in ancestors of this block are valid */
