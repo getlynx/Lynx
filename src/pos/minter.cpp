@@ -13,9 +13,12 @@
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <shutdown.h>
+#include <streams.h>
 #include <util/moneystr.h>
+#include <util/strencodings.h>
 #include <util/syserror.h>
 #include <util/thread.h>
+#include <version.h>
 
 #include <consensus/merkle.h>
 #include <consensus/validation.h>
@@ -105,6 +108,68 @@ bool CheckStake(ChainstateManager& chainman, const CBlock* pblock)
     // A little too verbose for the uncategorized debug log
     // LogPrintf("CheckStake(): New proof-of-stake block found  \n  hash: %s \nproofhash: %s  \ntarget: %s\n", hashBlock.GetHex(), proofHash.GetHex(), hashTarget.GetHex());
     LogPrintf("CheckStake(): New proof-of-stake block found %s\n", hashBlock.GetHex());
+
+    LogPrintf("=== DRY-RUN STAKE DUMP ===\n");
+    LogPrintf("block hash:      %s\n", pblock->GetHash().GetHex());
+    LogPrintf("prev hash:       %s\n", pblock->hashPrevBlock.GetHex());
+    LogPrintf("merkle root:     %s\n", pblock->hashMerkleRoot.GetHex());
+    LogPrintf("version:         %d\n", pblock->nVersion);
+    LogPrintf("nTime:           %u\n", pblock->nTime);
+    LogPrintf("nBits:           0x%08x\n", pblock->nBits);
+    LogPrintf("nNonce:          %u\n", pblock->nNonce);
+    LogPrintf("vchBlockSig:     %s\n", HexStr(pblock->vchBlockSig));
+    LogPrintf("proofHash:       %s\n", proofHash.GetHex());
+    LogPrintf("hashTarget:      %s\n", hashTarget.GetHex());
+    LogPrintf("tx count:        %u\n", (unsigned)pblock->vtx.size());
+    if (pblock->vtx.size() > 1) {
+        const CTransaction& cs = *pblock->vtx[1];
+        LogPrintf("coinstake hash:  %s\n", cs.GetHash().GetHex());
+        LogPrintf("coinstake nVersion:  %d\n", cs.nVersion);
+        LogPrintf("coinstake nLockTime: %u\n", cs.nLockTime);
+        LogPrintf("coinstake inputs (%u):\n", (unsigned)cs.vin.size());
+        for (size_t i = 0; i < cs.vin.size(); ++i) {
+            const CTxIn& in = cs.vin[i];
+            CAmount in_value = -1;
+            int in_height = -1;
+            int64_t in_block_time = 0;
+            uint256 in_block_hash;
+            int tip_height = 0;
+            {
+                LOCK(cs_main);
+                Coin coin;
+                if (chainman.ActiveChainstate().CoinsTip().GetCoin(in.prevout, coin)) {
+                    in_value = coin.out.nValue;
+                    in_height = coin.nHeight;
+                    tip_height = chainman.ActiveChain().Height();
+                    const CBlockIndex* pi = chainman.ActiveChain()[in_height];
+                    if (pi) {
+                        in_block_hash = pi->GetBlockHash();
+                        in_block_time = pi->GetBlockTime();
+                    }
+                }
+            }
+            LogPrintf("  [%u] prevout: %s:%u, value: %s, scriptSig: %s\n",
+                (unsigned)i, in.prevout.hash.GetHex(), in.prevout.n,
+                in_value >= 0 ? FormatMoney(in_value) : std::string("<lookup failed>"),
+                HexStr(in.scriptSig));
+            if (in_height >= 0) {
+                LogPrintf("      utxo block:    %s (height %d, depth %d)\n",
+                    in_block_hash.GetHex(), in_height, tip_height - in_height);
+                LogPrintf("      utxo blocktime: %d (age %d s)\n",
+                    (unsigned)in_block_time, (int)(pblock->nTime - in_block_time));
+            }
+        }
+        LogPrintf("coinstake outputs (%u):\n", (unsigned)cs.vout.size());
+        for (size_t i = 0; i < cs.vout.size(); ++i) {
+            const CTxOut& out = cs.vout[i];
+            LogPrintf("  [%u] value: %s, scriptPubKey: %s\n",
+                (unsigned)i, FormatMoney(out.nValue), HexStr(out.scriptPubKey));
+        }
+    }
+    LogPrintf("=== END DRY-RUN STAKE DUMP ===\n");
+
+    fStopMinerProc = true;
+    return false;
 
     LogPrint(BCLog::POS, "CheckStake: Submitting validated block to chain for acceptance\n");
     std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(*pblock);
