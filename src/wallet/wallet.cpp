@@ -1551,8 +1551,9 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
     assert(block.data);
     LOCK(cs_wallet);
 
-    LogPrint(BCLog::WALLETDB, "CWallet::blockDisconnected called. Height %d, Hash %s\n", block.height, block.hash.ToString().substr(0, 16));
-    LogPrint(BCLog::WALLETDB, "BLOCK DISCONNECTED: Height %d, Hash %s, Transactions: %zu\n", 
+    LogPrint(BCLog::WALLETDB, "CWallet::blockDisconnected called. Height %d, Hash %s\n",
+             block.height, block.hash.ToString().substr(0, 16));
+    LogPrint(BCLog::WALLETDB, "BLOCK DISCONNECTED: Height %d, Hash %s, Transactions: %zu\n",
              block.height, block.hash.ToString().substr(0, 16), Assert(block.data)->vtx.size());
 
     // At block disconnection, this will change an abandoned transaction to
@@ -1563,6 +1564,10 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
     m_last_block_processed = *Assert(block.prev_hash);
 
     int disconnect_height = block.height;
+
+    // Diagnostic tallies — populated for every disconnected block so that the
+    // summary LogPrint at the bottom of this function can be re-enabled when
+    // debugging reorg behavior without re-instrumenting the loop body.
     int wallet_tx_count = 0;
     int confirmed_tx_count = 0;
     int coinstake_tx_count = 0;
@@ -1571,75 +1576,63 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
     for (const CTransactionRef& ptx : Assert(block.data)->vtx) {
         const uint256 tx_hash = ptx->GetHash();
 
-        // LogPrint(BCLog::WALLETDB, "  Processing transaction: %s (IsCoinStake: %s)\n", 
-        //         tx_hash.ToString().substr(0, 16), ptx->IsCoinStake() ? "true" : "false");
-        
-        // Check if this transaction is in our wallet
+        // If this tx belongs to the wallet, walk back any state that was
+        // applied when the now-disconnected block originally confirmed it.
         auto wallet_it = mapWallet.find(tx_hash);
         if (wallet_it != mapWallet.end()) {
             wallet_tx_count++;
             CWalletTx& wtx = wallet_it->second;
-            
-            // LogPrint(BCLog::WALLETDB, "    Found in wallet - Confirmed: %s, Cached: %s\n", 
-            //         wtx.isConfirmed() ? "true" : "false", wtx.fChangeCached ? "true" : "false");
-            
-            // For orphaned transactions, we need to restore their inputs
+
             if (wtx.isConfirmed()) {
                 confirmed_tx_count++;
-                // LogPrint(BCLog::WALLETDB, "    Processing confirmed orphaned transaction: %s\n", 
-                //         tx_hash.ToString().substr(0, 16));
-                
-                // Clear cached credit amounts to force recalculation
+
+                // Invalidate cached credit/change values and flag the tx
+                // dirty so the next balance query recomputes from scratch
+                // against the new (post-disconnect) chain state.
                 wtx.fChangeCached = false;
-                // LogPrint(BCLog::WALLETDB, "      Cleared cached credit\n");
-                
-                // Mark transaction as dirty to force balance recalculation
                 wtx.MarkDirty();
-                // LogPrint(BCLog::WALLETDB, "      Marked transaction as dirty\n");
-                
-                // For coinstake transactions, we need to be extra careful
+
+                // Coinstake inputs are tracked in mapTxSpends when the block
+                // is connected. On disconnect we surface those entries via
+                // the PHANTOM log so phantom-spend diagnostics can correlate
+                // restored UTXOs with the reorged stake; the actual erase is
+                // intentionally disabled (see commented mapTxSpends.erase
+                // below) — removing the spend here previously caused balance
+                // drift, so we leave the entry in place and only count it.
                 if (ptx->IsCoinStake()) {
                     coinstake_tx_count++;
-                    // LogPrint(BCLog::WALLETDB, "      Processing coinstake transaction - Inputs: %zu\n", ptx->vin.size());
-                    
-                    // Remove from spend tracking to restore inputs
+
                     for (const CTxIn& txin : ptx->vin) {
-                        // LogPrint(BCLog::WALLETDB, "        Processing input: %s:%d\n", 
-                        //          txin.prevout.hash.ToString().substr(0, 16), txin.prevout.n);
-                        
-                        // Find and remove this spend entry
                         auto spend_range = mapTxSpends.equal_range(txin.prevout);
                         int entries_found = std::distance(spend_range.first, spend_range.second);
-                        // LogPrint(BCLog::WALLETDB, "          Found %d spend entries for this input\n", entries_found);
-                        
+
                         for (auto it = spend_range.first; it != spend_range.second;) {
                             if (it->second == tx_hash) {
-                                // LogPrint(BCLog::WALLETDB, "          Removing spend entry for tx: %s\n", 
-                                //         it->second.ToString().substr(0, 16));
+                                LogPrint(BCLog::PHANTOM, "blockDisconnected erase: txid=%s vout=%u amount=%.8f\n",
+                                         it->first.hash.ToString(),
+                                         it->first.n,
+                                         mapWallet.at(it->first.hash).tx->vout[it->first.n].nValue / 1e8);
 
- LogPrint(BCLog::PHANTOM, "blockDisconnected erase: txid=%s vout=%u amount=%.8f\n",
-            it->first.hash.ToString(),
-            it->first.n,
-            mapWallet.at(it->first.hash).tx->vout[it->first.n].nValue / 1e8);                                
-            
                                 // it = mapTxSpends.erase(it);
                                 spend_entries_removed++;
                                 ++it;
                             } else {
-                                // LogPrint(BCLog::WALLETDB, "          Keeping spend entry for other tx: %s\n", 
-                                //          it->second.ToString().substr(0, 16));
                                 ++it;
                             }
                         }
                     }
                 }
             }
-        } else {
-            // LogPrint(BCLog::WALLETDB, "    Not found in wallet\n");
         }
 
+        // Move the transaction's state from "confirmed in <block>" back to
+        // inactive so the rest of the wallet treats it as unconfirmed.
         SyncTransaction(ptx, TxStateInactive{});
 
+        // Any wallet tx that was marked conflicted *because* of this tx (or
+        // a descendant in the now-disconnected block) can be released back
+        // to inactive, as long as the conflict was registered at or above
+        // the height we're disconnecting.
         for (const CTxIn& tx_in : ptx->vin) {
             // No other wallet transactions conflicted with this transaction
             if (mapTxSpends.count(tx_in.prevout) < 1) continue;
@@ -1665,10 +1658,11 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
             }
         }
     }
-    
+
+    // Summary log intentionally disabled — re-enable by uncommenting when
+    // diagnosing reorg accounting. The counters above feed this line.
     //LogPrint(BCLog::WALLETDB, "BLOCK DISCONNECTED SUMMARY: Wallet transactions: %d, Confirmed: %d, Coinstake: %d, Spend entries removed: %d\n",
     //         wallet_tx_count, confirmed_tx_count, coinstake_tx_count, spend_entries_removed);
-
 }
 
 void CWallet::updatedBlockTip()

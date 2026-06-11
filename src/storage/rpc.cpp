@@ -874,7 +874,7 @@ LogPrint (BCLog::STORAGE, "json 2 gstrAssetFilename uuid %s %s\n", gstrAssetFile
 static RPCHelpMan fetchall()
 {
     return RPCHelpMan{"fetchall",
-        "\nRetrieve asset(s) stored on the Lynx blockchain in reverse chronological order\nLearn more at https://docs.getlynx.io/\n",
+        "\nRetrieve asset(s) stored in reverse chronological order\nLearn more at https://docs.getlynx.io/\n",
          {
              {"count", RPCArg::Type::STR, RPCArg::Optional::NO, "The number of assets to fetch (enter 0 to signify all)."}, 
              {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "Fully qualified asset download path."},
