@@ -1629,6 +1629,10 @@ void CWallet::blockDisconnected(const interfaces::BlockInfo& block)
         // inactive so the rest of the wallet treats it as unconfirmed.
         SyncTransaction(ptx, TxStateInactive{});
 
+        if (ptx->IsCoinStake() && mapWallet.count(tx_hash) > 0) {
+            AbandonTransaction(tx_hash);
+        }
+
         // Any wallet tx that was marked conflicted *because* of this tx (or
         // a descendant in the now-disconnected block) can be released back
         // to inactive, as long as the conflict was registered at or above

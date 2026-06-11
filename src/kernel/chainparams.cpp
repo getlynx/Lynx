@@ -422,6 +422,8 @@ public:
             consensus.lastPoWBlock = 3085114;
         } else {
             consensus.lastPoWBlock = 1500;
+            consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+            consensus.fPowNoRetargeting = true;        
         }
 
         consensus.nPosTargetTimespan = 5 * 60;

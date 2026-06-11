@@ -1479,7 +1479,7 @@ void CConnman::ThreadDNSAddressSeed()
                     }
                     if (nRelevant >= 2) {
                         if (found > 0) {
-                            LogPrintf("%d addresses found from DNS seeds\n", found);
+                            LogPrint(BCLog::STARTUP, "%d addresses found from DNS seeds\n", found);
                             LogPrintf("P2P peers available. Finished DNS seeding.\n");
                         } else {
                             LogPrint(BCLog::STARTUP, "P2P peers available. Skipped DNS seeding.\n");
@@ -1500,7 +1500,7 @@ void CConnman::ThreadDNSAddressSeed()
             } while (!fNetworkActive);
         }
 
-        LogPrintf("Loading addresses from DNS seed %s\n", seed);
+        LogPrint(BCLog::STARTUP, "Loading addresses from DNS seed %s\n", seed);
         // If -proxy is in use, we make an ADDR_FETCH connection to the DNS resolved peer address
         // for the base dns seed domain in chainparams
         if (HaveNameProxy()) {
@@ -1532,7 +1532,7 @@ void CConnman::ThreadDNSAddressSeed()
         }
         --seeds_right_now;
     }
-    LogPrintf("%d addresses found from DNS seeds\n", found);
+    LogPrint(BCLog::STARTUP, "%d addresses found from DNS seeds\n", found);
 }
 
 void CConnman::DumpAddresses()
