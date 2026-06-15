@@ -168,8 +168,8 @@ bool CheckStake(ChainstateManager& chainman, const CBlock* pblock)
     }
     LogPrintf("=== END DRY-RUN STAKE DUMP ===\n");
 
-    fStopMinerProc = true;
-    return false;
+    // fStopMinerProc = true;
+    // return false;
 
     LogPrint(BCLog::POS, "CheckStake: Submitting validated block to chain for acceptance\n");
     std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(*pblock);

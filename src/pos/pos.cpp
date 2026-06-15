@@ -137,11 +137,20 @@ bool blnfncCheckStakeKernelHash (
     // Set stake amount
     arith_uint256 rthStakeAmount = arith_uint256(i64StakeAmount);
 
-    // Weighted difficulty
     arith_uint256 rthWeightedDifficulty;
 
-    // Weight difficulty
-    rthWeightedDifficulty = rthDifficulty * rthStakeAmount;
+    // rthWeightedDifficulty = rthDifficulty * rthStakeAmount;
+    // LogPrintf("WD weighted=%s\n", rthWeightedDifficulty.GetHex());
+
+    if (rthStakeAmount != arith_uint256() && rthDifficulty > (~arith_uint256()) / rthStakeAmount) {
+        rthWeightedDifficulty = ~arith_uint256();
+    } else {
+        rthWeightedDifficulty = rthDifficulty * rthStakeAmount;
+    }
+
+    LogPrintf("WD target=%s\n",   rthDifficulty.GetHex());
+    LogPrintf("WD stake=%s\n",    rthStakeAmount.GetHex());
+    LogPrintf("WD weighted=%s\n", rthWeightedDifficulty.GetHex());
 
     // Set weighted difficulty
     ou25WeightedDifficulty = ArithToUint256(rthWeightedDifficulty);
