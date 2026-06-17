@@ -132,24 +132,42 @@ bool blnfncCheckStakeKernelHash (
         i64StakeAmount = cnsConsensusVariables.weightDampener;
     }
 
-    // Set stake amount
+    // Convert the (possibly dampened) stake amount into a 256-bit integer so it
+    // can be multiplied against the 256-bit difficulty target below.
     arith_uint256 rthStakeAmount = arith_uint256(i64StakeAmount);
 
-    // Weighted difficulty
+    // Weighted difficulty: the difficulty target scaled by the staked amount.
+    // A larger stake produces a larger (easier to satisfy) target, which is how
+    // more coins-at-stake earn a proportionally greater chance of staking.
     arith_uint256 rthWeightedDifficulty;
 
+    // Former unguarded calculation, kept for reference. It was replaced because
+    // a direct multiply can silently overflow the 256-bit value (see guard below).
     // rthWeightedDifficulty = rthDifficulty * rthStakeAmount;
     // LogPrintf("WD weighted=%s\n", rthWeightedDifficulty.GetHex());
 
+    // Overflow-safe multiplication of target by stake.
+    // arith_uint256 wraps around on overflow rather than saturating, so before
+    // multiplying we check whether the product would exceed the 256-bit maximum.
+    // The test rthDifficulty > (UINT256_MAX / rthStakeAmount) is true exactly
+    // when rthDifficulty * rthStakeAmount would not fit in 256 bits. The
+    // rthStakeAmount != 0 guard avoids a divide-by-zero in that check.
     if (rthStakeAmount != arith_uint256() && rthDifficulty > (~arith_uint256()) / rthStakeAmount) {
+
+        // Product would overflow: clamp to the maximum target (~uint256 = all
+        // bits set) instead of letting the value wrap to a small, wrong result.
         rthWeightedDifficulty = ~arith_uint256();
     } else {
+
+        // Safe to multiply: the product is guaranteed to fit within 256 bits.
         rthWeightedDifficulty = rthDifficulty * rthStakeAmount;
     }
 
-    LogPrintf("WD target=%s\n",   rthDifficulty.GetHex());
-    LogPrintf("WD stake=%s\n",    rthStakeAmount.GetHex());
-    LogPrintf("WD weighted=%s\n", rthWeightedDifficulty.GetHex());
+    // Log the inputs and result of the weighting under the POS debug category
+    // (visible with -debug=pos): raw target, stake amount, and weighted target.
+    LogPrint(BCLog::POS, "WD target=%s\n",   rthDifficulty.GetHex());
+    LogPrint(BCLog::POS, "WD stake=%s\n",    rthStakeAmount.GetHex());
+    LogPrint(BCLog::POS, "WD weighted=%s\n", rthWeightedDifficulty.GetHex());
 
     // Set weighted difficulty
     ou25WeightedDifficulty = ArithToUint256(rthWeightedDifficulty);
