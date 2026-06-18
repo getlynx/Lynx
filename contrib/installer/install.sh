@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.12.0"
+SPARK_INSTALLER_VERSION="2.13.0"
 
 # Parse command-line arguments
 chain_name=""
@@ -1755,17 +1755,29 @@ configureLocale() {
     log "Locale configuration completed"
 }
 
-# Download the most recent compatible binary from GitHub Releases
-getCompatibleBinary() {
+# Cached release lookup shared by preflightBinaryCheck and getCompatibleBinary
+# so a fresh install only hits the GitHub API once (unauthenticated requests
+# are rate-limited per IP, and the maintenance timer re-runs this script).
+release_info=""
+download_url=""
+chain_asset_urls=""
+
+# Locate the latest release asset for this chain/OS/arch without touching the
+# system (no daemon stop, no downloads). Sets release_info, chain_asset_urls,
+# and download_url on success.
+# Returns: 0 = asset found
+#          1 = GitHub API unreachable (network error, rate limit, or 5xx)
+#          2 = no binaries exist for this chain at all
+#          3 = chain has binaries, but none for this OS flavor/version/arch
+findCompatibleBinary() {
+    # Reuse a prior successful lookup (e.g. the preflight check just ran)
+    if [ -n "$download_url" ]; then
+        return 0
+    fi
 
     # Detect OS details for asset selection
     getSystemDetails
 
-    # Gracefully stop daemon if running
-    if systemctl is-active --quiet $service_name; then
-        log "Stopping $service_name..."
-        systemctl stop $service_name || log "Failed to stop $service_name. Continuing with update."
-    fi
     # Download latest release info from GitHub. Use -f so HTTP errors
     # (404/5xx/rate-limit) don't yield a JSON error body we'd then try to
     # grep for asset URLs.
@@ -1782,65 +1794,125 @@ getCompatibleBinary() {
     ARCH="$(uname -m)"
     log "Searching for compatible binary for $os_name $os_version ($ARCH)..."
 
-    # Pre-filter release assets by chain name if specified
-    if [ -n "$chain_name" ]; then
-        log "Filtering binaries for chain: $chain_name"
-        filtered_urls=$(echo "$release_info" | grep "browser_download_url" | grep -i "$chain_name" || true)
-        if [ -z "$filtered_urls" ]; then
-            log "No binary found for chain '$chain_name'. This chain may not have been built yet. For assistance, please visit our Discord server: https://discord.gg/6jUaNeV2Uy"
-            return 1
-        fi
-    else
-        filtered_urls=$(echo "$release_info" | grep "browser_download_url")
+    # Keep only this chain's CLI assets. Release filenames follow
+    # <date>.<Chain>.CLI.<version>.<OS>.<osversion>.<ARCH>.zip, so match the
+    # ".<chain>.CLI." segment of the filename. Matching the whole URL would
+    # let a default Lynx install pick up another chain's build, because every
+    # asset URL contains "lynx" in the repository path.
+    chain_asset_urls=$(echo "$release_info" | grep "browser_download_url" | grep -iE "\\.${chain_lower}\\.CLI\\." || true)
+    if [ -z "$chain_asset_urls" ]; then
+        log "No binary found for chain '$chain_lower'. This chain may not have been built yet. For assistance, please visit our Discord server: https://discord.gg/6jUaNeV2Uy"
+        return 2
     fi
 
     # Select the correct asset based on OS family, version, and architecture
+    local arch_token="amd"
+    if [[ "$ARCH" == "aarch64" || "$ARCH" == arm* ]]; then
+        arch_token="arm"
+    fi
     if [ "$os_family" = "debian" ]; then
-        if [[ "$ARCH" == "aarch64" || "$ARCH" == arm* ]]; then
-            download_url=$(echo "$filtered_urls" | \
-                grep -iE "debian|ubuntu|ol" | \
-                grep -i "$os_version" | \
-                grep -iE "\\.zip" | \
-                grep -iE "arm" | \
-                head -n 1 | \
-                cut -d '"' -f 4)
-        else
-            download_url=$(echo "$filtered_urls" | \
-                grep -iE "debian|ubuntu|ol" | \
-                grep -i "$os_version" | \
-                grep -iE "\\.zip" | \
-                grep -iE "amd" | \
-                head -n 1 | \
-                cut -d '"' -f 4)
-        fi
+        download_url=$(echo "$chain_asset_urls" | \
+            grep -iE "debian|ubuntu" | \
+            grep -i "\\.$os_version\\." | \
+            grep -iE "\\.zip" | \
+            grep -iE "\\.$arch_token\\." | \
+            head -n 1 | \
+            cut -d '"' -f 4)
     elif [ "$os_family" = "redhat" ]; then
-        if [[ "$ARCH" == "aarch64" || "$ARCH" == arm* ]]; then
-            download_url=$(echo "$filtered_urls" | \
-                grep -iE "rhel|centos|fedora|redhat|rocky|almalinux|ol" | \
-                grep -i "$os_major_version" | \
-                grep -iE "\\.zip" | \
-                grep -iE "arm" | \
-                head -n 1 | \
-                cut -d '"' -f 4)
-        else
-            download_url=$(echo "$filtered_urls" | \
-                grep -iE "rhel|centos|fedora|redhat|rocky|almalinux|ol" | \
-                grep -i "$os_major_version" | \
-                grep -iE "\\.zip" | \
-                grep -iE "amd" | \
-                head -n 1 | \
-                cut -d '"' -f 4)
-        fi
+        download_url=$(echo "$chain_asset_urls" | \
+            grep -iE "rhel|centos|fedora|redhat|rocky|almalinux|ol" | \
+            grep -i "\\.$os_major_version\\." | \
+            grep -iE "\\.zip" | \
+            grep -iE "\\.$arch_token\\." | \
+            head -n 1 | \
+            cut -d '"' -f 4)
     else
         log "Unsupported OS family for binary selection: $os_family"
     fi
     if [ -z "$download_url" ]; then
-        if [ -n "$chain_name" ]; then
-            log "No binary found for chain '$chain_name' on $os_name $os_version ($ARCH). This chain may not have been built yet. For assistance, please visit our Discord server: https://discord.gg/6jUaNeV2Uy"
-            return 1
-        fi
-        log "No suitable binary found for $os_name $os_version ($ARCH). Please check GitHub releases manually."
+        log "No suitable ${effective_chain} binary found for $os_name $os_version ($ARCH)."
+        return 3
+    fi
+    return 0
+}
+
+# Human-readable list of OS builds available for this chain, derived from the
+# release asset filenames (e.g. "Debian 12 (AMD)"). Used by failure notices so
+# the user can choose a supported OS without digging through GitHub releases.
+listAvailableBuilds() {
+    echo "$chain_asset_urls" | \
+        sed -nE 's/.*\.CLI\.v[0-9.]+\.(.+)\.(AMD|ARM)\.zip.*/\1 (\2)/p' | \
+        sed 's/\./ /' | \
+        LC_ALL=C sort -u
+}
+
+# Verify a compatible binary exists BEFORE the installer mutates the system
+# (patch timers, bashrc aliases, chain registry, packages, swap, services).
+# Fresh installs run interactively via 'bash <(curl ...)', so the notice goes
+# to the terminal — journal-only logging is invisible there. On failure the
+# script aborts cleanly and lets the user decide the path forward (provision
+# a different OS version, wait for a build, etc.) instead of leaving
+# half-installed timers retrying forever.
+preflightBinaryCheck() {
+    local rc=0
+    findCompatibleBinary || rc=$?
+    case $rc in
+        0)
+            log "Preflight: compatible binary found: $(basename "$download_url")"
+            return 0
+            ;;
+        1)
+            echo ""
+            echo "  Unable to reach the GitHub API to look up the latest ${effective_chain} release."
+            echo "  This is usually a temporary network problem or a GitHub rate limit — it"
+            echo "  does NOT mean this OS is unsupported. Please try again in a few minutes."
+            ;;
+        2)
+            echo ""
+            echo "  No '${effective_chain}' binaries were found in the latest release. This chain"
+            echo "  may not have been built yet. For assistance, please visit our Discord"
+            echo "  server: https://discord.gg/6jUaNeV2Uy"
+            ;;
+        *)
+            echo ""
+            echo "  No ${effective_chain} binary is available for this system:"
+            echo ""
+            echo "      Detected: $os_name $os_version ($ARCH)"
+            echo ""
+            echo "  ${effective_chain} builds are currently available for:"
+            echo ""
+            listAvailableBuilds | sed 's/^/      /'
+            echo ""
+            echo "  To run ${effective_chain}, provision a system with one of the OS versions"
+            echo "  listed above, or watch for new builds at:"
+            echo "  https://github.com/getlynx/Lynx/releases"
+            ;;
+    esac
+    echo ""
+    echo "  No changes were made to this system. Installation aborted."
+    echo ""
+    log "Preflight binary check failed (status $rc). Installation aborted before any system changes."
+    # Undo the only side effects that precede this check: the empty data
+    # directory and its compatibility symlink created at script start. rmdir
+    # refuses to remove a non-empty directory, so existing data is safe.
+    rmdir "$WorkingDirectory" 2>/dev/null && rm -f "/root/.${chain_lower}" || true
+    exit 1
+}
+
+# Download the most recent compatible binary from GitHub Releases
+getCompatibleBinary() {
+
+    # Locate the release asset before stopping anything, so a failed lookup
+    # (network error, or a new release that dropped builds for this OS)
+    # never leaves a healthy daemon stopped.
+    if ! findCompatibleBinary; then
         return 1
+    fi
+
+    # Gracefully stop daemon if running
+    if systemctl is-active --quiet $service_name; then
+        log "Stopping $service_name..."
+        systemctl stop $service_name || log "Failed to stop $service_name. Continuing with update."
     fi
     local filename=$(basename "$download_url")
     local archive="/root/$filename"
@@ -2138,12 +2210,21 @@ if [[ -z "$update_mode" ]] && [[ -z "$rebuild_mode" ]] && systemctl list-unit-fi
     update_mode="update"
 fi
 
+# Check if running as root
+isRootUser
+
+# Preflight (fresh installs only): confirm a compatible binary exists before
+# any system mutation. A failed check prints a notice on the terminal and
+# aborts, instead of leaving orphaned timers, aliases, and services behind.
+# Update and rebuild modes run on systems with a working daemon, where
+# getCompatibleBinary handles a missing asset gracefully on its own.
+if [[ -z "$update_mode" ]] && [[ -z "$rebuild_mode" ]]; then
+    preflightBinaryCheck
+fi
+
 # Ensure patch timers are in place (runs in all modes)
 patchRpcConf
 patchFirewall
-
-# Check if running as root
-isRootUser
 
 # If running in update mode, run only the update process
 if [[ "$update_mode" == "update" ]]; then
@@ -2240,6 +2321,10 @@ setTimeZone
 # Download the most recent compatible binary from GitHub Releases
 # This must happen before creating services that depend on the binary
 if ! getCompatibleBinary; then
+    echo ""
+    echo "  Binary download failed. Cannot proceed with installation."
+    echo "  Check the install log with: journalctl -t install.sh -n 50"
+    echo ""
     log "Binary download failed. Cannot proceed with installation."
     exit 1
 fi

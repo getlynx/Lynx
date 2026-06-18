@@ -233,98 +233,169 @@ RPCHelpMan getbalance()
 RPCHelpMan getblockrate()
 {
     return RPCHelpMan{"getblockrate",
-        "\nEstimate the expected number of days between block-staking wins, based on\n"
+        "\nEstimate the expected number of hours between block-staking wins, based on\n"
         "the wallet's current staking-eligible UTXO set and an average of the most\n"
         "recent 96 difficulties.\n",
         {
             {"until_next", RPCArg::Type::BOOL, RPCArg::Default{false},
-             "If true, return estimated days until the next win (interval minus time since the last win)."},
+             "If true, return estimated hours until the next win (interval minus time since the last win)."},
         },
-        RPCResult{RPCResult::Type::NUM, "", "Expected days between wins."},
+        RPCResult{RPCResult::Type::NUM, "", "Expected hours between wins."},
         RPCExamples{
-            "\nExpected days between wins\n"
+            "\nExpected hours between wins\n"
             + HelpExampleCli("getblockrate", "")
-            + "\nExpected days until the next win\n"
+            + "\nExpected hours until the next win\n"
             + HelpExampleCli("getblockrate", "true")
             + HelpExampleRpc("getblockrate", "true")},
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
+    // Resolve the wallet this RPC call targets. Return null if no wallet is
+    // loaded, then block until the wallet has caught up to the active chain so
+    // the UTXO set and tip height read below are mutually consistent.
     const std::shared_ptr<CWallet> pwallet = GetWalletForJSONRPCRequest(request);
     if (!pwallet) return UniValue::VNULL;
     pwallet->BlockUntilSyncedToCurrentChain();
 
+    // Optional argument: when true, report the time remaining until the *next*
+    // expected win rather than the full average interval between wins.
     const bool untilNext = !request.params[0].isNull() && request.params[0].get_bool();
 
     interfaces::Chain& chain = pwallet->chain();
 
-    // Get current chain tip.
+    // Current chain tip height. Without a tip there is nothing to estimate from,
+    // so return 0 (interpreted by callers as "unknown / not staking").
     auto height_opt = chain.getHeight();
     if (!height_opt) return UniValue(0.0);
     const int currentHeight = *height_opt;
 
-    // Sum staking-eligible UTXOs (age / depth / locked / spendable — same checks the staker applies).
+    // Sum the value (in satoshis) of every UTXO that is eligible to stake right
+    // now. The estimate is only meaningful if it counts the same coins the
+    // staker itself would consider, so we apply the identical eligibility checks
+    // (age / depth / locked / spendable) here.
     const Consensus::Params& consensus = Params().GetConsensus();
+
+    // Minimum confirmation depth a coin needs before it can stake: normally the
+    // coinbase-maturity depth, but on a very young chain we relax it to half the
+    // current height so the earliest blocks are not permanently ineligible.
     const int requiredDepth = std::min((int)COINBASE_MATURITY, currentHeight / 2);
+
     CAmount totalStakeSats = 0;
     {
+        // Hold the wallet lock while iterating its available coins.
         LOCK(pwallet->cs_wallet);
         const int64_t now = GetTime();
         for (const auto& output : AvailableCoins(*pwallet).All()) {
+
+            // Skip coins outside the staking age window: too young to have
+            // matured into eligibility, or so old they have aged back out of it.
             const int input_age = now - output.time;
             if (input_age < consensus.nStakeMinAge || input_age > consensus.nStakeMaxAge) continue;
+
+            // Skip coins not yet buried to the required confirmation depth.
             if (output.depth < requiredDepth) continue;
+
+            // Skip coins the user has explicitly locked (reserved, not for staking).
             if (pwallet->IsLockedCoin(output.outpoint)) continue;
+
+            // Skip watch-only / non-spendable coins; only fully spendable coins stake.
             if (!(pwallet->IsMine(output.txout) & ISMINE_SPENDABLE)) continue;
+
+            // Coin passed every check: add its value to the total staking weight.
             totalStakeSats += output.txout.nValue;
         }
     }
+
+    // With no eligible stake a win is impossible; report 0 rather than later
+    // dividing by zero.
     if (totalStakeSats == 0) return UniValue(0.0);
 
-    // Average dDiff over the last 96 blocks to damp LWMA-output wobble.
+    // Network difficulty drives how hard each staking attempt is. The per-block
+    // difficulty produced by the LWMA retarget algorithm jitters from block to
+    // block, so we average it over the most recent window of blocks to get a
+    // steadier number to estimate from.
     constexpr int kAverageWindow = 96;
+
+    // Walk back at most kAverageWindow blocks from the tip (clamped at genesis).
     const int startHeight = std::max(0, currentHeight - (kAverageWindow - 1));
     double dDiffSum = 0.0;
     int sampleCount = 0;
     for (int h = startHeight; h <= currentHeight; ++h) {
+
+        // Load the block at this height; skip any that cannot be read.
         CBlock blk;
         if (!chain.findBlock(chain.getBlockHash(h), interfaces::FoundBlock().data(blk))) continue;
+
+        // Decode nBits, the compact (floating-point-like) encoding of the target,
+        // into a floating-point difficulty. The high byte is a base-256 exponent
+        // (nShift) and the low three bytes are the mantissa. The ratio below is
+        // normalized so that exponent 29 corresponds to difficulty 1.0; the two
+        // loops scale the value up or down until the exponent reaches that
+        // reference point, leaving dDiff as a plain difficulty multiplier.
         unsigned int nBits = blk.nBits;
         int nShift = (nBits >> 24) & 0xff;
         double dDiff = double(0x0000ffff) / double(nBits & 0x00ffffff);
         while (nShift < 29) { dDiff *= 256.0; ++nShift; }
         while (nShift > 29) { dDiff /= 256.0; --nShift; }
+
+        // Accumulate this block's difficulty into the running total.
         dDiffSum += dDiff;
         ++sampleCount;
     }
+
+    // If no block in the window was readable there is nothing to average.
     if (sampleCount == 0) return UniValue(0.0);
+
+    // Mean difficulty across the sampled window.
     const double dDiff = dDiffSum / double(sampleCount);
 
-    // expected_attempts_to_win = difficulty * 2^32 / stake_in_sats
-    // 16 s per attempt, 86,400 s per day
-    constexpr double kTwoPow32 = 4294967296.0;
-    constexpr double kSecondsPerAttempt = 16.0;
-    constexpr double kSecondsPerDay = 86400.0;
+    // Convert difficulty and stake weight into an expected time-to-win.
+    //
+    // A single staking attempt succeeds with probability
+    //     stake_in_sats / (difficulty * 2^32),
+    // so the expected number of attempts before a win is the reciprocal:
+    //     expected_attempts = difficulty * 2^32 / stake_in_sats.
+    // The protocol allows one attempt per stake-timestamp slot — one every
+    // 16 seconds — so multiplying attempts by 16 s gives the expected seconds,
+    // which we then convert to hours for the returned value.
+    constexpr double kTwoPow32 = 4294967296.0;    // 2^32, the per-attempt hash space
+    constexpr double kSecondsPerAttempt = 16.0;   // one staking attempt per 16 s slot
+    constexpr double kSecondsPerHour = 3600.0;
 
     double expected_seconds = kSecondsPerAttempt * dDiff * kTwoPow32 / double(totalStakeSats);
-    double days = expected_seconds / kSecondsPerDay;
+    double hours = expected_seconds / kSecondsPerHour;
 
+    // When until_next was requested, report how much of the expected interval is
+    // still ahead of us instead of the full interval.
     if (untilNext) {
-        // Subtract time elapsed since this node's most recent block win (newest
-        // confirmed coinstake we own) from the expected interval.
+
+        // Find the timestamp of our most recent winning stake by scanning the
+        // wallet for confirmed coinstake transactions we own and keeping the
+        // newest one.
         int64_t lastWinTime = 0;
         {
             LOCK(pwallet->cs_wallet);
             for (const auto& [hash, wtx] : pwallet->mapWallet) {
+
+                // Only coinstake transactions represent staking wins.
                 if (!wtx.IsCoinStake()) continue;
+
+                // Only count wins already confirmed in the main chain.
                 if (pwallet->GetTxDepthInMainChain(wtx) <= 0) continue;
+
+                // Keep the most recent win time seen so far.
                 lastWinTime = std::max<int64_t>(lastWinTime, wtx.GetTxTime());
             }
         }
+
+        // Subtract the time already elapsed since that win from the expected
+        // interval, clamping at 0 so an overdue win reads as 0 rather than going
+        // negative.
         if (lastWinTime > 0)
-            days = std::max(0.0, days - (GetTime() - lastWinTime) / kSecondsPerDay);
+            hours = std::max(0.0, hours - (GetTime() - lastWinTime) / kSecondsPerHour);
     }
 
-    return UniValue(UniValue::VNUM, strprintf("%.7f", days));
+    // Return the estimate as a fixed-point number with 4 decimal places of hours.
+    return UniValue(UniValue::VNUM, strprintf("%.4f", hours));
 },
     };
 }
