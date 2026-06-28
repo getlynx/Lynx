@@ -458,6 +458,8 @@ sw() { swe "$@"; }
 ca() { _spark_require_chain && $SPARK_CLI capacity; }
 bac() { _spark_require_chain && /usr/local/bin/${SPARK_CHAIN}-backup.sh; }
 lba() { _spark_require_chain && cd /var/lib/${SPARK_CHAIN}-backup && ls -lh; }
+lun() { _spark_require_chain && $SPARK_CLI listunspent; }
+lu() { lun; }
 #
 # DAEMON COMMANDS
 lyv() { _spark_require_chain && $SPARK_CLI -version; }
@@ -702,6 +704,7 @@ executeHelpCommand() {
     echo "    swe [address]          - Sweep a wallet (receiver pays fee)"
     echo "    bac                    - Manual wallet backup"
     echo "    lba                    - List backup directory contents"
+    echo "    lun                    - List unspent transaction outputs (UTXOs)"
     echo "    pri                    - Show wallet value in USD"
     echo ""
     echo "  SYSTEM COMMANDS:"
