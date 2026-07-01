@@ -4943,6 +4943,8 @@ void Chainstate::LoadExternalBlockFile(
                         // This block can be processed immediately; rewind to its start, read and deserialize it.
                         blkdat.SetPos(nBlockPos);
                         std::shared_ptr<CBlock> pblock{std::make_shared<CBlock>()};
+                        // Deserialize the block's txs in its own height's format (known index height, else tip+1).
+                        g_currentValidatingBlockHeight = pindex ? pindex->nHeight : m_chain.Height() + 1;
                         blkdat >> *pblock;
                         nRewind = blkdat.GetPos();
 

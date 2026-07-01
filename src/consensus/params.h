@@ -169,7 +169,7 @@ struct Params {
     int lastPoWBlock{0};
     int infiniloopTransitionHeight{0};
     bool IsLegacyInfiniloopBlock(int height) const {
-        return std::string(CURRENT_CHAIN) == "infiniloop" && height < infiniloopTransitionHeight;
+        return std::string(CURRENT_CHAIN) == "infiniloop" && height <= infiniloopTransitionHeight;
     }
     /** The best chain should have at least this much work */
     uint256 nMinimumChainWork;

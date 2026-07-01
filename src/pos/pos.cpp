@@ -23,8 +23,6 @@
 std::list<COutPoint> listStakeSeen;
 std::map<COutPoint, uint256> mapStakeSeen;
 
-int g_currentValidatingBlockHeight{0};
-
 // 
 // Proof of stake core algorithm 
 // 

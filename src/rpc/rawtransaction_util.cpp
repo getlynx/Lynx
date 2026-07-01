@@ -310,6 +310,7 @@ void SignTransactionResultToJSON(CMutableTransaction& mtx, bool complete, const 
         TxInErrorToJSON(mtx.vin.at(err_pair.first), vErrors, err_pair.second.original);
     }
 
+    g_currentValidatingBlockHeight = g_infiniloopTransitionHeight + 1;
     result.pushKV("hex", EncodeHexTx(CTransaction(mtx)));
     result.pushKV("complete", complete);
     if (!vErrors.empty()) {

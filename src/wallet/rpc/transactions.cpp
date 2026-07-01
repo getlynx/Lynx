@@ -785,6 +785,8 @@ RPCHelpMan gettransaction()
     ListTransactions(*pwallet, wtx, 0, false, details, filter, /*filter_label=*/std::nullopt);
     entry.pushKV("details", details);
 
+    // Wallet txs are kept in the old format; serialize this one the same for display.
+    g_currentValidatingBlockHeight = 0;
     std::string strHex = EncodeHexTx(*wtx.tx, pwallet->chain().rpcSerializationFlags());
     entry.pushKV("hex", strHex);
 

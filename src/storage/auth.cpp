@@ -2070,6 +2070,7 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
         }
 
         // calculate and adjust fee (with 32byte fudge)
+        g_currentValidatingBlockHeight = vpwallets[0]->GetLastBlockHeight() + 1;
         unsigned int nBytes = GetSerializeSize(tx) + 32;
         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
         tx.vout[0].nValue -= nFee;
@@ -2163,6 +2164,7 @@ bool generate_blockuuid_transaction(WalletContext& wallet_context, CMutableTrans
         }
 
         // calculate and adjust fee (with 32byte fudge)
+        g_currentValidatingBlockHeight = vpwallets[0]->GetLastBlockHeight() + 1;
         unsigned int nBytes = GetSerializeSize(tx) + 32;
         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
         tx.vout[0].nValue -= nFee;
@@ -2254,6 +2256,7 @@ bool generate_blocktenant_transaction(WalletContext& wallet_context, CMutableTra
         }
 
         // calculate and adjust fee (with 32byte fudge)
+        g_currentValidatingBlockHeight = vpwallets[0]->GetLastBlockHeight() + 1;
         unsigned int nBytes = GetSerializeSize(tx) + 32;
         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
         tx.vout[0].nValue -= nFee;

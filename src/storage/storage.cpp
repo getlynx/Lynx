@@ -1390,6 +1390,7 @@ bool generate_selfsend_transaction(WalletContext& wallet_context, CMutableTransa
         }
 
         // calculate and adjust fee (with 32byte fudge)
+        g_currentValidatingBlockHeight = vpwallets[0]->GetLastBlockHeight() + 1;
         unsigned int nBytes = GetSerializeSize(tx) + 32;
         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
 

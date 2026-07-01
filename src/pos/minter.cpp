@@ -6,6 +6,7 @@
 
 #include <chainparams.h>
 #include <consensus/consensus.h>
+#include <core_io.h>
 #include <node/miner.h>
 #include <pos/manager.h>
 #include <pos/pos.h>
@@ -124,6 +125,8 @@ bool CheckStake(ChainstateManager& chainman, const CBlock* pblock)
     if (pblock->vtx.size() > 1) {
         const CTransaction& cs = *pblock->vtx[1];
         LogPrintf("coinstake hash:  %s\n", cs.GetHash().GetHex());
+        g_currentValidatingBlockHeight = g_infiniloopTransitionHeight + 1;
+        LogPrintf("coinstake hex:   %s\n", EncodeHexTx(cs));
         LogPrintf("coinstake nVersion:  %d\n", cs.nVersion);
         LogPrintf("coinstake nLockTime: %u\n", cs.nLockTime);
         LogPrintf("coinstake inputs (%u):\n", (unsigned)cs.vin.size());
@@ -167,9 +170,6 @@ bool CheckStake(ChainstateManager& chainman, const CBlock* pblock)
         }
     }
     LogPrintf("=== END DRY-RUN STAKE DUMP ===\n");
-
-    fStopMinerProc = true;
-    return false;
 
     LogPrint(BCLog::POS, "CheckStake: Submitting validated block to chain for acceptance\n");
     std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(*pblock);
@@ -321,6 +321,11 @@ bool SignBlock(CBlock& block, CBlockIndex* pindexPrev, wallet::CWallet* wallet, 
         return error("%s: Malformed block.", __func__);
     }
 
+    // This block is built for nHeight, so every tx serialized while assembling, hashing, and signing
+    // it must use that height's format (Lynx above the transition, legacy at or below). Validation of
+    // the same block sets this global to the same value, so the two agree on the merkle root.
+    g_currentValidatingBlockHeight = nHeight;
+
     CKey key;
     block.nBits = GetNextWorkRequiredPoS(pindexPrev, Params().GetConsensus());
     // A little too verbose in the debug log.
@@ -339,9 +344,14 @@ bool SignBlock(CBlock& block, CBlockIndex* pindexPrev, wallet::CWallet* wallet, 
             //    as it would be the same as the block timestamp
             block.nTime = nSearchTime;
 
-            // Insert coinstake as vtx[1]
+            // A CTransaction freezes its txid at construction (primitives/transaction.cpp), so the height
+            // global must be correct BEFORE any tx ref is built. CreateCoinStake left it at a below-
+            // transition UTXO's height, which would freeze the coinstake's txid in legacy format while the
+            // body is later written as Lynx -- corrupting the merkle. Restore this block's height first,
+            // then (re)build every tx ref so all txids are cached in this height's format.
+            g_currentValidatingBlockHeight = nHeight;
             block.vtx.insert(block.vtx.begin() + 1, MakeTransactionRef(txCoinStake));
-
+            for (auto& tx : block.vtx) tx = MakeTransactionRef(CMutableTransaction(*tx));
             bool mutated;
             block.hashMerkleRoot = BlockMerkleRoot(block, &mutated);
 
@@ -591,7 +601,7 @@ bool SelectCoinsForStaking(wallet::CWallet* wallet, CAmount nTargetValue, std::s
             LogPrint(BCLog::POS, "SelectCoinsForStaking: Skipping output - age %d not in range [%d, %d]: %s\n", input_age, params.nStakeMinAge, params.nStakeMaxAge, txout.ToString());
             continue;
         }
-        LogPrint(BCLog::POS, "SelectCoinsForStaking: Output age %d seconds meets requirements\n", input_age); 
+        LogPrint(BCLog::POS, "SelectCoinsForStaking: Output age %d seconds meets requirements\n", input_age);
 
         {
             LOCK(wallet->cs_wallet);

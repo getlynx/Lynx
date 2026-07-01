@@ -76,7 +76,7 @@ bool strip_opreturndata_from_chunk(std::string& opdata, std::string& chunk)
 bool strip_opreturndata_from_chunk (std::string& opdata, std::string& chunk, int& pintOffset)
 {
     chunk.clear();
-    if (std::string(CURRENT_CHAIN) == "infiniloop" && opdata.size() < 4) return false;
+    if (std::string(CURRENT_CHAIN) == "infiniloop" && g_currentValidatingBlockHeight <= g_infiniloopTransitionHeight && opdata.size() < 4) return false;
     std::stringstream push_data;
     push_data << opdata.at(2) << opdata.at(3);
     // OP_PUSHDATA1 (80-255)

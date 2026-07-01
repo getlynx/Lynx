@@ -841,6 +841,7 @@ static RPCHelpMan getblocktemplate()
 
         UniValue entry(UniValue::VOBJ);
 
+        g_currentValidatingBlockHeight = g_infiniloopTransitionHeight + 1;
         entry.pushKV("data", EncodeHexTx(tx));
         entry.pushKV("txid", txHash.GetHex());
         entry.pushKV("hash", tx.GetWitnessHash().GetHex());

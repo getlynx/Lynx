@@ -279,6 +279,7 @@ static UniValue FinishTransaction(const std::shared_ptr<CWallet> pwallet, const 
     }
 
     if (complete) {
+        g_currentValidatingBlockHeight = g_infiniloopTransitionHeight + 1;
         std::string hex{EncodeHexTx(CTransaction(mtx))};
         CTransactionRef tx(MakeTransactionRef(std::move(mtx)));
         result.pushKV("txid", tx->GetHash().GetHex());
@@ -600,6 +601,7 @@ RPCHelpMan burn()
     entry.pushKV("dry_run", dry_run);
     entry.pushKV("tag", tag_input);
     entry.pushKV("txid", tx->GetHash().GetHex());
+    g_currentValidatingBlockHeight = g_infiniloopTransitionHeight + 1;
     entry.pushKV("hex", EncodeHexTx(*tx));
     entry.pushKV("fee_reason", StringForFeeReason(res->fee_calc.reason));
     entry.pushKV("burn_vout", burn_vout);

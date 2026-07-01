@@ -59,6 +59,8 @@ bool TxIndex::CustomAppend(const interfaces::BlockInfo& block)
     if (block.height == 0) return true;
 
     assert(block.data);
+    // Size each tx in this block's format so the on-disk offsets match what was written.
+    g_currentValidatingBlockHeight = block.height;
     CDiskTxPos pos({block.file_number, block.data_pos}, GetSizeOfCompactSize(block.data->vtx.size()));
     std::vector<std::pair<uint256, CDiskTxPos>> vPos;
     vPos.reserve(block.data->vtx.size());
@@ -87,6 +89,11 @@ bool TxIndex::FindTx(const uint256& tx_hash, uint256& block_hash, CTransactionRe
         file >> header;
         if (fseek(file.Get(), postx.nTxOffset, SEEK_CUR)) {
             return error("%s: fseek(...) failed", __func__);
+        }
+        // Read the tx in its own block's format (the block whose header we just read).
+        {
+            const CBlockIndex* pidx = WITH_LOCK(cs_main, return m_chainstate->m_blockman.LookupBlockIndex(header.GetHash()));
+            g_currentValidatingBlockHeight = pidx ? pidx->nHeight : 0;
         }
         file >> tx;
     } catch (const std::exception& e) {

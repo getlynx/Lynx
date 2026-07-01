@@ -827,6 +827,17 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
 
     FastRandomContext rng_fast;
     CMutableTransaction txNew; // The resulting transaction that we make
+    // This spend is bound for the next block, so build it in that height's format. Set the global the
+    // tx serializer reads, and gate the legacy stamping below on it; above the transition it goes out Lynx.
+    g_currentValidatingBlockHeight = wallet.GetLastBlockHeight() + 1;
+    // infiniloop (Peercoin/Novacoin lineage) rejects bidha's transactions two ways:
+    //  - its CTransaction::CURRENT_VERSION is 1 and the mempool rejects nVersion > 1 (bidha defaults to 2);
+    //  - ConnectInputs rejects a tx whose nTime is earlier than the inputs it spends, and bidha leaves nTime=0.
+    // Stamp version 1 and a current timestamp so the legacy network accepts our transactions.
+    if (std::string(CURRENT_CHAIN) == "infiniloop" && g_currentValidatingBlockHeight <= g_infiniloopTransitionHeight) {
+        txNew.nVersion = 1;
+        txNew.nTime = (uint32_t)GetTime();
+    }
 
     CoinSelectionParams coin_selection_params{rng_fast}; // Parameters for coin selection, init with dummy
     coin_selection_params.m_avoid_partial_spends = coin_control.m_avoid_partial_spends;
@@ -926,6 +937,11 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
 
     // Static vsize overhead + outputs vsize. 4 nVersion, 4 nLocktime, 1 input count, 1 witness overhead (dummy, flag, stack size)
     coin_selection_params.tx_noinputs_size = 10 + GetSizeOfCompactSize(vecSend.size()); // bytes for output count
+    // infiniloop transactions serialize an extra 4-byte nTime field that the standard
+    // overhead above omits; count it so coin-selection doesn't under-size the fee.
+    if (std::string(CURRENT_CHAIN) == "infiniloop" && g_currentValidatingBlockHeight <= g_infiniloopTransitionHeight) {
+        coin_selection_params.tx_noinputs_size += 4;
+    }
 
     // vouts to the payees
     for (const auto& recipient : vecSend)
