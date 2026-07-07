@@ -260,6 +260,16 @@ public:
         bool dummy_bool = false; //!< Used to be fSpent
         uint256 serializedHash = TxStateSerializedBlockHash(m_state);
         int serializedIndex = TxStateSerializedIndex(m_state);
+        // infiniloop: stamp this tx's era ahead of the body (0 = legacy, at/below the transition;
+        // 1 = bidha, above it) and serialize the body in that era's format, so the loader decodes it
+        // without guessing. Confirmed tx -> its block height; unconfirmed -> current (bidha) era.
+        if (std::string(CURRENT_CHAIN) == "infiniloop") {
+            const TxStateConfirmed* conf = state<TxStateConfirmed>();
+            const int height = conf ? conf->confirmed_block_height : g_infiniloopTransitionHeight + 1;
+            const uint8_t era = height <= g_infiniloopTransitionHeight ? 0 : 1;
+            s << era;
+            g_currentValidatingBlockHeight = era == 0 ? 0 : g_infiniloopTransitionHeight + 1;
+        }
         s << tx << serializedHash << dummy_vector1 << serializedIndex << dummy_vector2 << mapValueCopy << vOrderForm << fTimeReceivedIsTxTime << nTimeReceived << fFromMe << dummy_bool;
     }
 
@@ -273,6 +283,13 @@ public:
         bool dummy_bool; //! Used to be fSpent
         uint256 serialized_block_hash;
         int serializedIndex;
+        // infiniloop: read the era stamp written ahead of the body and decode the body in that format,
+        // so the recomputed txid reproduces the key.
+        if (std::string(CURRENT_CHAIN) == "infiniloop") {
+            uint8_t era;
+            s >> era;
+            g_currentValidatingBlockHeight = era == 0 ? 0 : g_infiniloopTransitionHeight + 1;
+        }
         s >> tx >> serialized_block_hash >> dummy_vector1 >> serializedIndex >> dummy_vector2 >> mapValue >> vOrderForm >> fTimeReceivedIsTxTime >> nTimeReceived >> fFromMe >> dummy_bool;
 
         m_state = TxStateInterpretSerialized({serialized_block_hash, serializedIndex});

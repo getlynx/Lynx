@@ -239,6 +239,7 @@ public:
     {
         auto tx = wallet.getTx(rec->hash);
         if (tx) {
+            g_currentValidatingBlockHeight = 0;
             std::string strHex = EncodeHexTx(*tx);
             return QString::fromStdString(strHex);
         }

@@ -194,6 +194,8 @@ static bool DecodeTx(CMutableTransaction& tx, const std::vector<unsigned char>& 
 
 bool DecodeHexTx(CMutableTransaction& tx, const std::string& hex_tx, bool try_no_witness, bool try_witness)
 {
+    // A hex tx handed to the node is a current (post-transition, Lynx) tx; decode it in that format.
+    g_currentValidatingBlockHeight = g_infiniloopTransitionHeight + 1;
     if (!IsHex(hex_tx)) {
         return false;
     }
@@ -223,6 +225,8 @@ bool DecodeHexBlk(CBlock& block, const std::string& strHexBlk)
 
     std::vector<unsigned char> blockData(ParseHex(strHexBlk));
     CDataStream ssBlock(blockData, SER_NETWORK, PROTOCOL_VERSION);
+    // A submitted hex block is a current (Lynx) block; decode its txs in that format.
+    g_currentValidatingBlockHeight = g_infiniloopTransitionHeight + 1;
     try {
         ssBlock >> block;
     }

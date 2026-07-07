@@ -6,6 +6,7 @@
 
 #include <chainparams.h>
 #include <consensus/consensus.h>
+#include <core_io.h>
 #include <node/miner.h>
 #include <pos/manager.h>
 #include <pos/pos.h>
@@ -13,9 +14,12 @@
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <shutdown.h>
+#include <streams.h>
 #include <util/moneystr.h>
+#include <util/strencodings.h>
 #include <util/syserror.h>
 #include <util/thread.h>
+#include <version.h>
 
 #include <consensus/merkle.h>
 #include <consensus/validation.h>
@@ -105,6 +109,67 @@ bool CheckStake(ChainstateManager& chainman, const CBlock* pblock)
     // A little too verbose for the uncategorized debug log
     // LogPrintf("CheckStake(): New proof-of-stake block found  \n  hash: %s \nproofhash: %s  \ntarget: %s\n", hashBlock.GetHex(), proofHash.GetHex(), hashTarget.GetHex());
     LogPrintf("CheckStake(): New proof-of-stake block found %s\n", hashBlock.GetHex());
+
+    LogPrintf("=== DRY-RUN STAKE DUMP ===\n");
+    LogPrintf("block hash:      %s\n", pblock->GetHash().GetHex());
+    LogPrintf("prev hash:       %s\n", pblock->hashPrevBlock.GetHex());
+    LogPrintf("merkle root:     %s\n", pblock->hashMerkleRoot.GetHex());
+    LogPrintf("version:         %d\n", pblock->nVersion);
+    LogPrintf("nTime:           %u\n", pblock->nTime);
+    LogPrintf("nBits:           0x%08x\n", pblock->nBits);
+    LogPrintf("nNonce:          %u\n", pblock->nNonce);
+    LogPrintf("vchBlockSig:     %s\n", HexStr(pblock->vchBlockSig));
+    LogPrintf("proofHash:       %s\n", proofHash.GetHex());
+    LogPrintf("hashTarget:      %s\n", hashTarget.GetHex());
+    LogPrintf("tx count:        %u\n", (unsigned)pblock->vtx.size());
+    if (pblock->vtx.size() > 1) {
+        const CTransaction& cs = *pblock->vtx[1];
+        LogPrintf("coinstake hash:  %s\n", cs.GetHash().GetHex());
+        g_currentValidatingBlockHeight = g_infiniloopTransitionHeight + 1;
+        LogPrintf("coinstake hex:   %s\n", EncodeHexTx(cs));
+        LogPrintf("coinstake nVersion:  %d\n", cs.nVersion);
+        LogPrintf("coinstake nLockTime: %u\n", cs.nLockTime);
+        LogPrintf("coinstake inputs (%u):\n", (unsigned)cs.vin.size());
+        for (size_t i = 0; i < cs.vin.size(); ++i) {
+            const CTxIn& in = cs.vin[i];
+            CAmount in_value = -1;
+            int in_height = -1;
+            int64_t in_block_time = 0;
+            uint256 in_block_hash;
+            int tip_height = 0;
+            {
+                LOCK(cs_main);
+                Coin coin;
+                if (chainman.ActiveChainstate().CoinsTip().GetCoin(in.prevout, coin)) {
+                    in_value = coin.out.nValue;
+                    in_height = coin.nHeight;
+                    tip_height = chainman.ActiveChain().Height();
+                    const CBlockIndex* pi = chainman.ActiveChain()[in_height];
+                    if (pi) {
+                        in_block_hash = pi->GetBlockHash();
+                        in_block_time = pi->GetBlockTime();
+                    }
+                }
+            }
+            LogPrintf("  [%u] prevout: %s:%u, value: %s, scriptSig: %s\n",
+                (unsigned)i, in.prevout.hash.GetHex(), in.prevout.n,
+                in_value >= 0 ? FormatMoney(in_value) : std::string("<lookup failed>"),
+                HexStr(in.scriptSig));
+            if (in_height >= 0) {
+                LogPrintf("      utxo block:    %s (height %d, depth %d)\n",
+                    in_block_hash.GetHex(), in_height, tip_height - in_height);
+                LogPrintf("      utxo blocktime: %d (age %d s)\n",
+                    (unsigned)in_block_time, (int)(pblock->nTime - in_block_time));
+            }
+        }
+        LogPrintf("coinstake outputs (%u):\n", (unsigned)cs.vout.size());
+        for (size_t i = 0; i < cs.vout.size(); ++i) {
+            const CTxOut& out = cs.vout[i];
+            LogPrintf("  [%u] value: %s, scriptPubKey: %s\n",
+                (unsigned)i, FormatMoney(out.nValue), HexStr(out.scriptPubKey));
+        }
+    }
+    LogPrintf("=== END DRY-RUN STAKE DUMP ===\n");
 
     LogPrint(BCLog::POS, "CheckStake: Submitting validated block to chain for acceptance\n");
     std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(*pblock);
@@ -256,6 +321,11 @@ bool SignBlock(CBlock& block, CBlockIndex* pindexPrev, wallet::CWallet* wallet, 
         return error("%s: Malformed block.", __func__);
     }
 
+    // This block is built for nHeight, so every tx serialized while assembling, hashing, and signing
+    // it must use that height's format (Lynx above the transition, legacy at or below). Validation of
+    // the same block sets this global to the same value, so the two agree on the merkle root.
+    g_currentValidatingBlockHeight = nHeight;
+
     CKey key;
     block.nBits = GetNextWorkRequiredPoS(pindexPrev, Params().GetConsensus());
     // A little too verbose in the debug log.
@@ -274,9 +344,14 @@ bool SignBlock(CBlock& block, CBlockIndex* pindexPrev, wallet::CWallet* wallet, 
             //    as it would be the same as the block timestamp
             block.nTime = nSearchTime;
 
-            // Insert coinstake as vtx[1]
+            // A CTransaction freezes its txid at construction (primitives/transaction.cpp), so the height
+            // global must be correct BEFORE any tx ref is built. CreateCoinStake left it at a below-
+            // transition UTXO's height, which would freeze the coinstake's txid in legacy format while the
+            // body is later written as Lynx -- corrupting the merkle. Restore this block's height first,
+            // then (re)build every tx ref so all txids are cached in this height's format.
+            g_currentValidatingBlockHeight = nHeight;
             block.vtx.insert(block.vtx.begin() + 1, MakeTransactionRef(txCoinStake));
-
+            for (auto& tx : block.vtx) tx = MakeTransactionRef(CMutableTransaction(*tx));
             bool mutated;
             block.hashMerkleRoot = BlockMerkleRoot(block, &mutated);
 
@@ -519,14 +594,28 @@ bool SelectCoinsForStaking(wallet::CWallet* wallet, CAmount nTargetValue, std::s
     setCoinsRet.clear();
     nValueRet = 0;
 
+    // The kernel rejects any coin whose stake depth is below this bar (pos.cpp), and a coin that is
+    // not yet confirmed (depth 0) isn't in the UTXO set at all -> blnfncCheckKernel logs
+    // "stake outpoint not found". Filter both here so selection only offers coins the kernel can use;
+    // otherwise a batch of unconfirmed wallet txs (e.g. combines stuck in the mempool) floods errors.
+    int nRequiredDepth;
+    {
+        LOCK(wallet->cs_wallet);
+        nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(wallet->GetLastBlockHeight() / 2));
+    }
+
     for (const auto& output : vCoins) {
         const auto& txout = output.txout;
+        if (output.depth - 1 < nRequiredDepth) {
+            LogPrint(BCLog::POS, "SelectCoinsForStaking: Skipping output - stake depth %d below required %d: %s\n", output.depth - 1, nRequiredDepth, txout.ToString());
+            continue;
+        }
         int input_age = GetTime() - output.time;
         if (input_age < params.nStakeMinAge || input_age > params.nStakeMaxAge) {
             LogPrint(BCLog::POS, "SelectCoinsForStaking: Skipping output - age %d not in range [%d, %d]: %s\n", input_age, params.nStakeMinAge, params.nStakeMaxAge, txout.ToString());
             continue;
         }
-        LogPrint(BCLog::POS, "SelectCoinsForStaking: Output age %d seconds meets requirements\n", input_age); 
+        LogPrint(BCLog::POS, "SelectCoinsForStaking: Output age %d seconds meets requirements\n", input_age);
 
         {
             LOCK(wallet->cs_wallet);
@@ -640,13 +729,13 @@ bool CreateCoinStake (  wallet::CWallet* wallet,
         }
 
         auto mempool = chain_state.GetMempool();
-        if (!mempool->HasNoInputsOf(*pcoin.first->tx)) {
+        COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
+        if (mempool->isSpent(prevoutStake)) {
             LogPrint(BCLog::POS, "CreateCoinStake: Coin already spent in mempool, skipping\n");
             continue;
         }
 
         int64_t nBlockTime;
-        COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
         LogPrint(BCLog::POS, "CreateCoinStake: Testing kernel candidate: %s:%d\n", pcoin.first->GetHash().ToString(), pcoin.second);
         if (blnfncCheckKernel(chain_state, pindexPrev, nBits, nTime, prevoutStake, &nBlockTime)) {
             LOCK(wallet->cs_wallet);

@@ -381,6 +381,15 @@ static RPCHelpMan getrawtransaction()
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, errmsg + ". Use gettransaction for wallet transactions.");
     }
 
+    // Serialize this tx in its own block's format (old below the transition, Lynx above); a mempool tx
+    // (not in a block) uses next-block.
+    {
+        LOCK(cs_main);
+        const CBlockIndex* txindex = blockindex;
+        if (!txindex && !hash_block.IsNull()) txindex = chainman.m_blockman.LookupBlockIndex(hash_block);
+        g_currentValidatingBlockHeight = txindex ? txindex->nHeight : chainman.ActiveChain().Height() + 1;
+    }
+
     if (verbosity <= 0) {
         return EncodeHexTx(*tx, RPCSerializationFlags());
     }
@@ -449,6 +458,8 @@ static RPCHelpMan createrawtransaction()
     }
     CMutableTransaction rawTx = ConstructTransaction(request.params[0], request.params[1], request.params[2], rbf);
 
+    // Newly built tx — emit it in the current (Lynx) format.
+    g_currentValidatingBlockHeight = g_infiniloopTransitionHeight + 1;
     return EncodeHexTx(CTransaction(rawTx));
 },
     };
@@ -483,6 +494,8 @@ static RPCHelpMan decoderawtransaction()
     bool try_witness = request.params[1].isNull() ? true : request.params[1].get_bool();
     bool try_no_witness = request.params[1].isNull() ? true : !request.params[1].get_bool();
 
+    // Decode in the old format, matching how this build handled txs before the transition gate existed.
+    g_currentValidatingBlockHeight = 0;
     if (!DecodeHexTx(mtx, request.params[0].get_str(), try_no_witness, try_witness)) {
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
     }
@@ -653,6 +666,7 @@ static RPCHelpMan combinerawtransaction()
     UniValue txs = request.params[0].get_array();
     std::vector<CMutableTransaction> txVariants(txs.size());
 
+    g_currentValidatingBlockHeight = 0;
     for (unsigned int idx = 0; idx < txs.size(); idx++) {
         if (!DecodeHexTx(txVariants[idx], txs[idx].get_str())) {
             throw JSONRPCError(RPC_DESERIALIZATION_ERROR, strprintf("TX decode failed for tx %d. Make sure the tx has at least one input.", idx));
@@ -782,6 +796,7 @@ static RPCHelpMan signrawtransactionwithkey()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     CMutableTransaction mtx;
+    g_currentValidatingBlockHeight = 0;
     if (!DecodeHexTx(mtx, request.params[0].get_str())) {
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed. Make sure the tx has at least one input.");
     }
@@ -1067,7 +1082,8 @@ static RPCHelpMan decodepsbt()
 
     UniValue result(UniValue::VOBJ);
 
-    // Add the decoded tx
+    // Add the decoded tx (current/Lynx format)
+    g_currentValidatingBlockHeight = g_infiniloopTransitionHeight + 1;
     UniValue tx_univ(UniValue::VOBJ);
     TxToUniv(CTransaction(*psbtx.tx), /*block_hash=*/uint256(), /*entry=*/tx_univ, /*include_hex=*/false);
     result.pushKV("tx", tx_univ);
@@ -1630,6 +1646,7 @@ static RPCHelpMan converttopsbt()
     bool iswitness = witness_specified ? request.params[2].get_bool() : false;
     const bool try_witness = witness_specified ? iswitness : true;
     const bool try_no_witness = witness_specified ? !iswitness : true;
+    g_currentValidatingBlockHeight = 0;
     if (!DecodeHexTx(tx, request.params[0].get_str(), try_no_witness, try_witness)) {
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
     }

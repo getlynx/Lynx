@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 /*
@@ -29,7 +30,9 @@ constexpr char C1 = (CURRENT_CHAIN[1] >= 'a' && CURRENT_CHAIN[1] <= 'z') ? CURRE
 constexpr char C2 = (CURRENT_CHAIN[2] >= 'a' && CURRENT_CHAIN[2] <= 'z') ? CURRENT_CHAIN[2]-'a'+'A' : CURRENT_CHAIN[2];
 constexpr char C3 = (CURRENT_CHAIN[3] >= 'a' && CURRENT_CHAIN[3] <= 'z') ? CURRENT_CHAIN[3]-'a'+'A' : CURRENT_CHAIN[3];
 
-const std::string CURRENCY_UNIT{C0, C1, C2, C3};
+const std::string CURRENCY_UNIT = (std::string_view(CURRENT_CHAIN) == "infiniloop")
+                                    ? "InfiniLooP"
+                                    : std::string{C0, C1, C2, C3};
 
 const std::string CURRENCY_ATOM = "sat"; // One indivisible minimum value unit
 

@@ -63,11 +63,14 @@ bool LoadMempool(CTxMemPool& pool, const fs::path& load_path, Chainstate& active
         }
         uint64_t num;
         file >> num;
+        // Mempool txs are loose, bound for the next block; deserialize each in that height's format.
+        const int tip_plus_1 = WITH_LOCK(cs_main, return active_chainstate.m_chain.Height()) + 1;
         while (num) {
             --num;
             CTransactionRef tx;
             int64_t nTime;
             int64_t nFeeDelta;
+            g_currentValidatingBlockHeight = tip_plus_1;
             file >> tx;
             file >> nTime;
             file >> nFeeDelta;
@@ -155,6 +158,8 @@ bool DumpMempool(const CTxMemPool& pool, const fs::path& dump_path, FopenFn mock
         uint64_t version = MEMPOOL_DUMP_VERSION;
         file << version;
 
+        // Mempool txs are new (Lynx format); write them above the transition so LoadMempool reads them back the same.
+        g_currentValidatingBlockHeight = g_infiniloopTransitionHeight + 1;
         file << (uint64_t)vinfo.size();
         for (const auto& i : vinfo) {
             file << *(i.tx);

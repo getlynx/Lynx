@@ -1883,6 +1883,7 @@ void PeerManagerImpl::BlockDisconnected(const std::shared_ptr<const CBlock> &blo
  */
 void PeerManagerImpl::NewPoWValidBlock(const CBlockIndex *pindex, const std::shared_ptr<const CBlock>& pblock)
 {
+    g_currentValidatingBlockHeight = pindex->nHeight;
     auto pcmpctblock = std::make_shared<const CBlockHeaderAndShortTxIDs>(*pblock);
     const CNetMsgMaker msgMaker(PROTOCOL_VERSION);
 
@@ -1895,8 +1896,9 @@ void PeerManagerImpl::NewPoWValidBlock(const CBlockIndex *pindex, const std::sha
     if (!DeploymentActiveAt(*pindex, m_chainman, Consensus::DEPLOYMENT_SEGWIT)) return;
 
     uint256 hashBlock(pblock->GetHash());
+    const int cmpct_height = pindex->nHeight;
     const std::shared_future<CSerializedNetMsg> lazy_ser{
-        std::async(std::launch::deferred, [&] { return msgMaker.Make(NetMsgType::CMPCTBLOCK, *pcmpctblock); })};
+        std::async(std::launch::deferred, [&, cmpct_height] { g_currentValidatingBlockHeight = cmpct_height; return msgMaker.Make(NetMsgType::CMPCTBLOCK, *pcmpctblock); })};
 
     {
         LOCK(m_most_recent_block_mutex);
@@ -2200,6 +2202,8 @@ void PeerManagerImpl::ProcessGetBlockData(CNode& pfrom, Peer& peer, const CInv& 
         pblock = pblockRead;
     }
     if (pblock) {
+        // Serialize this block's txs in its own height's format for every send path below.
+        g_currentValidatingBlockHeight = pindex->nHeight;
         if (inv.IsMsgBlk()) {
             m_connman.PushMessage(&pfrom, msgMaker.Make(SERIALIZE_TRANSACTION_NO_WITNESS, NetMsgType::BLOCK, *pblock));
         } else if (inv.IsMsgWitnessBlk()) {
@@ -2320,6 +2324,7 @@ void PeerManagerImpl::ProcessGetData(CNode& pfrom, Peer& peer, const std::atomic
         if (tx) {
             // WTX and WITNESS_TX imply we serialize with witness
             int nSendFlags = (inv.IsMsgTx() ? SERIALIZE_TRANSACTION_NO_WITNESS : 0);
+            g_currentValidatingBlockHeight = m_chainman.ActiveChain().Height() + 1;
             m_connman.PushMessage(&pfrom, msgMaker.Make(nSendFlags, NetMsgType::TX, *tx));
             m_mempool.RemoveUnbroadcastTx(tx->GetHash());
             // As we're going to send tx, make sure its unconfirmed parents are made requestable.
@@ -2789,6 +2794,27 @@ void PeerManagerImpl::ProcessHeadersMessage(CNode& pfrom, Peer& peer,
             m_headers_presync_stats.erase(pfrom.GetId());
         }
         return;
+    }
+
+    // A legacy infiniloop peer keeps mining its own fork above the transition height. Bidha stakes
+    // the post-transition chain itself and must never ingest those legacy headers. Drop anything above
+    // the transition from a legacy peer (version < PROTOCOL_VERSION) before any validation -- otherwise
+    // a single rejected header at the tail of the batch makes ProcessNewBlockHeaders return false, and
+    // we bail out before downloading the valid prefix we just accepted. Bidha peers are left untouched
+    // so post-transition Lynx headers still flow.
+    if (std::string(CURRENT_CHAIN) == "infiniloop" && pfrom.GetCommonVersion() < PROTOCOL_VERSION) {
+        const CBlockIndex* prev{WITH_LOCK(::cs_main, return m_chainman.m_blockman.LookupBlockIndex(headers[0].hashPrevBlock))};
+        if (prev) {
+            const int base_height = prev->nHeight + 1; // height of headers[0]
+            if (base_height > g_infiniloopTransitionHeight) {
+                return; // whole batch is the legacy fork above the transition; ignore it
+            }
+            const size_t keep = g_infiniloopTransitionHeight - base_height + 1;
+            if (keep < headers.size()) {
+                headers.resize(keep);
+                nCount = headers.size();
+            }
+        }
     }
 
     // Before we do any processing, make sure these pass basic sanity checks.
@@ -4001,6 +4027,8 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         // is not considered a protocol violation, so don't punish the peer.
         if (m_chainman.ActiveChainstate().IsInitialBlockDownload()) return;
 
+        // A loose tx is bound for the next block; deserialize it in that height's format.
+        g_currentValidatingBlockHeight = m_chainman.ActiveChain().Height() + 1;
         CTransactionRef ptx;
         vRecv >> ptx;
         const CTransaction& tx = *ptx;
@@ -4312,6 +4340,8 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
                 }
 
                 PartiallyDownloadedBlock& partialBlock = *(*queuedBlockIt)->partialBlock;
+                // Reconstruct this block's txs in its own height's format (Lynx above the transition).
+                g_currentValidatingBlockHeight = pindex->nHeight;
                 ReadStatus status = partialBlock.InitData(cmpctblock, vExtraTxnForCompact);
                 if (status == READ_STATUS_INVALID) {
                     RemoveBlockRequest(pindex->GetBlockHash(), pfrom.GetId()); // Reset in-flight state in case Misbehaving does not result in a disconnect
@@ -4347,6 +4377,7 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
                 // Optimistically try to reconstruct anyway since we might be
                 // able to without any round trips.
                 PartiallyDownloadedBlock tempBlock(&m_mempool);
+                g_currentValidatingBlockHeight = pindex->nHeight;
                 ReadStatus status = tempBlock.InitData(cmpctblock, vExtraTxnForCompact);
                 if (status != READ_STATUS_OK) {
                     // TODO: don't ignore failures
@@ -4439,6 +4470,8 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
             }
 
             PartiallyDownloadedBlock& partialBlock = *it->second.second->partialBlock;
+            const CBlockIndex* pidxFill = m_chainman.m_blockman.LookupBlockIndex(resp.blockhash);
+            g_currentValidatingBlockHeight = pidxFill ? pidxFill->nHeight : 0;
             ReadStatus status = partialBlock.FillBlock(*pblock, resp.txn);
             if (status == READ_STATUS_INVALID) {
                 RemoveBlockRequest(resp.blockhash, pfrom.GetId()); // Reset in-flight state in case Misbehaving does not result in a disconnect
@@ -4511,9 +4544,17 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
             return;
         }
         headers.resize(nCount);
+        // A header's wire format is decided by who serialized it, not by the block's height. A legacy
+        // infiniloop peer (version < 70006) stamps a trailing block-signature count on every header it
+        // ships -- including its own fork above the transition -- so consume it. A bidha peer (70006)
+        // sends bare Lynx headers, so don't.
+        const bool legacy_peer = std::string(CURRENT_CHAIN) == "infiniloop" && pfrom.GetCommonVersion() < PROTOCOL_VERSION;
         for (unsigned int n = 0; n < nCount; n++) {
             vRecv >> headers[n];
             ReadCompactSize(vRecv); // ignore tx count; assume it is 0.
+            if (legacy_peer) {
+                ReadCompactSize(vRecv); // discard trailing vchBlockSig count varint
+            }
         }
 
         ProcessHeadersMessage(pfrom, *peer, std::move(headers), /*via_compact_block=*/false);
@@ -4544,6 +4585,8 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         }
 
         std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
+        // A received block extends our chain; deserialize its txs in that height's format.
+        g_currentValidatingBlockHeight = m_chainman.ActiveChain().Height() + 1;
         vRecv >> *pblock;
 
         LogPrint(BCLog::NET, "received block %s peer=%d\n", pblock->GetHash().ToString(), pfrom.GetId());
@@ -5553,6 +5596,7 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                     {
                         LOCK(m_most_recent_block_mutex);
                         if (m_most_recent_block_hash == pBestIndex->GetBlockHash()) {
+                            g_currentValidatingBlockHeight = pBestIndex->nHeight;
                             cached_cmpctblock_msg = msgMaker.Make(NetMsgType::CMPCTBLOCK, *m_most_recent_compact_block);
                         }
                     }
