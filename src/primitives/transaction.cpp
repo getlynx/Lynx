@@ -20,7 +20,9 @@
 // Defined here in the consensus lib so the tx serializer that reads them links into every binary,
 // not just the daemon. Declared extern in transaction.h. g_currentValidatingBlockHeight is set by
 // validation, mining, the wallet, and compact-block reconstruction; g_infiniloopTransitionHeight by chainparams.
-int g_currentValidatingBlockHeight{0};
+// thread_local: each caller sets the height right before its own (de)serialize, so the value must be
+// per-thread — otherwise a concurrent thread (e.g. index sync vs. rollforward) clobbers it mid-stream.
+thread_local int g_currentValidatingBlockHeight{0};
 int g_infiniloopTransitionHeight{0};
 
 std::string COutPoint::ToString() const

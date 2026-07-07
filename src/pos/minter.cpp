@@ -594,8 +594,22 @@ bool SelectCoinsForStaking(wallet::CWallet* wallet, CAmount nTargetValue, std::s
     setCoinsRet.clear();
     nValueRet = 0;
 
+    // The kernel rejects any coin whose stake depth is below this bar (pos.cpp), and a coin that is
+    // not yet confirmed (depth 0) isn't in the UTXO set at all -> blnfncCheckKernel logs
+    // "stake outpoint not found". Filter both here so selection only offers coins the kernel can use;
+    // otherwise a batch of unconfirmed wallet txs (e.g. combines stuck in the mempool) floods errors.
+    int nRequiredDepth;
+    {
+        LOCK(wallet->cs_wallet);
+        nRequiredDepth = std::min((int)COINBASE_MATURITY, (int)(wallet->GetLastBlockHeight() / 2));
+    }
+
     for (const auto& output : vCoins) {
         const auto& txout = output.txout;
+        if (output.depth - 1 < nRequiredDepth) {
+            LogPrint(BCLog::POS, "SelectCoinsForStaking: Skipping output - stake depth %d below required %d: %s\n", output.depth - 1, nRequiredDepth, txout.ToString());
+            continue;
+        }
         int input_age = GetTime() - output.time;
         if (input_age < params.nStakeMinAge || input_age > params.nStakeMaxAge) {
             LogPrint(BCLog::POS, "SelectCoinsForStaking: Skipping output - age %d not in range [%d, %d]: %s\n", input_age, params.nStakeMinAge, params.nStakeMaxAge, txout.ToString());
@@ -715,13 +729,13 @@ bool CreateCoinStake (  wallet::CWallet* wallet,
         }
 
         auto mempool = chain_state.GetMempool();
-        if (!mempool->HasNoInputsOf(*pcoin.first->tx)) {
+        COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
+        if (mempool->isSpent(prevoutStake)) {
             LogPrint(BCLog::POS, "CreateCoinStake: Coin already spent in mempool, skipping\n");
             continue;
         }
 
         int64_t nBlockTime;
-        COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
         LogPrint(BCLog::POS, "CreateCoinStake: Testing kernel candidate: %s:%d\n", pcoin.first->GetHash().ToString(), pcoin.second);
         if (blnfncCheckKernel(chain_state, pindexPrev, nBits, nTime, prevoutStake, &nBlockTime)) {
             LOCK(wallet->cs_wallet);

@@ -253,7 +253,7 @@ void TxToUniv(const CTransaction& tx, const uint256& block_hash, UniValue& entry
     }
     entry.pushKV("vout", vout);
 
-    if (have_undo) {
+    if (have_undo && !tx.IsCoinStake()) {
         const CAmount fee = amt_total_in - amt_total_out;
         CHECK_NONFATAL(MoneyRange(fee));
         entry.pushKV("fee", ValueFromAmount(fee));

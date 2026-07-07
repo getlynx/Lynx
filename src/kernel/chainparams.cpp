@@ -255,7 +255,7 @@ spec.secretPrefix["infiniloop"] = 153;
 
 spec.uuidlastblock["infiniloop"] = 3084941;
 
-spec.initauthuser["infiniloop"] = "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d";
+spec.initauthuser["infiniloop"] = "58721d870b5e33d55009431cd5e8c6f0b375e033";
 
 spec.psztimestamp["infiniloop"] = "CNN: California to extend stay-at-home orders as hospitals hit breaking point due to COVID";
 
@@ -457,6 +457,10 @@ spec.genesismerkleroot["infiniloop"] = "0xab44c95608c9971475915ed3d31326569dee3b
             // consensus.infiniloopTransitionHeight = 3000000;
             extern int g_infiniloopTransitionHeight;
             g_infiniloopTransitionHeight = consensus.infiniloopTransitionHeight;
+            // Start the authdata rebuild at the transition height (where authdata begins),
+            // not the leftover spec value (3084941) which sits above the infiniloop tip. Set
+            // here, after infiniloopTransitionHeight, so the order is correct.
+            consensus.nUUIDBlockStart = consensus.infiniloopTransitionHeight;
         } else {
             consensus.lastPoWBlock = 1500;
             consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");

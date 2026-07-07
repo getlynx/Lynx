@@ -373,7 +373,7 @@ void Chainstate::MaybeUpdateMempoolForReorg(
                 const Coin& coin{CoinsTip().AccessCoin(txin.prevout)};
                 assert(!coin.IsSpent());
                 const auto mempool_spend_height{m_chain.Tip()->nHeight + 1};
-                if (coin.IsCoinBase() && mempool_spend_height - coin.nHeight < COINBASE_MATURITY) {
+                if ((coin.IsCoinBase() || coin.IsCoinStake()) && mempool_spend_height - coin.nHeight < COINBASE_MATURITY) {
                     return true;
                 }
             }
@@ -1874,6 +1874,11 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, CTxUndo &txund
 }
 
 bool CScriptCheck::operator()() {
+    // infiniloop: this runs on a parallel script-check worker whose thread_local
+    // g_currentValidatingBlockHeight defaults to 0 (legacy). Restore the height captured at
+    // construction so the sighash serializes in the correct (Lynx) format; otherwise a validly
+    // signed tx fails verification here and the block won't connect (ConnectBlock: CheckQueue failed).
+    g_currentValidatingBlockHeight = m_validating_height;
     const CScript &scriptSig = ptxTo->vin[nIn].scriptSig;
     const CScriptWitness *witness = &ptxTo->vin[nIn].scriptWitness;
     return VerifyScript(scriptSig, m_tx_out.scriptPubKey, witness, nFlags, CachingTransactionSignatureChecker(ptxTo, nIn, m_tx_out.nValue, cacheStore, *txdata), &error);
@@ -2439,6 +2444,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     std::vector<int> prevheights;
     CAmount nFees = 0;
     CAmount nValueIn = 0;
+    CAmount stakeIn = 0;
     CAmount nValueOut = 0;
     int nInputs = 0;
     int64_t nSigOpsCost = 0;
@@ -2547,8 +2553,12 @@ LogPrint (BCLog::STORAGE, "is_opreturn_an_authdata from validation.cpp \n");
                             tx_state.GetRejectReason(), tx_state.GetDebugMessage());
                 return error("%s: Consensus::CheckTxInputs: %s, %s", __func__, tx.GetHash().ToString(), state.ToString());
             }
-            for (unsigned int i = 0; i < tx.vin.size(); i++)
-                nValueIn += view.AccessCoin(tx.vin[i].prevout).out.nValue;
+            for (unsigned int i = 0; i < tx.vin.size(); i++) {
+                CAmount nIn = view.AccessCoin(tx.vin[i].prevout).out.nValue;
+                nValueIn += nIn;
+                if (tx.IsCoinStake())
+                    stakeIn += nIn;
+            }
             nValueOut += tx.GetValueOut();
             if (!tx.IsCoinStake())
                 nFees += txfee;
@@ -2622,7 +2632,7 @@ LogPrint (BCLog::STORAGE, "is_opreturn_an_authdata from validation.cpp \n");
     else
     {
         CAmount stakeReward = GetProofOfStakeReward(pindex->nHeight, params.GetConsensus());
-        CAmount stakeActual = block.vtx[1]->GetValueOut() - nValueIn;
+        CAmount stakeActual = block.vtx[1]->GetValueOut() - stakeIn;
         if (!params.GetConsensus().IsLegacyInfiniloopBlock(pindex->nHeight) && stakeActual > stakeReward) {
 		LogPrintf("ERROR: ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)\n", stakeActual, stakeReward);
 		return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-amount");

@@ -169,7 +169,7 @@ bool CoinStatsIndex::CustomAppend(const interfaces::BlockInfo& block)
 
                 m_muhash.Insert(MakeUCharSpan(TxOutSer(outpoint, coin)));
 
-                if (tx->IsCoinBase()) {
+                if (tx->IsCoinBase() || tx->IsCoinStake()) {
                     m_total_coinbase_amount += coin.out.nValue;
                 } else {
                     m_total_new_outputs_ex_coinbase_amount += coin.out.nValue;
@@ -445,7 +445,7 @@ bool CoinStatsIndex::ReverseBlock(const CBlock& block, const CBlockIndex* pindex
 
             m_muhash.Remove(MakeUCharSpan(TxOutSer(outpoint, coin)));
 
-            if (tx->IsCoinBase()) {
+            if (tx->IsCoinBase() || tx->IsCoinStake()) {
                 m_total_coinbase_amount -= coin.out.nValue;
             } else {
                 m_total_new_outputs_ex_coinbase_amount -= coin.out.nValue;

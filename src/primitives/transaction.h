@@ -27,7 +27,7 @@
 // right after nVersion; Lynx does not. The caller sets g_currentValidatingBlockHeight to the height
 // of the block this tx belongs to before serializing, so the field is written at or below the
 // transition height and dropped above it. Declared here (not via pos.h) to keep this low-level header light.
-extern int g_currentValidatingBlockHeight;
+extern thread_local int g_currentValidatingBlockHeight;
 extern int g_infiniloopTransitionHeight;
 
 /**
