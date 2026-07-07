@@ -315,7 +315,7 @@ void copy_blocktenant_list(std::vector<std::pair<std::string, std::string>>& tem
     tempList = blocktenantList;
 }
 
-bool is_signature_valid_raw(std::vector<unsigned char>& signature, uint256& hash)
+bool is_signature_valid_raw(std::vector<unsigned char>& signature, uint256& hash, uint160* outSigner)
 {
     if (signature.empty()) {
         return false;
@@ -327,6 +327,7 @@ bool is_signature_valid_raw(std::vector<unsigned char>& signature, uint256& hash
     }
 
     uint160 hash160(Hash160(pubkey));
+    if (outSigner) *outSigner = hash160;
     if (!is_auth_member(hash160)) {
         return false;
     }
@@ -377,7 +378,7 @@ bool is_signature_valid_chunk(std::string chunk)
 }
 */
 
-bool is_signature_valid_chunk (std::string chunk, int pintOffset)
+bool is_signature_valid_chunk (std::string chunk, int pintOffset, uint160* outSigner)
 {
     uint256 checkhash;
     std::string signature;
@@ -389,7 +390,7 @@ bool is_signature_valid_chunk (std::string chunk, int pintOffset)
     vchsig = ParseHex(signature);
     sha256_hash_bin(&chunk.c_str()[pintOffset], (char*)&checkhash, (OPAUTH_MAGICLEN*2) + (OPAUTH_OPERATIONLEN*2) + (OPAUTH_TIMELEN*2) + (OPAUTH_HASHLEN*2));
 
-    if (!is_signature_valid_raw(vchsig, checkhash)) {
+    if (!is_signature_valid_raw(vchsig, checkhash, outSigner)) {
         return false;
     }
 
@@ -665,9 +666,14 @@ bool process_auth_chunk (std::string& chunk, int& , int pintOffset)
 
     // if (!is_signature_valid_chunk(chunk)) {
     
-    // Validate signature
-    if (!is_signature_valid_chunk (chunk, pintOffset)) {
+    // Validate signature; allow/deny must come from a manager
+    uint160 signer;
+    if (!is_signature_valid_chunk (chunk, pintOffset, &signer)) {
         //LogPrintf("%s - failed at is_signature_valid_chunk2\n", __func__);
+        return false;
+    }
+    if (!is_manager(signer)) {
+        //LogPrintf("%s - signer is not a manager\n", __func__);
         return false;
     }
 
