@@ -1323,6 +1323,11 @@ public:
     void Serialize(S &s) const {
         // Serialize nVersion
         ::Serialize(s, txTo.nVersion);
+        // infiniloop serializes the transaction nTime right after nVersion and includes it in the
+        // signature hash; bidha must match or its signatures fail to verify on the legacy network
+        // (peers reject with DoS-100 and disconnect on receipt).
+        if (std::string(CURRENT_CHAIN) == "infiniloop" && g_currentValidatingBlockHeight <= g_infiniloopTransitionHeight)
+            ::Serialize(s, txTo.nTime);
         // Serialize vin
         unsigned int nInputs = fAnyoneCanPay ? 1 : txTo.vin.size();
         ::WriteCompactSize(s, nInputs);

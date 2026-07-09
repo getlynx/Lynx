@@ -9,6 +9,7 @@
 #include <chainparams.h>
 #include <crypto/sha256.h>
 #include <crypto/siphash.h>
+#include <pos/pos.h>
 #include <random.h>
 #include <streams.h>
 #include <txmempool.h>
@@ -205,6 +206,8 @@ ReadStatus PartiallyDownloadedBlock::FillBlock(CBlock& block, const std::vector<
         return READ_STATUS_INVALID;
 
     BlockValidationState state;
+    // Height was set by the caller (net_processing) to this block's height so the merkle re-check
+    // serializes its txs in the right format; do not reset it here.
     CheckBlockFn check_block = m_check_block_mock ? m_check_block_mock : CheckBlock;
     if (!check_block(block, state, Params().GetConsensus(), /*fCheckPoW=*/true, /*fCheckMerkleRoot=*/true)) {
         // TODO: We really want to just check merkle tree manually here,

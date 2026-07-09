@@ -183,7 +183,7 @@ bool check_mempool_for_customuuid (const CTxMemPool& mempool, std::string strCus
 static RPCHelpMan store()
 {
     return RPCHelpMan{"store",
-        "\nStore a file on the Lynx blockchain.\n",
+        "\nStore a file on the " CURRENT_CHAIN " blockchain.\n",
          {
              {"filepath", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Full path of file to be uploaded"},
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Custom unique identifier (32 characters, hexadecimal format, must be unique across all files)"},
@@ -203,7 +203,7 @@ static RPCHelpMan store()
                           {RPCResult::Type::STR, "identifier", "Universally unique asset identifier"},
                           {RPCResult::Type::STR, "tenant", "Hashed public tenant key"},
                           {RPCResult::Type::NUM, "filesize", "filesize (B)"},
-                          {RPCResult::Type::STR, "storagefee", "Storage transaction fee in lynx"},
+                          {RPCResult::Type::STR, "storagefee", "Storage transaction fee in " + CURRENCY_UNIT},
                           {RPCResult::Type::STR, "storagetime", "Storage date and time"},
                           {RPCResult::Type::NUM, "currentblock", "Current block"},
                           {RPCResult::Type::STR, "stakingstatus", "enabled | disabled"},
@@ -214,7 +214,7 @@ static RPCHelpMan store()
 
 
             RPCExamples{
-            "\nStore /home/username/documents/research.pdf on the Lynx blockchain.\n"
+            "\nStore /home/username/documents/research.pdf on the " CURRENT_CHAIN " blockchain.\n"
             + HelpExampleCli("store", "/home/username/documents/research.pdf")
         + HelpExampleRpc("store", "/home/username/documents/research.pdf")
                 },
@@ -350,29 +350,6 @@ static RPCHelpMan store()
     if(!request.params[3].isNull()) {
         strParameter4 = request.params[3].get_str();
         gstrJSONAssetStoreCharacters = strParameter4;
-
-if (strParameter4 == "1") {
-    gstrJSONAssetStoreCharacters.clear();
-    FILE* in = fopen("/root/dkdk", "rb");
-    char buffer[200000];
-    int intReturn = fread(buffer, 1, 5, in);
-    // fread(gchrJSONAssetStoreCharacters, 1, 5, in);
-    fclose(in);
-
-    gstrJSONAssetStoreCharacters.assign (buffer, 5);
-}
-
-if (strParameter4 == "2") {
-    gstrJSONAssetStoreCharacters.clear();
-    FILE* in = fopen("/root/ben.jpg", "rb");
-    char buffer[200000];
-    int intReturn = fread(buffer, 1, 169018, in);
-    // fread(gchrJSONAssetStoreCharacters, 1, 169018, in);
-    fclose(in);
-
-    gstrJSONAssetStoreCharacters.assign (buffer, 169018);
-}
-
     }
     if(!request.params[4].isNull()) {
         strParameter5 = request.params[4].get_str();
@@ -1028,7 +1005,7 @@ static RPCHelpMan fetchall()
 static RPCHelpMan fetch()
 {
     return RPCHelpMan{"fetch",
-        "\nRetrieve an asset stored on the Lynx blockchain.\nLearn more at https://docs.getlynx.io/\n",
+        "\nRetrieve an asset stored on the " CURRENT_CHAIN " blockchain.\nLearn more at https://docs.getlynx.io/\n",
          {
              {"uuid", RPCArg::Type::STR, RPCArg::Optional::NO, "The 64-character unique identifier of the asset."},
              {"path", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "The full path where you want to download the asset."},
@@ -2153,18 +2130,18 @@ static RPCHelpMan auth()
             unvEntry.pushKV("tenant", authUser.ToString());
 
             // Set capacity in KB
-            uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1024;
+            uint64_t u64Capacity = (uint64_t)intNumberOfSuitableInputs * 512 * 256 / 1024;
 
             // If manager
             // if (authUser.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
             if (is_manager ()) {
 
                 // Zero capacity
-                u32Capacity = 0;
+                u64Capacity = 0;
             }
 
             // capacity
-            unvEntry.pushKV("capacity (KB)", u32Capacity);
+            unvEntry.pushKV("capacity (KB)", u64Capacity);
 
             // Get current time
             uint32_t u32CurrentTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
@@ -2333,10 +2310,10 @@ static RPCHelpMan capacity()
             estimate_coins_for_opreturn(vctWallets.front().get(), intNumberOfSuitableInputs);
 
             // Set capacity in KB
-            uint32_t u32Capacity = intNumberOfSuitableInputs * 512 * 256 / 1024;
+            uint64_t u64Capacity = (uint64_t)intNumberOfSuitableInputs * 512 * 256 / 1024;
 
             // capacity
-            unvEntry.pushKV("capacity (KB)", u32Capacity);
+            unvEntry.pushKV("capacity (KB)", u64Capacity);
 
             unvResults.push_back(unvEntry);
 
@@ -2989,6 +2966,11 @@ static RPCHelpMan deny()
         return std::string("hash160-wrong-size");
     }
     uint160 hash = uint160S(hash160);
+
+    // the supermanager can never be denied
+    if (hash.ToString() == Params().GetConsensus().initAuthUser.ToString()) {
+        return std::string("Role-based restriction: Current role cannot perform this action");
+    }
 
     // are we authenticated
     if (is_auth_member(authUser)) {

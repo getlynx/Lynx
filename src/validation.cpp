@@ -373,7 +373,7 @@ void Chainstate::MaybeUpdateMempoolForReorg(
                 const Coin& coin{CoinsTip().AccessCoin(txin.prevout)};
                 assert(!coin.IsSpent());
                 const auto mempool_spend_height{m_chain.Tip()->nHeight + 1};
-                if (coin.IsCoinBase() && mempool_spend_height - coin.nHeight < COINBASE_MATURITY) {
+                if ((coin.IsCoinBase() || coin.IsCoinStake()) && mempool_spend_height - coin.nHeight < COINBASE_MATURITY) {
                     return true;
                 }
             }
@@ -1874,6 +1874,11 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, CTxUndo &txund
 }
 
 bool CScriptCheck::operator()() {
+    // infiniloop: this runs on a parallel script-check worker whose thread_local
+    // g_currentValidatingBlockHeight defaults to 0 (legacy). Restore the height captured at
+    // construction so the sighash serializes in the correct (Lynx) format; otherwise a validly
+    // signed tx fails verification here and the block won't connect (ConnectBlock: CheckQueue failed).
+    g_currentValidatingBlockHeight = m_validating_height;
     const CScript &scriptSig = ptxTo->vin[nIn].scriptSig;
     const CScriptWitness *witness = &ptxTo->vin[nIn].scriptWitness;
     return VerifyScript(scriptSig, m_tx_out.scriptPubKey, witness, nFlags, CachingTransactionSignatureChecker(ptxTo, nIn, m_tx_out.nValue, cacheStore, *txdata), &error);
@@ -2243,6 +2248,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     // is enforced in ContextualCheckBlockHeader(); we wouldn't want to
     // re-enforce that rule here (at least until we make it impossible for
     // m_adjusted_time_callback() to go backward).
+    g_currentValidatingBlockHeight = pindex->nHeight;
     if (!CheckBlock(block, state, params.GetConsensus(), !fJustCheck, !fJustCheck)) {
         if (state.GetResult() == BlockValidationResult::BLOCK_MUTATED) {
             // We don't write down blocks to disk if they may have been
@@ -2438,6 +2444,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     std::vector<int> prevheights;
     CAmount nFees = 0;
     CAmount nValueIn = 0;
+    CAmount stakeIn = 0;
     CAmount nValueOut = 0;
     int nInputs = 0;
     int64_t nSigOpsCost = 0;
@@ -2546,8 +2553,12 @@ LogPrint (BCLog::STORAGE, "is_opreturn_an_authdata from validation.cpp \n");
                             tx_state.GetRejectReason(), tx_state.GetDebugMessage());
                 return error("%s: Consensus::CheckTxInputs: %s, %s", __func__, tx.GetHash().ToString(), state.ToString());
             }
-            for (unsigned int i = 0; i < tx.vin.size(); i++)
-                nValueIn += view.AccessCoin(tx.vin[i].prevout).out.nValue;
+            for (unsigned int i = 0; i < tx.vin.size(); i++) {
+                CAmount nIn = view.AccessCoin(tx.vin[i].prevout).out.nValue;
+                nValueIn += nIn;
+                if (tx.IsCoinStake())
+                    stakeIn += nIn;
+            }
             nValueOut += tx.GetValueOut();
             if (!tx.IsCoinStake())
                 nFees += txfee;
@@ -2621,14 +2632,15 @@ LogPrint (BCLog::STORAGE, "is_opreturn_an_authdata from validation.cpp \n");
     else
     {
         CAmount stakeReward = GetProofOfStakeReward(pindex->nHeight, params.GetConsensus());
-        CAmount stakeActual = block.vtx[1]->GetValueOut() - nValueIn;
-        if (stakeActual > stakeReward) {
+        CAmount stakeActual = block.vtx[1]->GetValueOut() - stakeIn;
+        if (!params.GetConsensus().IsLegacyInfiniloopBlock(pindex->nHeight) && stakeActual > stakeReward) {
 		LogPrintf("ERROR: ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)\n", stakeActual, stakeReward);
 		return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-amount");
 	}
     }
 
-    if (!control.Wait()) {
+    bool queue_ok = control.Wait();
+    if (!params.GetConsensus().IsLegacyInfiniloopBlock(pindex->nHeight) && !queue_ok) {
         LogPrintf("ERROR: %s: CheckQueue failed\n", __func__);
         return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "block-validation-failed");
     }
@@ -3974,7 +3986,7 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
     // Check proof of work
     const Consensus::Params& consensusParams = chainman.GetConsensus();
     bool checkTarget = nHeight >= consensusParams.HardFork3Height + 5; // few blocks extra to clear the window
-    if (checkTarget && (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams)))
+    if (!consensusParams.IsLegacyInfiniloopBlock(nHeight) && checkTarget && (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams)))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", "incorrect proof of work");
 
     // Check against checkpoints
@@ -4309,6 +4321,7 @@ bool Chainstate::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, BlockV
 
     const CChainParams& params{m_chainman.GetParams()};
 
+    g_currentValidatingBlockHeight = pindex->nHeight;
     if (!CheckBlock(block, state, params.GetConsensus()) ||
         !ContextualCheckBlock(block, state, m_chainman, pindex->pprev)) {
         if (state.IsInvalid() && state.GetResult() != BlockValidationResult::BLOCK_MUTATED) {
@@ -4361,6 +4374,7 @@ bool ChainstateManager::ProcessNewBlock(const std::shared_ptr<const CBlock>& blo
         // malleability that cause CheckBlock() to fail; see e.g. CVE-2012-2459 and
         // https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2019-February/016697.html.  Because CheckBlock() is
         // not very expensive, the anti-DoS benefits of caching failure (of a definitely-invalid block) are not substantial.
+        g_currentValidatingBlockHeight = 0;
         bool ret = CheckBlock(*block, state, GetConsensus());
         if (ret) {
             // Store to disk
@@ -4417,6 +4431,7 @@ bool TestBlockValidity(BlockValidationState& state,
     // NOTE: CheckBlockHeader is called by CheckBlock
     if (!ContextualCheckBlockHeader(block, state, chainstate.m_blockman, chainstate.m_chainman, pindexPrev, adjusted_time_callback()))
         return error("%s: Consensus::ContextualCheckBlockHeader: %s", __func__, state.ToString());
+    g_currentValidatingBlockHeight = indexDummy.nHeight;
     if (!CheckBlock(block, state, chainparams.GetConsensus(), fCheckPOW, fCheckMerkleRoot))
         return error("%s: Consensus::CheckBlock: %s", __func__, state.ToString());
     if (!ContextualCheckBlock(block, state, chainstate.m_chainman, pindexPrev))
@@ -4539,6 +4554,7 @@ VerifyDBResult CVerifyDB::VerifyDB(
             return VerifyDBResult::CORRUPTED_BLOCK_DB;
         }
         // check level 1: verify block validity
+        g_currentValidatingBlockHeight = pindex->nHeight;
         if (nCheckLevel >= 1 && !CheckBlock(block, state, consensus_params)) {
             LogPrintf("Verification error: found bad block at %d, hash=%s (%s)\n",
                       pindex->nHeight, pindex->GetBlockHash().ToString(), state.ToString());
@@ -4937,6 +4953,8 @@ void Chainstate::LoadExternalBlockFile(
                         // This block can be processed immediately; rewind to its start, read and deserialize it.
                         blkdat.SetPos(nBlockPos);
                         std::shared_ptr<CBlock> pblock{std::make_shared<CBlock>()};
+                        // Deserialize the block's txs in its own height's format (known index height, else tip+1).
+                        g_currentValidatingBlockHeight = pindex ? pindex->nHeight : m_chain.Height() + 1;
                         blkdat >> *pblock;
                         nRewind = blkdat.GetPos();
 

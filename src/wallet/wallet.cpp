@@ -3648,7 +3648,7 @@ int CWallet::GetTxBlocksToMaturity(const CWalletTx& wtx) const
 {
     AssertLockHeld(cs_wallet);
 
-    if (!wtx.IsCoinBase()) {
+    if (!wtx.IsCoinBase() && !wtx.IsCoinStake()) {
         return 0;
     }
     int chain_depth = GetTxDepthInMainChain(wtx);

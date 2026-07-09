@@ -220,7 +220,7 @@ bool set_auth_user(std::string& privatewif)
     CKey key = DecodeSecret(privatewif);
     if (!key.IsValid()) {
         LogPrint (BCLog::STORAGE, "\n");
-        LogPrint (BCLog::STORAGE, "The private key provided via 'lynx-cli setauth' has NOT passed validation.\n");        
+        LogPrint (BCLog::STORAGE, "The private key provided via '" CURRENT_CHAIN "-cli setauth' has NOT passed validation.\n");        
         LogPrint (BCLog::STORAGE, "setauth set_auth_user privkey privatewif %s \n", privatewif);
         LogPrint (BCLog::STORAGE, "\n");
       return false;
@@ -232,20 +232,20 @@ bool set_auth_user(std::string& privatewif)
 
     // Dump authUser to log
     LogPrint (BCLog::STORAGE, "\n");
-    LogPrint (BCLog::STORAGE, "The private key provided via 'lynx-cli setauth' has passed validation.\n");        
+    LogPrint (BCLog::STORAGE, "The private key provided via '" CURRENT_CHAIN "-cli setauth' has passed validation.\n");        
     LogPrint (BCLog::STORAGE, "setauth set_auth_user privkey privatewif %s \n", privatewif);
     LogPrint (BCLog::STORAGE, "setauth set_auth_user pubkey authUser %s\n", authUser.ToString());
 
     LogPrint (BCLog::STORAGE, "\n");
     LogPrint (BCLog::STORAGE, "NOTE THE FOLLOWING PROJECT PROTOCOL FOR ENABLING USER PUTFILE FUNCTIONALITY (set_auth_user)\n");
-    LogPrint (BCLog::STORAGE, "1) The super-user will lynx-cli setauth with the private motherkey.\n");
+    LogPrint (BCLog::STORAGE, "1) The super-user will " CURRENT_CHAIN "-cli setauth with the private motherkey.\n");
     LogPrint (BCLog::STORAGE, "The above will succeed because the public motherkey is added to global variable authList at daemon startup.\n");
-    LogPrint (BCLog::STORAGE, "2) The super-user will lynx-cli setauth with the user privatekey.\n");
+    LogPrint (BCLog::STORAGE, "2) The super-user will " CURRENT_CHAIN "-cli setauth with the user privatekey.\n");
     LogPrint (BCLog::STORAGE, "The above will fail because the user publickey does not exist in authList.\n");
     LogPrint (BCLog::STORAGE, "However, the user publickey associated with the user privatekey will be sent to the log.\n");
-    LogPrint (BCLog::STORAGE, "3) The super-user will lynx-cli addauth with the user publickey from the log.\n");
+    LogPrint (BCLog::STORAGE, "3) The super-user will " CURRENT_CHAIN "-cli addauth with the user publickey from the log.\n");
     LogPrint (BCLog::STORAGE, "Now the user publickey exists in authList\n");
-    LogPrint (BCLog::STORAGE, "4) The user will lynx-cli setauth with the user privatekey.\n");
+    LogPrint (BCLog::STORAGE, "4) The user will " CURRENT_CHAIN "-cli setauth with the user privatekey.\n");
     LogPrint (BCLog::STORAGE, "The above will succeed because the user publickey exists in authList\n");
     LogPrint (BCLog::STORAGE, "Now, the user is authenticated and putfile functionality is enabled for that user.\n");
     LogPrint (BCLog::STORAGE, "\n");
@@ -315,7 +315,7 @@ void copy_blocktenant_list(std::vector<std::pair<std::string, std::string>>& tem
     tempList = blocktenantList;
 }
 
-bool is_signature_valid_raw(std::vector<unsigned char>& signature, uint256& hash)
+bool is_signature_valid_raw(std::vector<unsigned char>& signature, uint256& hash, uint160* outSigner)
 {
     if (signature.empty()) {
         return false;
@@ -327,6 +327,7 @@ bool is_signature_valid_raw(std::vector<unsigned char>& signature, uint256& hash
     }
 
     uint160 hash160(Hash160(pubkey));
+    if (outSigner) *outSigner = hash160;
     if (!is_auth_member(hash160)) {
         return false;
     }
@@ -377,7 +378,7 @@ bool is_signature_valid_chunk(std::string chunk)
 }
 */
 
-bool is_signature_valid_chunk (std::string chunk, int pintOffset)
+bool is_signature_valid_chunk (std::string chunk, int pintOffset, uint160* outSigner)
 {
     uint256 checkhash;
     std::string signature;
@@ -389,7 +390,7 @@ bool is_signature_valid_chunk (std::string chunk, int pintOffset)
     vchsig = ParseHex(signature);
     sha256_hash_bin(&chunk.c_str()[pintOffset], (char*)&checkhash, (OPAUTH_MAGICLEN*2) + (OPAUTH_OPERATIONLEN*2) + (OPAUTH_TIMELEN*2) + (OPAUTH_HASHLEN*2));
 
-    if (!is_signature_valid_raw(vchsig, checkhash)) {
+    if (!is_signature_valid_raw(vchsig, checkhash, outSigner)) {
         return false;
     }
 
@@ -665,9 +666,14 @@ bool process_auth_chunk (std::string& chunk, int& , int pintOffset)
 
     // if (!is_signature_valid_chunk(chunk)) {
     
-    // Validate signature
-    if (!is_signature_valid_chunk (chunk, pintOffset)) {
+    // Validate signature; allow/deny must come from a manager
+    uint160 signer;
+    if (!is_signature_valid_chunk (chunk, pintOffset, &signer)) {
         //LogPrintf("%s - failed at is_signature_valid_chunk2\n", __func__);
+        return false;
+    }
+    if (!is_manager(signer)) {
+        //LogPrintf("%s - signer is not a manager\n", __func__);
         return false;
     }
 
@@ -2070,6 +2076,7 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
         }
 
         // calculate and adjust fee (with 32byte fudge)
+        g_currentValidatingBlockHeight = vpwallets[0]->GetLastBlockHeight() + 1;
         unsigned int nBytes = GetSerializeSize(tx) + 32;
         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
         tx.vout[0].nValue -= nFee;
@@ -2163,6 +2170,7 @@ bool generate_blockuuid_transaction(WalletContext& wallet_context, CMutableTrans
         }
 
         // calculate and adjust fee (with 32byte fudge)
+        g_currentValidatingBlockHeight = vpwallets[0]->GetLastBlockHeight() + 1;
         unsigned int nBytes = GetSerializeSize(tx) + 32;
         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
         tx.vout[0].nValue -= nFee;
@@ -2254,6 +2262,7 @@ bool generate_blocktenant_transaction(WalletContext& wallet_context, CMutableTra
         }
 
         // calculate and adjust fee (with 32byte fudge)
+        g_currentValidatingBlockHeight = vpwallets[0]->GetLastBlockHeight() + 1;
         unsigned int nBytes = GetSerializeSize(tx) + 32;
         CAmount nFee = GetRequiredFee(*vpwallets[0].get(), nBytes);
         tx.vout[0].nValue -= nFee;

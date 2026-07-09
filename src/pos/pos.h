@@ -57,6 +57,13 @@ bool blnfncCheckProofOfStake(Chainstate& chain_state, BlockValidationState& stat
  */
 bool CheckCoinStakeTimestamp(int64_t nTimeBlock);
 
+/** Height of the block currently being validated; read by infiniloop transition gates. thread_local:
+ *  set per-thread right before that thread's own tx (de)serialize (see transaction.cpp). */
+extern thread_local int g_currentValidatingBlockHeight;
+
+/** Last legacy infiniloop block height. At or below it the legacy tx wire format applies; above it, Lynx. */
+extern int g_infiniloopTransitionHeight;
+
 /**
  * Wrapper around CheckStakeKernelHash()
  * Also checks existence of kernel input and min age

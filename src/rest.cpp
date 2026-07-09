@@ -720,6 +720,13 @@ static bool rest_tx(const std::any& context, HTTPRequest* req, const std::string
         return RESTERR(req, HTTP_NOT_FOUND, hashStr + " not found");
     }
 
+    // Serialize this tx in its own block's format (a mempool tx uses next-block).
+    {
+        LOCK(cs_main);
+        const CBlockIndex* pidx = hashBlock.IsNull() ? nullptr : node->chainman->m_blockman.LookupBlockIndex(hashBlock);
+        g_currentValidatingBlockHeight = pidx ? pidx->nHeight : node->chainman->ActiveChain().Height() + 1;
+    }
+
     switch (rf) {
     case RESTResponseFormat::BINARY: {
         CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION | RPCSerializationFlags());

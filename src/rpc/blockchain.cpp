@@ -1107,6 +1107,7 @@ static RPCHelpMan gettxout()
     ScriptToUniv(coin.out.scriptPubKey, /*out=*/o, /*include_hex=*/true, /*include_address=*/true);
     ret.pushKV("scriptPubKey", o);
     ret.pushKV("coinbase", (bool)coin.fCoinBase);
+    ret.pushKV("coinstake", (bool)coin.fCoinStake);
 
     return ret;
 },
@@ -1938,22 +1939,24 @@ static RPCHelpMan getblockstats()
                 utxo_size_inc_actual -= prevout_size;
             }
 
-            CAmount txfee = tx_total_in - tx_total_out;
-            CHECK_NONFATAL(MoneyRange(txfee));
-            if (do_medianfee) {
-                fee_array.push_back(txfee);
-            }
-            maxfee = std::max(maxfee, txfee);
-            minfee = std::min(minfee, txfee);
-            totalfee += txfee;
+            if (!tx->IsCoinStake()) {
+                CAmount txfee = tx_total_in - tx_total_out;
+                CHECK_NONFATAL(MoneyRange(txfee));
+                if (do_medianfee) {
+                    fee_array.push_back(txfee);
+                }
+                maxfee = std::max(maxfee, txfee);
+                minfee = std::min(minfee, txfee);
+                totalfee += txfee;
 
-            // New feerate uses satoshis per virtual byte instead of per serialized byte
-            CAmount feerate = weight ? (txfee * WITNESS_SCALE_FACTOR) / weight : 0;
-            if (do_feerate_percentiles) {
-                feerate_array.emplace_back(std::make_pair(feerate, weight));
+                // New feerate uses satoshis per virtual byte instead of per serialized byte
+                CAmount feerate = weight ? (txfee * WITNESS_SCALE_FACTOR) / weight : 0;
+                if (do_feerate_percentiles) {
+                    feerate_array.emplace_back(std::make_pair(feerate, weight));
+                }
+                maxfeerate = std::max(maxfeerate, feerate);
+                minfeerate = std::min(minfeerate, feerate);
             }
-            maxfeerate = std::max(maxfeerate, feerate);
-            minfeerate = std::min(minfeerate, feerate);
         }
     }
 
@@ -2322,7 +2325,7 @@ static RPCHelpMan scanblocks()
 {
     return RPCHelpMan{"scanblocks",
         "\nReturn relevant blockhashes for given descriptors (requires blockfilterindex).\n"
-        "This call may take several minutes. Make sure to use no RPC timeout (lynx-cli -rpcclienttimeout=0)",
+        "This call may take several minutes. Make sure to use no RPC timeout (" CURRENT_CHAIN "-cli -rpcclienttimeout=0)",
         {
             scan_action_arg_desc,
             scan_objects_arg_desc,

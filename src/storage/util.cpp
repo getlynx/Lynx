@@ -76,6 +76,8 @@ bool strip_opreturndata_from_chunk(std::string& opdata, std::string& chunk)
 bool strip_opreturndata_from_chunk (std::string& opdata, std::string& chunk, int& pintOffset)
 {
     chunk.clear();
+    if (std::string(CURRENT_CHAIN) == "infiniloop" && g_currentValidatingBlockHeight <= g_infiniloopTransitionHeight && opdata.size() < 4) return false;
+    if (opdata.size() < 4) return false;
     std::stringstream push_data;
     push_data << opdata.at(2) << opdata.at(3);
     // OP_PUSHDATA1 (80-255)
@@ -124,9 +126,10 @@ void is_valid_chunk (std::string& chunk, int& type, int pintOffset)
 
 std::string strType;
 
-strType = chunk.substr (pintOffset, 8);
-
     type = 0; // unknown/invalid
+    if (pintOffset < 0 || chunk.size() < (size_t)pintOffset + 8) return;
+
+strType = chunk.substr (pintOffset, 8);
 //    std::stringstream push_data;
 //    push_data << chunk.at(pintOffset + 0) << chunk.at(pintOffset + 1)
 //              << chunk.at(pintOffset + 2) << chunk.at(pintOffset + 3)

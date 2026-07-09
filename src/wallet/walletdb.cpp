@@ -367,6 +367,8 @@ ReadKeyValue(CWallet* pwallet, DataStream& ssKey, CDataStream& ssValue,
                     wss.tx_corrupt = true;
                     return false;
                 }
+                // The era stamp ahead of the body (see CWalletTx::Unserialize) selects the format,
+                // so the decoded txid reproduces the key.
                 ssValue >> wtx;
                 if (wtx.GetHash() != hash)
                     return false;

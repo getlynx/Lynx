@@ -794,6 +794,9 @@ bool BlockManager::ReadBlockFromDisk(CBlock& block, const CBlockIndex& index) co
 {
     const FlatFilePos block_pos{WITH_LOCK(cs_main, return index.GetBlockPos())};
 
+    // Deserialize this block's txs in its own height's format: legacy (with nTime) at or below the
+    // transition, Lynx above. Without this a stale global (e.g. left by mining) misreads the tx stream.
+    g_currentValidatingBlockHeight = index.nHeight;
     if (!ReadBlockFromDisk(block, block_pos)) {
         return false;
     }
@@ -841,6 +844,9 @@ bool BlockManager::ReadRawBlockFromDisk(std::vector<uint8_t>& block, const FlatF
 
 FlatFilePos BlockManager::SaveBlockToDisk(const CBlock& block, int nHeight, CChain& active_chain, const FlatFilePos* dbp)
 {
+    // Serialize this block's txs in its own height's format (legacy with nTime at or below the
+    // transition, Lynx above) for both the size computation and the disk write below.
+    g_currentValidatingBlockHeight = nHeight;
     unsigned int nBlockSize = ::GetSerializeSize(block, CLIENT_VERSION);
     FlatFilePos blockPos;
     const auto position_known {dbp != nullptr};

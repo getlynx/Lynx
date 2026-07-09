@@ -242,6 +242,37 @@ public:
 
 //LogPrintf ("CURRENT_CHAIN chainparams.cpp %s \n", CURRENT_CHAIN);
 
+spec.nDefaultPort["infiniloop"] = 9449;
+
+spec.pchMessageStart["infiniloop"][0] = 0x71;
+spec.pchMessageStart["infiniloop"][1] = 0x33;
+spec.pchMessageStart["infiniloop"][2] = 0x21;
+spec.pchMessageStart["infiniloop"][3] = 0x00;
+
+spec.pubkeyPrefix["infiniloop"] = 33;
+spec.scriptPrefix["infiniloop"] = 85;
+spec.secretPrefix["infiniloop"] = 153;
+
+spec.uuidlastblock["infiniloop"] = 3084941;
+
+spec.initauthuser["infiniloop"] = "58721d870b5e33d55009431cd5e8c6f0b375e033";
+
+spec.psztimestamp["infiniloop"] = "CNN: California to extend stay-at-home orders as hospitals hit breaking point due to COVID";
+
+spec.timestamp["infiniloop"] = 1609281149;
+// spec.timestamp["infiniloop"] = 1757546169;
+
+spec.nonce["infiniloop"] = 703813;
+// spec.nonce["infiniloop"] = 719727;
+
+spec.genesishash["infiniloop"] = "0x000001ed1ed7503c6ef472314d8138b7440ebd0c5c8b539481705032bbed295a";
+// spec.genesishash["infiniloop"] = "0x1b4a093b321ba972f75dd94bfc9e52b61b58cc3dfab9e01c6bee0de79191e563";
+
+spec.genesismerkleroot["infiniloop"] = "0xab44c95608c9971475915ed3d31326569dee3b30b610d1bd1e423aab32015c74";
+// spec.genesismerkleroot["infiniloop"] = "0xd48fd106f53376ab9c33415daa61af7472c236c5ff8ddbe9c085dee45cc3932f";
+
+// spec.nbits["infiniloop"] = 0x1e0fffff;
+
         spec.psztimestamp["alioth"] = "Conformity wears the mask of patriotism.";
         spec.nonce["alioth"] = 2951643;
         spec.genesishash["alioth"] = "0xfa9f9bd23d7ed9984c1fe756caeaa3af9e63887f4b1fe4807f3915af74c61a7b";
@@ -420,6 +451,16 @@ public:
 
         if (std::string(CURRENT_CHAIN) == "lynx") {
             consensus.lastPoWBlock = 3085114;
+        } else if (std::string(CURRENT_CHAIN) == "infiniloop") {
+            consensus.lastPoWBlock = 7500;   // matches InfiniLooP's nLastPOWBlock
+            consensus.infiniloopTransitionHeight = 2779913;
+            // consensus.infiniloopTransitionHeight = 3000000;
+            extern int g_infiniloopTransitionHeight;
+            g_infiniloopTransitionHeight = consensus.infiniloopTransitionHeight;
+            // Start the authdata rebuild at the transition height (where authdata begins),
+            // not the leftover spec value (3084941) which sits above the infiniloop tip. Set
+            // here, after infiniloopTransitionHeight, so the order is correct.
+            consensus.nUUIDBlockStart = consensus.infiniloopTransitionHeight;
         } else {
             consensus.lastPoWBlock = 1500;
             consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -563,13 +604,33 @@ fclose(f);
 
 
 
-// if (std::string(CURRENT_CHAIN) == "lynx") {
-        // genesis = CreateGenesisBlock(1387779684, 2714385, 0x1e0ffff0, 1, 88 * COIN);
-// } else {
-        // genesis = CreateGenesisBlock(spec.timestamp, spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
-        // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
+if (std::string(CURRENT_CHAIN) == "infiniloop") {
+        // infiniloop targets InfiniLooP. Reproduce InfiniLooP's exact genesis coinbase bytes:
+        //   nVersion=1, nTime=<spec ts>, vin[0].scriptSig = CScript() << 0 << 42 << pszTimestamp,
+        //   vout[0] empty (value 0, scriptPubKey empty), nLockTime=0.
+        // nBits = 0x1e0fffff (= CBigNum(~uint256(0) >> 20).GetCompact()).
+        const char* psz = spec.psztimestamp[CURRENT_CHAIN].c_str();
+        CMutableTransaction txNew;
+        txNew.nVersion = 1;
+        txNew.nTime    = spec.timestamp[CURRENT_CHAIN];
+        txNew.vin.resize(1);
+        txNew.vin[0].scriptSig = CScript() << 0 << CScriptNum(42)
+            << std::vector<unsigned char>((const unsigned char*)psz, (const unsigned char*)psz + strlen(psz));
+        txNew.vout.resize(1);
+        txNew.vout[0].nValue = 0;
+        // scriptPubKey left empty
+        txNew.nLockTime = 0;
+        genesis = CBlock();
+        genesis.nVersion = 1;
+        genesis.nTime    = spec.timestamp[CURRENT_CHAIN];
+        genesis.nBits    = 0x1e0fffff;
+        genesis.nNonce   = spec.nonce[CURRENT_CHAIN];
+        genesis.hashPrevBlock.SetNull();
+        genesis.vtx.push_back(MakeTransactionRef(std::move(txNew)));
+        genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
+} else {
         genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
-// }
+}
 
         consensus.hashGenesisBlock = genesis.GetHash();
 
@@ -874,10 +935,13 @@ if (std::string(CURRENT_CHAIN) == "lynx") {
         // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
         genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
-        assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
-        // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
-        assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+        if (std::string(CURRENT_CHAIN) != "infiniloop") {
+            // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
+            // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
+            assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
+            // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
+            assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+        }
 }
 
         consensus.initAuthTime = genesis.nTime;
@@ -1034,10 +1098,13 @@ if (std::string(CURRENT_CHAIN) == "lynx") {
         // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
         genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
-        assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
-        // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
-        assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+        if (std::string(CURRENT_CHAIN) != "infiniloop") {
+            // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
+            // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
+            assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
+            // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
+            assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+        }
 }
 
         vFixedSeeds.clear();
@@ -1155,10 +1222,13 @@ if (std::string(CURRENT_CHAIN) == "lynx") {
         // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
         genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
-        assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
-        // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
-        assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+        if (std::string(CURRENT_CHAIN) != "infiniloop") {
+            // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
+            // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
+            assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
+            // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
+            assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+        }
 }
 
         vFixedSeeds.clear(); //!< Regtest mode doesn't have any fixed seeds.

@@ -23,6 +23,13 @@
 #include <utility>
 #include <vector>
 
+// Infiniloop transition gate. The legacy infiniloop tx wire format carries an extra nTime field
+// right after nVersion; Lynx does not. The caller sets g_currentValidatingBlockHeight to the height
+// of the block this tx belongs to before serializing, so the field is written at or below the
+// transition height and dropped above it. Declared here (not via pos.h) to keep this low-level header light.
+extern thread_local int g_currentValidatingBlockHeight;
+extern int g_infiniloopTransitionHeight;
+
 /**
  * A flag that is ORed into the protocol version to designate that a transaction
  * should be (un)serialized without witness data.
@@ -229,6 +236,9 @@ inline void UnserializeTransaction(TxType& tx, Stream& s) {
     const bool fAllowWitness = !(s.GetVersion() & SERIALIZE_TRANSACTION_NO_WITNESS);
 
     s >> tx.nVersion;
+    if (std::string(CURRENT_CHAIN) == "infiniloop" && g_currentValidatingBlockHeight <= g_infiniloopTransitionHeight) {
+        s >> tx.nTime;
+    }
     unsigned char flags = 0;
     tx.vin.clear();
     tx.vout.clear();
@@ -268,6 +278,9 @@ inline void SerializeTransaction(const TxType& tx, Stream& s) {
     const bool fAllowWitness = !(s.GetVersion() & SERIALIZE_TRANSACTION_NO_WITNESS);
 
     s << tx.nVersion;
+    if (std::string(CURRENT_CHAIN) == "infiniloop" && g_currentValidatingBlockHeight <= g_infiniloopTransitionHeight) {
+        s << tx.nTime;
+    }
     unsigned char flags = 0;
     // Consistency check
     if (fAllowWitness) {
@@ -317,6 +330,7 @@ public:
     const std::vector<CTxOut> vout;
     const int32_t nVersion;
     const uint32_t nLockTime;
+    const uint32_t nTime;   // infiniloop: serialized after nVersion; 0/unused on other chains
 
 private:
     /** Memory only. */
@@ -398,6 +412,7 @@ struct CMutableTransaction
     std::vector<CTxOut> vout;
     int32_t nVersion;
     uint32_t nLockTime;
+    uint32_t nTime{0};   // infiniloop: serialized after nVersion; 0/unused on other chains
 
     explicit CMutableTransaction();
     explicit CMutableTransaction(const CTransaction& tx);

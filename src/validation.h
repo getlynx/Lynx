@@ -317,10 +317,15 @@ private:
     bool cacheStore;
     ScriptError error{SCRIPT_ERR_UNKNOWN_ERROR};
     PrecomputedTransactionData *txdata;
+    // infiniloop: the tx wire format (legacy nTime vs Lynx) is chosen from g_currentValidatingBlockHeight,
+    // which is per-thread. This check runs on a parallel worker thread that would otherwise sit at the
+    // default (legacy) and compute a wrong sighash. Capture the height here on the constructing thread
+    // (where it is set correctly) and restore it in operator() before verifying.
+    int m_validating_height{0};
 
 public:
     CScriptCheck(const CTxOut& outIn, const CTransaction& txToIn, unsigned int nInIn, unsigned int nFlagsIn, bool cacheIn, PrecomputedTransactionData* txdataIn) :
-        m_tx_out(outIn), ptxTo(&txToIn), nIn(nInIn), nFlags(nFlagsIn), cacheStore(cacheIn), txdata(txdataIn) { }
+        m_tx_out(outIn), ptxTo(&txToIn), nIn(nInIn), nFlags(nFlagsIn), cacheStore(cacheIn), txdata(txdataIn), m_validating_height(g_currentValidatingBlockHeight) { }
 
     CScriptCheck(const CScriptCheck&) = delete;
     CScriptCheck& operator=(const CScriptCheck&) = delete;

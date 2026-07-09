@@ -22,6 +22,9 @@ const CBlockIndex* GetLastPoSBlockIndex(const CBlockIndex* pindex)
 
 unsigned int GetNextWorkRequiredPoS(const CBlockIndex* pindexLast, const Consensus::Params& params)
 {
+    // return UintToArith256(params.posLimit).GetCompact();
+    // return 0x1d0e4916;
+
     const int64_t T = params.nPosTargetSpacing;
     const int64_t N = 24;
     const int64_t k = N * (N + 1) * T / 2;
