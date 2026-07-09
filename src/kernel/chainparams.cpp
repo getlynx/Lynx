@@ -219,8 +219,6 @@ LogPrint(BCLog::CHAIN, "pszTimestamp %s \n", pszTimestamp);
 /**
  * Main network on which people trade goods and services.
  */
-
-// /* 
 class CMainParams : public CChainParams {
 public:
     CMainParams() {
@@ -239,39 +237,6 @@ public:
         consensus.MinBIP9WarningHeight = 483840; // segwit activation height + miner confirmation window
         consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 1 * 60 * 60;
-
-//LogPrintf ("CURRENT_CHAIN chainparams.cpp %s \n", CURRENT_CHAIN);
-
-spec.nDefaultPort["infiniloop"] = 9449;
-
-spec.pchMessageStart["infiniloop"][0] = 0x71;
-spec.pchMessageStart["infiniloop"][1] = 0x33;
-spec.pchMessageStart["infiniloop"][2] = 0x21;
-spec.pchMessageStart["infiniloop"][3] = 0x00;
-
-spec.pubkeyPrefix["infiniloop"] = 33;
-spec.scriptPrefix["infiniloop"] = 85;
-spec.secretPrefix["infiniloop"] = 153;
-
-spec.uuidlastblock["infiniloop"] = 3084941;
-
-spec.initauthuser["infiniloop"] = "58721d870b5e33d55009431cd5e8c6f0b375e033";
-
-spec.psztimestamp["infiniloop"] = "CNN: California to extend stay-at-home orders as hospitals hit breaking point due to COVID";
-
-spec.timestamp["infiniloop"] = 1609281149;
-// spec.timestamp["infiniloop"] = 1757546169;
-
-spec.nonce["infiniloop"] = 703813;
-// spec.nonce["infiniloop"] = 719727;
-
-spec.genesishash["infiniloop"] = "0x000001ed1ed7503c6ef472314d8138b7440ebd0c5c8b539481705032bbed295a";
-// spec.genesishash["infiniloop"] = "0x1b4a093b321ba972f75dd94bfc9e52b61b58cc3dfab9e01c6bee0de79191e563";
-
-spec.genesismerkleroot["infiniloop"] = "0xab44c95608c9971475915ed3d31326569dee3b30b610d1bd1e423aab32015c74";
-// spec.genesismerkleroot["infiniloop"] = "0xd48fd106f53376ab9c33415daa61af7472c236c5ff8ddbe9c085dee45cc3932f";
-
-// spec.nbits["infiniloop"] = 0x1e0fffff;
 
         spec.psztimestamp["alioth"] = "Conformity wears the mask of patriotism.";
         spec.nonce["alioth"] = 2951643;
@@ -417,6 +382,22 @@ spec.genesismerkleroot["infiniloop"] = "0xab44c95608c9971475915ed3d31326569dee3b
         spec.initauthuser["indus"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["indus"] = 1757546169;
 
+        spec.psztimestamp["infiniloop"] = "CNN: California to extend stay-at-home orders as hospitals hit breaking point due to COVID";
+        spec.nonce["infiniloop"] = 703813;
+        spec.genesishash["infiniloop"] = "0x000001ed1ed7503c6ef472314d8138b7440ebd0c5c8b539481705032bbed295a";
+        spec.genesismerkleroot["infiniloop"] = "0xab44c95608c9971475915ed3d31326569dee3b30b610d1bd1e423aab32015c74";
+        spec.nDefaultPort["infiniloop"] = 9449;
+        spec.pubkeyPrefix["infiniloop"] = 33;
+        spec.scriptPrefix["infiniloop"] = 85;
+        spec.secretPrefix["infiniloop"] = 153;
+        spec.pchMessageStart["infiniloop"][0] = 0x71;
+        spec.pchMessageStart["infiniloop"][1] = 0x33;
+        spec.pchMessageStart["infiniloop"][2] = 0x21;
+        spec.pchMessageStart["infiniloop"][3] = 0x00;
+        spec.uuidlastblock["infiniloop"] = 3084941;
+        spec.initauthuser["infiniloop"] = "58721d870b5e33d55009431cd5e8c6f0b375e033";
+        spec.timestamp["infiniloop"] = 1609281149;
+
         spec.psztimestamp["lynx"] = "ICanHazKitteh at epoch 1387779684. Meow. Now pet me.";
         spec.nonce["lynx"] = 2714385;
         spec.genesishash["lynx"] = "0x984b30fc9bb5e5ff424ad7f4ec1930538a7b14a2d93e58ad7976c23154ea4a76";
@@ -433,28 +414,19 @@ spec.genesismerkleroot["infiniloop"] = "0xab44c95608c9971475915ed3d31326569dee3b
         spec.initauthuser["lynx"] = "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d";
         spec.timestamp["lynx"] = 1387779684;
 
-
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.posLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
-
-//LogPrintf ("spec.initauthuser %s \n", spec.initauthuser[CURRENT_CHAIN].c_str());
-
-        // consensus.initAuthUser = uint160S(spec.initauthuser);
         consensus.initAuthUser = uint160S(spec.initauthuser[CURRENT_CHAIN]);
-        // consensus.nUUIDBlockStart = spec.uuidlastblock ;
         consensus.nUUIDBlockStart = spec.uuidlastblock[CURRENT_CHAIN] ;
-// }
 
         consensus.fPowNoRetargeting = false;
-        // consensus.lastPoWBlock = std::numeric_limits<int>::max();
 
         if (std::string(CURRENT_CHAIN) == "lynx") {
             consensus.lastPoWBlock = 3085114;
         } else if (std::string(CURRENT_CHAIN) == "infiniloop") {
             consensus.lastPoWBlock = 7500;   // matches InfiniLooP's nLastPOWBlock
             consensus.infiniloopTransitionHeight = 2779913;
-            // consensus.infiniloopTransitionHeight = 3000000;
             extern int g_infiniloopTransitionHeight;
             g_infiniloopTransitionHeight = consensus.infiniloopTransitionHeight;
             // Start the authdata rebuild at the transition height (where authdata begins),
@@ -464,7 +436,7 @@ spec.genesismerkleroot["infiniloop"] = "0xab44c95608c9971475915ed3d31326569dee3b
         } else {
             consensus.lastPoWBlock = 1500;
             consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-            consensus.fPowNoRetargeting = true;        
+            consensus.fPowNoRetargeting = true;
         }
 
         consensus.nPosTargetTimespan = 5 * 60;
@@ -526,167 +498,71 @@ spec.genesismerkleroot["infiniloop"] = "0xab44c95608c9971475915ed3d31326569dee3b
         consensus.weightDampener = 10000000 * COIN;
         consensus.weightDampenerHeight = 3086200;
 
-
-
-// cout << spec.name << " " << spec.nDefaultPort << " " << hex << (int)spec.pchMessageStart[0] << " " << (int)spec.pchMessageStart[1] << " " << (int)spec.pchMessageStart[2] << " " << (int)spec.pchMessageStart[3] << dec << " " << spec.pubkeyPrefix  << " " << spec.scriptPrefix  << " " << spec.secretPrefix  << " " << spec.coinSymbol << endl;
-
-
-
-// if (std::string(CURRENT_CHAIN) == "lynx") {
-        // pchMessageStart[0] = 0xfa;
-        // pchMessageStart[1] = 0xcf
-        // pchMessageStart[2] = 0xb3;
-        // pchMessageStart[3] = 0xdc;
-        // nDefaultPort = 22566;
-// } else {
-
         pchMessageStart[0] = spec.pchMessageStart[CURRENT_CHAIN][0];
         pchMessageStart[1] = spec.pchMessageStart[CURRENT_CHAIN][1];
         pchMessageStart[2] = spec.pchMessageStart[CURRENT_CHAIN][2];
         pchMessageStart[3] = spec.pchMessageStart[CURRENT_CHAIN][3];
         nDefaultPort = spec.nDefaultPort[CURRENT_CHAIN];
 
-LogPrint(BCLog::CHAIN, "nDefaultPort %d \n", nDefaultPort);
-
-LogPrint(BCLog::CHAIN, "pchMessageStart[0] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][0]);
-LogPrint(BCLog::CHAIN, "pchMessageStart[1] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][1]);
-LogPrint(BCLog::CHAIN, "pchMessageStart[2] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][2]);
-LogPrint(BCLog::CHAIN, "pchMessageStart[3] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][3]);
-
-// }
+        LogPrint(BCLog::CHAIN, "nDefaultPort %d \n", nDefaultPort);
+        LogPrint(BCLog::CHAIN, "pchMessageStart[0] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][0]);
+        LogPrint(BCLog::CHAIN, "pchMessageStart[1] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][1]);
+        LogPrint(BCLog::CHAIN, "pchMessageStart[2] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][2]);
+        LogPrint(BCLog::CHAIN, "pchMessageStart[3] %#x \n", spec.pchMessageStart[CURRENT_CHAIN][3]);
 
         nPruneAfterHeight = 100000;
         m_assumed_blockchain_size = 1;
         m_assumed_chain_state_size = 0;
 
-/*
-FILE *f = fopen ("/root/flurb", "a");
-
-uint32_t nBits = 0x1e0ffff0;
-
-arith_uint256 target;
-bool fNegative, fOverflow;
-target.SetCompact(nBits, &fNegative, &fOverflow);
-
-int nonce = -1;
-fprintf (f, "nonce %d \n", nonce);
-while (true) {
-  nonce++;
-
-  genesis = CreateGenesisBlock2(1757546169, nonce, nBits, 1, 88 * COIN);
-
-  arith_uint256 hashInt = UintToArith256(genesis.GetPoWHash());
-
-  if (hashInt <= target) {
-
-    fprintf (f, "target %s \n", target.GetHex().c_str());
-    fprintf (f, "nonce %d \n", nonce);
-    fprintf (f, "GetHash %s \n", genesis.GetHash().GetHex().c_str());
-    fprintf (f, "GetPoWHash %s \n", genesis.GetPoWHash().GetHex().c_str());
-    fprintf (f, "hashMerkleRoot %s \n", genesis.hashMerkleRoot.GetHex().c_str());
-//    std::cout << "=== Genesis Block Found ===\n";
-//    std::cout << "Nonce: " << nonce << "\n";
-//    std::cout << "Hash: " << genesis.GetHash().GetHex() << "\n";
-//    std::cout << "Merkle root: " << genesis.hashMerkleRoot.GetHex() << "\n";
-    break;
-  }
-
-  if (nonce % 100 == 0) {
-    fprintf (f, "nonce %d \n", nonce);
-    fflush (f);
-  }
-
-
-}
-
-fclose(f);
-*/
-
-
-
-if (std::string(CURRENT_CHAIN) == "infiniloop") {
-        // infiniloop targets InfiniLooP. Reproduce InfiniLooP's exact genesis coinbase bytes:
-        //   nVersion=1, nTime=<spec ts>, vin[0].scriptSig = CScript() << 0 << 42 << pszTimestamp,
-        //   vout[0] empty (value 0, scriptPubKey empty), nLockTime=0.
-        // nBits = 0x1e0fffff (= CBigNum(~uint256(0) >> 20).GetCompact()).
-        const char* psz = spec.psztimestamp[CURRENT_CHAIN].c_str();
-        CMutableTransaction txNew;
-        txNew.nVersion = 1;
-        txNew.nTime    = spec.timestamp[CURRENT_CHAIN];
-        txNew.vin.resize(1);
-        txNew.vin[0].scriptSig = CScript() << 0 << CScriptNum(42)
-            << std::vector<unsigned char>((const unsigned char*)psz, (const unsigned char*)psz + strlen(psz));
-        txNew.vout.resize(1);
-        txNew.vout[0].nValue = 0;
-        // scriptPubKey left empty
-        txNew.nLockTime = 0;
-        genesis = CBlock();
-        genesis.nVersion = 1;
-        genesis.nTime    = spec.timestamp[CURRENT_CHAIN];
-        genesis.nBits    = 0x1e0fffff;
-        genesis.nNonce   = spec.nonce[CURRENT_CHAIN];
-        genesis.hashPrevBlock.SetNull();
-        genesis.vtx.push_back(MakeTransactionRef(std::move(txNew)));
-        genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
-} else {
-        genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
-}
+        if (std::string(CURRENT_CHAIN) == "infiniloop") {
+            // infiniloop targets InfiniLooP. Reproduce InfiniLooP's exact genesis coinbase bytes:
+            //   nVersion=1, nTime=<spec ts>, vin[0].scriptSig = CScript() << 0 << 42 << pszTimestamp,
+            //   vout[0] empty (value 0, scriptPubKey empty), nLockTime=0.
+            // nBits = 0x1e0fffff (= CBigNum(~uint256(0) >> 20).GetCompact()).
+            const char* psz = spec.psztimestamp[CURRENT_CHAIN].c_str();
+            CMutableTransaction txNew;
+            txNew.nVersion = 1;
+            txNew.nTime    = spec.timestamp[CURRENT_CHAIN];
+            txNew.vin.resize(1);
+            txNew.vin[0].scriptSig = CScript() << 0 << CScriptNum(42)
+                << std::vector<unsigned char>((const unsigned char*)psz, (const unsigned char*)psz + strlen(psz));
+            txNew.vout.resize(1);
+            txNew.vout[0].nValue = 0;
+            // scriptPubKey left empty
+            txNew.nLockTime = 0;
+            genesis = CBlock();
+            genesis.nVersion = 1;
+            genesis.nTime    = spec.timestamp[CURRENT_CHAIN];
+            genesis.nBits    = 0x1e0fffff;
+            genesis.nNonce   = spec.nonce[CURRENT_CHAIN];
+            genesis.hashPrevBlock.SetNull();
+            genesis.vtx.push_back(MakeTransactionRef(std::move(txNew)));
+            genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
+        } else {
+            genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
+        }
 
         consensus.hashGenesisBlock = genesis.GetHash();
 
-// if (std::string(CURRENT_CHAIN) == "lynx") {
-        // assert(consensus.hashGenesisBlock == uint256S("0x984b30fc9bb5e5ff424ad7f4ec1930538a7b14a2d93e58ad7976c23154ea4a76"));
-        // assert(genesis.hashMerkleRoot == uint256S("0xc2adb964220f170f6c4fe9002f0db19a6f9c9608f6f765ba0629ac3897028de5"));
-// } else {
-        // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
         assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
-        // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
         assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
-// }
-
-/*
-FILE *f = fopen ("/root/flurm", "w");
-fprintf(f,"  chainparams.cpp nVersion = %d\n", genesis.nVersion);
-fprintf(f, "  nTime    = %u\n", genesis.nTime);
-fprintf(f, "  nBits    = 0x%08x\n", genesis.nBits);
-fprintf(f, "  nNonce   = %u\n", genesis.nNonce);
-fprintf(f, "  hash     = %s\n", genesis.GetHash().ToString().c_str());
-fprintf(f, "  merkle   = %s\n", genesis.hashMerkleRoot.ToString().c_str());
-fclose(f);
-*/
 
         consensus.initAuthTime = genesis.nTime;
 
         vSeeds.emplace_back(std::string(CURRENT_CHAIN) + ".getlynx.io");
 
-if (std::string(CURRENT_CHAIN) == "lynx") {
-        // vSeeds.emplace_back("node1.getlynx.io.");
-        // vSeeds.emplace_back("node2.getlynx.io.");
-        // vSeeds.emplace_back("node3.getlynx.io.");
-        // vSeeds.emplace_back("node4.getlynx.io.");
-        // vSeeds.emplace_back("node5.getlynx.io.");
-
-        vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
-
-        // base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,45);
-        // base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,22);
-        // base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,173);
-        // bech32_hrp = "lynx";
-} else {
-        // vSeeds.clear();
-        vFixedSeeds.clear();
-
-}
+        if (std::string(CURRENT_CHAIN) == "lynx") {
+            vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
+        } else {
+            vFixedSeeds.clear();
+        }
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,spec.pubkeyPrefix[CURRENT_CHAIN]);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,spec.scriptPrefix[CURRENT_CHAIN]);
-        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,spec.secretPrefix[CURRENT_CHAIN]);	
+        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,spec.secretPrefix[CURRENT_CHAIN]);
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x88, 0xB2, 0x1E};
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xAD, 0xE4};
 
         bech32_hrp = CURRENT_CHAIN;
-
-
-
 
         fDefaultConsistencyChecks = false;
         fRequireStandard = true;
@@ -703,124 +579,26 @@ if (std::string(CURRENT_CHAIN) == "lynx") {
          // TODO to be specified in a future patch.
         };
 
-if (std::string(CURRENT_CHAIN) == "lynx") {
-        chainTxData = ChainTxData{
-            // Data from RPC: getchaintxstats 4096 000000000000000000035c3f0d31e71a5ee24c5aaf3354689f65bd7b07dee632
-            1387905669, // * UNIX timestamp of last known number of transactions
-            1717,       // * total number of transactions between genesis and that timestamp
-                        //   (the tx=... number in the SetBestChain debug.log lines)
-            3.0         // * estimated number of transactions per second after that timestamp
-        };
-} else {
-        chainTxData = ChainTxData{
-            // Data from RPC: getchaintxstats 4096 000000000000000000035c3f0d31e71a5ee24c5aaf3354689f65bd7b07dee632
-            1757546169, // * UNIX timestamp of last known number of transactions
-            0,       // * total number of transactions between genesis and that timestamp
-                        //   (the tx=... number in the SetBestChain debug.log lines)
-            0.0         // * estimated number of transactions per second after that timestamp
-        };
-}
+        if (std::string(CURRENT_CHAIN) == "lynx") {
+            chainTxData = ChainTxData{
+                // Data from RPC: getchaintxstats 4096 000000000000000000035c3f0d31e71a5ee24c5aaf3354689f65bd7b07dee632
+                1387905669, // * UNIX timestamp of last known number of transactions
+                1717,       // * total number of transactions between genesis and that timestamp
+                            //   (the tx=... number in the SetBestChain debug.log lines)
+                3.0         // * estimated number of transactions per second after that timestamp
+            };
+        } else {
+            chainTxData = ChainTxData{
+                // Data from RPC: getchaintxstats 4096 000000000000000000035c3f0d31e71a5ee24c5aaf3354689f65bd7b07dee632
+                1757546169, // * UNIX timestamp of last known number of transactions
+                0,       // * total number of transactions between genesis and that timestamp
+                            //   (the tx=... number in the SetBestChain debug.log lines)
+                0.0         // * estimated number of transactions per second after that timestamp
+            };
+        }
 
     }
 };
-// */
-
-/*
-class CMainParams : public CChainParams {
-public:
-    CMainParams() {
-        m_chain_type = ChainType::MAIN;
-
-        // Consensus parameters
-        consensus.signet_blocks = false;
-        consensus.signet_challenge.clear();
-        consensus.nSubsidyHalvingInterval = 210000;
-
-        consensus.script_flag_exceptions.clear();
-
-        consensus.BIP34Height = 710000;
-        consensus.BIP34Hash = uint256S("fa09d204a83a768ed5a7c8d441fa62f2043abf420cff1226c7b4329aeb9d51cf");
-        consensus.BIP65Height = 918684;
-        consensus.BIP66Height = 811879;
-        consensus.MinBIP9WarningHeight = 483840;
-
-        consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.nPowTargetTimespan = 1 * 60 * 60;
-        consensus.fPowAllowMinDifficultyBlocks = false;
-        consensus.fPowNoRetargeting = false;
-        consensus.lastPoWBlock = 3085114;
-
-        consensus.posLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.nPosTargetTimespan = 5 * 60;
-        consensus.nPosTargetSpacing = 5 * 60;
-        consensus.nStakeMinAge = 10 * 60;
-        consensus.nStakeMaxAge = 60 * 60 * 24 * 120;
-
-        consensus.nRuleChangeActivationThreshold = 6048; // 75% of 8064
-        consensus.nMinerConfirmationWindow = 8064;
-        consensus.nUUIDBlockStart = 3084941;
-
-        // BIP deployments (CSV, SegWit, Taproot)
-        consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY] = {28, 1199145601, 1230767999, 0};
-        consensus.vDeployments[Consensus::DEPLOYMENT_CSV] = {0, 1485561600, 1517356801, 0};
-        consensus.vDeployments[Consensus::DEPLOYMENT_SEGWIT] = {1, 0, 999999999999ULL, 0};
-        consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT] = {2, 1619222400, 1628640000, 709632};
-
-        consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000");
-        consensus.defaultAssumeValid = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000");
-
-        // Genesis block
-        genesis = CreateGenesisBlock(1757546169, 791506, 0x1e0ffff0, 1, 88 * COIN);
-        consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x000009f2d965b3367ee24d95a73989d1ae7af28e6cc3a3380d44f810b2829cfa"));
-        assert(genesis.hashMerkleRoot == uint256S("0x7859ebe6fc610559c58228dc5e7a27d9ca80bd4674e642ce512820eaa51f5050"));
-        consensus.initAuthTime = genesis.nTime;
-
-        // Network parameters
-        pchMessageStart[0] = 0xe7;
-        pchMessageStart[1] = 0xc5;
-        pchMessageStart[2] = 0xd3;
-        pchMessageStart[3] = 0xb6;
-        nDefaultPort = 45466;
-        nPruneAfterHeight = 100000;
-
-        // Seeds
-        vSeeds.clear();
-        vFixedSeeds.clear();
-
-        // Address prefixes
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,65);
-        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,196);
-        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1,128);
-        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x88, 0xB2, 0x1E};
-        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xAD, 0xE4};
-        bech32_hrp = "panther";
-
-        // Checkpoints
-        checkpointData = {
-            {
-                {0, genesis.GetHash()},
-            }
-        };
-
-        // ChainTxData
-        chainTxData = ChainTxData{
-            1757546169, // UNIX timestamp of last known tx
-            0,          // total txs
-            0.0         // tx/sec estimate
-        };
-
-        // Misc flags
-        fDefaultConsistencyChecks = false;
-        fRequireStandard = true;
-        m_is_test_chain = false;
-        m_is_mockable_chain = false;
-
-        m_assumed_blockchain_size = 1;
-        m_assumed_chain_state_size = 0;
-    }
-};
-*/
 
 /**
  * Testnet (v3): public test network which is reset from time to time.
@@ -925,24 +703,24 @@ public:
         m_assumed_chain_state_size = 3;
 
 
-if (std::string(CURRENT_CHAIN) == "lynx") {
-        genesis = CreateGenesisBlock(1685504092, 5, 0x207fffff, 1, 50 * COIN);
-        consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x03536bed1d498da393f19961ed78f8c47ecf601717c3b4b28a3923db29ec58d2"));
-        assert(genesis.hashMerkleRoot == uint256S("0xe17e4369f534691fade36848437428efdd6c51141b504aca65568ae564f171bf"));
-} else {
-        // genesis = CreateGenesisBlock(spec.timestamp, spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
-        // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
-        genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
-        consensus.hashGenesisBlock = genesis.GetHash();
-        if (std::string(CURRENT_CHAIN) != "infiniloop") {
-            // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
-            // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
-            assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
-            // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
-            assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+        if (std::string(CURRENT_CHAIN) == "lynx") {
+            genesis = CreateGenesisBlock(1685504092, 5, 0x207fffff, 1, 50 * COIN);
+            consensus.hashGenesisBlock = genesis.GetHash();
+            assert(consensus.hashGenesisBlock == uint256S("0x03536bed1d498da393f19961ed78f8c47ecf601717c3b4b28a3923db29ec58d2"));
+            assert(genesis.hashMerkleRoot == uint256S("0xe17e4369f534691fade36848437428efdd6c51141b504aca65568ae564f171bf"));
+        } else {
+            // genesis = CreateGenesisBlock(spec.timestamp, spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
+            // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
+            genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
+            consensus.hashGenesisBlock = genesis.GetHash();
+            if (std::string(CURRENT_CHAIN) != "infiniloop") {
+                // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
+                // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
+                assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
+                // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
+                assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+            }
         }
-}
 
         consensus.initAuthTime = genesis.nTime;
 
@@ -1088,24 +866,24 @@ public:
         nDefaultPort = 38333;
         nPruneAfterHeight = 1000;
 
-if (std::string(CURRENT_CHAIN) == "lynx") {
-        genesis = CreateGenesisBlock(1757546169, 791506, 0x1e0ffff0, 1, 88 * COIN);
-        consensus.hashGenesisBlock = genesis.GetHash();
-        // assert(consensus.hashGenesisBlock == uint256S("0x000009f2d965b3367ee24d95a73989d1ae7af28e6cc3a3380d44f810b2829cfa"));
-        // assert(genesis.hashMerkleRoot == uint256S("0x7859ebe6fc610559c58228dc5e7a27d9ca80bd4674e642ce512820eaa51f5050"));
-} else {
-        // genesis = CreateGenesisBlock(spec.timestamp, spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
-        // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
-        genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
-        consensus.hashGenesisBlock = genesis.GetHash();
-        if (std::string(CURRENT_CHAIN) != "infiniloop") {
-            // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
-            // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
-            assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
-            // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
-            assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+        if (std::string(CURRENT_CHAIN) == "lynx") {
+            genesis = CreateGenesisBlock(1757546169, 791506, 0x1e0ffff0, 1, 88 * COIN);
+            consensus.hashGenesisBlock = genesis.GetHash();
+            // assert(consensus.hashGenesisBlock == uint256S("0x000009f2d965b3367ee24d95a73989d1ae7af28e6cc3a3380d44f810b2829cfa"));
+            // assert(genesis.hashMerkleRoot == uint256S("0x7859ebe6fc610559c58228dc5e7a27d9ca80bd4674e642ce512820eaa51f5050"));
+        } else {
+            // genesis = CreateGenesisBlock(spec.timestamp, spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
+            // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
+            genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
+            consensus.hashGenesisBlock = genesis.GetHash();
+            if (std::string(CURRENT_CHAIN) != "infiniloop") {
+                // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
+                // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
+                assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
+                // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
+                assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+            }
         }
-}
 
         vFixedSeeds.clear();
 
@@ -1212,24 +990,24 @@ public:
         }
 
 
-if (std::string(CURRENT_CHAIN) == "lynx") {
-        genesis = CreateGenesisBlock(1296688602, 2, 0x207fffff, 1, 50 * COIN);
-        consensus.hashGenesisBlock = genesis.GetHash();
-        //assert(consensus.hashGenesisBlock == uint256S("0x0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"));
-        //assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
-} else {
-        // genesis = CreateGenesisBlock(spec.timestamp, spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
-        // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
-        genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
-        consensus.hashGenesisBlock = genesis.GetHash();
-        if (std::string(CURRENT_CHAIN) != "infiniloop") {
-            // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
-            // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
-            assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
-            // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
-            assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+        if (std::string(CURRENT_CHAIN) == "lynx") {
+            genesis = CreateGenesisBlock(1296688602, 2, 0x207fffff, 1, 50 * COIN);
+            consensus.hashGenesisBlock = genesis.GetHash();
+            //assert(consensus.hashGenesisBlock == uint256S("0x0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"));
+            //assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
+        } else {
+            // genesis = CreateGenesisBlock(spec.timestamp, spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
+            // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
+            genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
+            consensus.hashGenesisBlock = genesis.GetHash();
+            if (std::string(CURRENT_CHAIN) != "infiniloop") {
+                // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
+                // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
+                assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
+                // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
+                assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
+            }
         }
-}
 
         vFixedSeeds.clear(); //!< Regtest mode doesn't have any fixed seeds.
         vSeeds.clear();
