@@ -73,6 +73,9 @@ bash <(curl -sL install.getlynx.io) --chain=halley
 ```bash
 bash <(curl -sL install.getlynx.io) --chain=indus
 ```
+```bash
+bash <(curl -sL install.getlynx.io) --chain=infiniloop
+```
 
 Explicitly update an existing Spark daemon
 ```bash
