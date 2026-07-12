@@ -426,7 +426,7 @@ public:
             consensus.lastPoWBlock = 3085114;
         } else if (std::string(CURRENT_CHAIN) == "infiniloop") {
             consensus.lastPoWBlock = 7500;   // matches InfiniLooP's nLastPOWBlock
-            consensus.infiniloopTransitionHeight = 2779913;
+            consensus.infiniloopTransitionHeight = 2800000;
             extern int g_infiniloopTransitionHeight;
             g_infiniloopTransitionHeight = consensus.infiniloopTransitionHeight;
             // Start the authdata rebuild at the transition height (where authdata begins),
