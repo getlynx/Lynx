@@ -147,6 +147,10 @@ void LogPackageVersion()
 #else
     version_string += " (release build)";
 #endif
-    LogPrintf(PACKAGE_NAME " version %s\n", version_string);
+    std::string packagename = std::string(CURRENT_CHAIN) + " Core";
+    packagename[0] = (packagename[0] >= 'a' && packagename[0] <= 'z') ? packagename[0]-'a'+'A' : packagename[0];
+
+    // LogPrintf(PACKAGE_NAME " version %s\n", version_string);
+    LogPrintf("%s version %s\n", packagename, version_string);
 }
 } // namespace init
