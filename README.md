@@ -28,7 +28,7 @@ Lynx takes a different approach. By putting the whole file on a public, transpar
 
 Lynx treats its coin like a **commodity** — something that gets consumed to do useful work, the way gasoline is burned to move a ship.
 
-- **Stakers** run nodes that secure the network and, in doing so, create new Lynx coins. This is done through **Proof of Stake**, which uses a tiny fraction of the energy of Bitcoin-style mining — no warehouses of power-hungry machines. While data-center computers can and do help maintain the global network, they aren't required: Lynx is designed to be eco-friendly and can be run entirely by individual participants on inexpensive computers at home or in the office.
+- **Stakers** run nodes that secure the network and, in doing so, create new Lynx coins. This is done through **Proof of Stake**, which uses a tiny fraction of the energy of Bitcoin-style mining — no warehouses of power-hungry machines. While data-center computers can and do help maintain the global network, they aren't required: Lynx is [designed to be eco-friendly](https://docs.getlynx.io/lynx-core/sustainability) and can be run entirely by individual participants on inexpensive computers at home or in the office.
 - **Storage users** acquire coins and "burn" (permanently destroy) them to pay for writing a file to the chain.
 
 Coins are created to secure the network and destroyed to store data, completing the cycle. Because the coin has a genuine use, Lynx isn't chasing price speculation — it's a working utility.
