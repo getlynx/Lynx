@@ -152,5 +152,24 @@ void LogPackageVersion()
 
     // LogPrintf(PACKAGE_NAME " version %s\n", version_string);
     LogPrintf("%s version %s\n", packagename, version_string);
+    LogPrintf("\n");
+    LogPrintf("%s is part of the Lynx Data Storage Network (LDSN),\n", packagename);
+    LogPrintf("built from the Lynx Core codebase.\n");
+    LogPrintf("\n");
+    LogPrintf("The Lynx Data Storage Network (LDSN) is a decentralized, eco-friendly global\n");
+    LogPrintf("platform for permanent data storage. Files are written whole onto the\n");
+    LogPrintf("blockchain, where they outlive us. It safeguards family photos, legal and\n");
+    LogPrintf("medical records, journalistic archives, dissertations, published papers,\n");
+    LogPrintf("and long-term climate and medical research. Every stored file is encrypted\n");
+    LogPrintf("and private, not publicly readable unless its creator chooses to share it.\n");
+    LogPrintf("Staking creates coins to secure the network; storing data burns them - a\n");
+    LogPrintf("working commodity with real utility.\n");
+    LogPrintf("\n");
+    LogPrintf("Thank you for helping change the world. History cannot be rewritten when its\n");
+    LogPrintf("records cannot be erased. Facts kill fascism - and keeping facts alive,\n");
+    LogPrintf("permanently and verifiably, is exactly what this network was built to do.\n");
+    LogPrintf("\n");
+    LogPrintf("Store your first file at https://clevver.org\n");
+    LogPrintf("Documentation: https://docs.getlynx.io\n");
 }
 } // namespace init
