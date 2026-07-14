@@ -59,7 +59,7 @@ Spark is ideal for small, quiet hardware — a Raspberry Pi 4 (even a Pi Zero 2)
 
 **Beacon** is a full terminal management console for the Lynx Data Storage Network. It's the better fit if you want a live dashboard you can leave open all day, wallet encryption, or a built-in ElectrumX server without assembling one yourself.
 
-👉 See **[Spark vs. Beacon](https://docs.getlynx.io/lynx-administration/spark-the-simple-way-to-run-a-lynx-node)** in the docs to choose.
+👉 See **[Spark vs. Beacon](https://docs.getlynx.io/lynx-administration/spark-the-simple-way-to-run-a-lynx-node#spark-vs.-beacon)** in the docs to choose.
 
 ### Raspberry Pi ISO
 
