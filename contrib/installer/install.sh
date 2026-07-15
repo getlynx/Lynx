@@ -12,10 +12,15 @@ SPARK_INSTALLER_VERSION="2.13.0"
 chain_name=""
 update_mode=""
 rebuild_mode=""
+# force_update is set only when 'update' is passed explicitly (by the 'upd'
+# alias / documented command), NOT when update mode is auto-detected from an
+# existing service (the 12-minute maintenance timer). It forces an
+# unconditional binary re-download so 'upd' always replaces the local binary.
+force_update=""
 for arg in "$@"; do
     case "$arg" in
         --chain=*) chain_name="${arg#--chain=}" ;;
-        update)    update_mode="update" ;;
+        update)    update_mode="update"; force_update="yes" ;;
         rebuild)   rebuild_mode="rebuild" ;;
     esac
 done
@@ -32,13 +37,6 @@ conf_name="${chain_lower}.conf"
 
 # Base URL for fetching external helper scripts at runtime
 SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/installer"
-
-# Set assumevalid flag only for the default chain
-if [ "$chain_lower" = "lynx" ]; then
-    assumevalid_flag=" -assumevalid=485bea987c62039d365a9458b6df2e3ef679054f2bd6e016877f783652912cfb"
-else
-    assumevalid_flag=""
-fi
 
 ################################################################################
 # LYNX SPARK INSTALLER
@@ -489,7 +487,7 @@ jou() { if [ "$1" = "-f" ]; then journalctl -t install.sh -f; elif [ "${2:-}" = 
 jo() { jou "$@"; }
 shh() { nano /root/.ssh/authorized_keys && read -p "Restart SSH daemon to apply changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null && echo "SSH daemon restarted successfully"; else echo "SSH daemon not restarted. Changes will take effect after manual restart."; fi; }
 pas() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "$ssh_config"; echo "$new_setting" >> "$ssh_config"; if [ "$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; }
-upd() { _spark_require_chain && bash <(curl -sL install.getlynx.io) --chain=$SPARK_CHAIN; }
+upd() { _spark_require_chain && bash <(curl -sL install.getlynx.io) update --chain=$SPARK_CHAIN; }
 reb() { _spark_require_chain && bash <(curl -sL install.getlynx.io) rebuild --chain=$SPARK_CHAIN; }
 #
 h() { executeHelpCommand; }
@@ -1920,7 +1918,9 @@ getCompatibleBinary() {
     local filename=$(basename "$download_url")
     local archive="/root/$filename"
     log "Downloading $filename to /root..."
-    if ! wget -q -O "$archive" "$download_url"; then
+    # --no-cache defeats GitHub's asset CDN serving a stale copy when a release
+    # asset is re-uploaded under the exact same filename.
+    if ! wget -q --no-cache -O "$archive" "$download_url"; then
         log "Failed to download $filename from $download_url"
         rm -f "$archive"
         return 1
@@ -1976,7 +1976,7 @@ Wants=network-online.target
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
-ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory${assumevalid_flag}
+ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory
 ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory -rpcconnect=$rpc_host stop
 Restart=on-failure
 RestartSec=30
@@ -2237,6 +2237,19 @@ if [[ "$update_mode" == "update" ]]; then
 
     # Ensure chain registry and selector are up to date
     registerChainAndInstallSelector
+
+    # Explicit user-initiated update (upd / `update`): always fetch and
+    # overwrite the binary regardless of sync state. This runs BEFORE the sync
+    # check, which otherwise exits early on a synced (or syncing) node and never
+    # reaches the download. getCompatibleBinary stops the daemon, unzip -o
+    # overwrites the existing binary, then restarts the service.
+    if [ "$force_update" = "yes" ]; then
+        if ! getCompatibleBinary; then
+            log "Binary download failed. Exiting."
+            exit 1
+        fi
+        exit 0
+    fi
 
     # Ensure the daemon is running immediately (e.g. after a reboot)
     # before starting slow operations like package updates.
