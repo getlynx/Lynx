@@ -153,7 +153,7 @@ void LogPackageVersion()
     // LogPrintf(PACKAGE_NAME " version %s\n", version_string);
     LogPrintf("%s version %s\n", packagename, version_string);
     LogPrintf("\n");
-    LogPrintf("%s is part of the Lynx Data Storage Network (LDSN),\n", packagename);
+    LogPrintf("%s is part of the Lynx Data Storage Network,\n", packagename);
     LogPrintf("built from the Lynx Core codebase.\n");
     LogPrintf("\n");
     LogPrintf("The Lynx Data Storage Network (LDSN) is a decentralized, eco-friendly global\n");
@@ -171,5 +171,6 @@ void LogPackageVersion()
     LogPrintf("\n");
     LogPrintf("Store your first file at https://clevver.org\n");
     LogPrintf("Documentation: https://docs.getlynx.io\n");
+    LogPrintf("\n");
 }
 } // namespace init
