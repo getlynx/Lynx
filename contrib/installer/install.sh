@@ -6,7 +6,21 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.14.0"
+SPARK_INSTALLER_VERSION="2.15.0"
+
+# ── Per-chain footer links (edit this table over time) ────────────────────────
+# Controls the two chain-specific links at the bottom of the 'h' console:
+#   🔍 Blockchain explorer   and   📈 Trade <Chain>
+# One row per chain, pipe-delimited:  <chain>|<block explorer URL>|<exchange URL>
+#   - Leave a field empty to hide just that line for the chain
+#     (e.g. "foo|https://explorer.foo/|"  -> explorer shown, Trade line hidden).
+#   - Omit a chain entirely (e.g. alioth) to hide BOTH lines for it.
+# Written to /etc/spark/chain-links.conf on every install/rebuild/update and read
+# at runtime by the help screen, keyed on the currently selected chain.
+SPARK_CHAIN_LINKS="\
+lynx|https://explorer.getlynx.io/|https://freixlite.com/market/LYNX/LTC
+infiniloop|https://chainz.cryptoid.info/il8p/|https://freixlite.com/market/IL8P/LTC
+"
 
 # Parse command-line arguments
 chain_name=""
@@ -52,7 +66,7 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 #   installed chains. For managing multiple daemons from a single console,
 #   see Beacon (https://github.com/getlynx/Beacon).
 #
-# AUTHOR: Lynx Development Team
+# AUTHOR: Lynx Core Development Team
 # VERSION: 4.0
 # LAST UPDATED: 2026-04-01
 # DOCUMENTATION: https://docs.getlynx.io/
@@ -150,11 +164,8 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 ################################################################################
 #
 # INSTALLATION:
-#   Install a new Spark (default Lynx chain):
-#   bash <(curl -sL install.getlynx.io)
-#
 #   Install a Spark for a specific chain:
-#   bash <(curl -sL install.getlynx.io) --chain=mychain
+#   bash <(curl -sL install.getlynx.io) --chain={chain}
 #
 #   Update an existing Spark daemon:
 #   bash <(curl -sL install.getlynx.io) update
@@ -196,31 +207,32 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 #   - Check service status: lss (or systemctl status lynx)
 #   - View debug logs: lyl -f (or tail -f $WorkingDirectory/debug.log)
 #   - Check install logs: jou -f (or journalctl -t install.sh -f)
-#   - Restart daemon: lyr (or systemctl restart lynx)
-#   - Manual sync check: gbi (or lynx-cli getblockchaininfo)
+#   - Restart daemon: lyr (or systemctl restart {chain})
+#   - Manual sync check: gbi (or {chain}-cli getblockchaininfo)
 #   - Check firewall rules: ipt (or iptables -L -vn)
 #   - View SSH config: shh (or nano /root/.ssh/authorized_keys)
 #
 ################################################################################
 #
 # NETWORK PORTS:
-#   - Daemon P2P port: 22566 (configurable in lynx.conf)
-#   - RPC port: 8332 (configurable in lynx.conf)
+#   - Daemon P2P port: 22566 (configurable in {chain}.conf)
+#   - RPC port: 8332 (configurable in {chain}.conf)
 #   - SSH port: configurable via usp command (default varies by system)
 #
 # FILES CREATED:
 #   - /etc/systemd/system/{chain}-install.service
 #   - /etc/systemd/system/{chain}-install.timer
-#   - /etc/systemd/system/lynx.service
-#   - /etc/systemd/system/lynx-wallet-backup.service
-#   - /etc/systemd/system/lynx-wallet-backup.timer
-#   - /etc/systemd/system/lynx-patch-firewall.service
-#   - /etc/systemd/system/lynx-patch-firewall.timer
+#   - /etc/systemd/system/{chain}.service
+#   - /etc/systemd/system/{chain}-wallet-backup.service
+#   - /etc/systemd/system/{chain}-wallet-backup.timer
+#   - /etc/systemd/system/{chain}-patch-firewall.service
+#   - /etc/systemd/system/{chain}-patch-firewall.timer
 #   - /usr/local/bin/{chain}-backup.sh
 #   - /usr/local/bin/chain (chain selector)
 #   - /usr/local/bin/c (symlink to chain)
 #   - /usr/local/bin/spark-current-chain.sh (sourced helper)
 #   - /etc/spark/chains.conf (chain registry)
+#   - /etc/spark/chain-links.conf (per-chain explorer/exchange footer links)
 #   - /run/spark/current-chain (current selection, tmpfs)
 #   - /run/spark/chain-colors (per-chain PS1 color cache, tmpfs)
 #   - /swapfile (if needed)
@@ -231,7 +243,7 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 # DATA DIRECTORY SETUP
 #
 # PURPOSE:
-#   Ensures the Lynx data directory exists with proper permissions and creates
+#   Ensures the chain data directory exists with proper permissions and creates
 #   a symbolic link for backward compatibility with legacy configurations.
 #
 # OPERATIONS:
@@ -721,9 +733,24 @@ executeHelpCommand() {
     echo ""
     echo "  📚 Complete project documentation: https://docs.getlynx.io/"
     echo "  💾 Store files permanently: https://clevver.org/"
-    echo "  🔍 Blockchain explorer: https://explorer.getlynx.io/"
-    echo "  📈 Trade Lynx: https://freixlite.com/market/LYNX/LTC"
-    echo "  🔢 Daemon: $version_info"
+    # Chain-specific footer links, keyed on the selected chain. A missing chain
+    # or an empty field hides that line (see SPARK_CHAIN_LINKS in the installer
+    # header, written to /etc/spark/chain-links.conf).
+    local _explorer_url="" _exchange_url="" _lk_chain _lk_explorer _lk_exchange
+    if [ -f /etc/spark/chain-links.conf ]; then
+        while IFS='|' read -r _lk_chain _lk_explorer _lk_exchange || [ -n "$_lk_chain" ]; do
+            [ "$_lk_chain" = "$SPARK_CHAIN" ] || continue
+            _explorer_url="$_lk_explorer"
+            _exchange_url="$_lk_exchange"
+            break
+        done < /etc/spark/chain-links.conf
+    fi
+    if [ -n "$_explorer_url" ]; then
+        echo "  🔍 Blockchain explorer: $_explorer_url"
+    fi
+    if [ -n "$_exchange_url" ]; then
+        echo "  📈 Trade ${chain_cap}: $_exchange_url"
+    fi
     echo "  🔢 Spark: v${SPARK_INSTALLER_VERSION:-unknown}"
     echo ""
     echo ""
@@ -925,6 +952,11 @@ registerChainAndInstallSelector() {
         log "Registered $chain_lower in $registry."
     fi
 
+    # --- Per-chain footer links (source of truth: SPARK_CHAIN_LINKS in header) ---
+    # Rewritten every run so edits to the header table propagate on install/reb.
+    printf '%s\n' "$SPARK_CHAIN_LINKS" > /etc/spark/chain-links.conf
+    log "Wrote per-chain footer links to /etc/spark/chain-links.conf."
+
     # --- Ensure /run/spark exists (tmpfs, cleared on reboot) ---
     mkdir -p /run/spark
 
@@ -1018,7 +1050,7 @@ _colorize_chain() {
 # single RPC regardless of chain count. The 5s ceiling is generous enough
 # that healthy daemons under contention still report in (1s was too tight
 # and dropped columns under load), but tight enough that a hung daemon
-# can't stall the menu indefinitely. Lynx's getbalances embeds
+# can't stall the menu indefinitely. Chain's getbalances embeds
 # lastprocessedblock.height inline, so balance + height come from one call.
 _show_menu() {
     echo ""
