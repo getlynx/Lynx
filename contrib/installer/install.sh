@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.15.0"
+SPARK_INSTALLER_VERSION="2.16.0"
 
 # ── Per-chain footer links (edit this table over time) ────────────────────────
 # Controls the two chain-specific links at the bottom of the 'h' console:
@@ -31,13 +31,32 @@ rebuild_mode=""
 # existing service (the 12-minute maintenance timer). It forces an
 # unconditional binary re-download so 'upd' always replaces the local binary.
 force_update=""
+# skip_hardening is set by the hidden --shared-host flag. It suppresses the SSH
+# hardening and firewall configuration so Spark can be installed alongside
+# pre-existing services (web servers, existing SSH/user setup, an existing host
+# firewall) without clobbering them. Not advertised in the help/usage text.
+skip_hardening=""
 for arg in "$@"; do
     case "$arg" in
-        --chain=*) chain_name="${arg#--chain=}" ;;
-        update)    update_mode="update"; force_update="yes" ;;
-        rebuild)   rebuild_mode="rebuild" ;;
+        --chain=*)     chain_name="${arg#--chain=}" ;;
+        update)        update_mode="update"; force_update="yes" ;;
+        rebuild)       rebuild_mode="rebuild" ;;
+        --shared-host) skip_hardening="yes" ;;
     esac
 done
+
+# Persist the shared-host choice to an on-disk marker (NOT /run, which is tmpfs
+# and clears on reboot). The 12-minute maintenance timer re-invokes this script
+# WITHOUT the flag, so without a marker it would re-apply the firewall and edit
+# sshd_config on the next cycle. Reading the marker back keeps every subsequent
+# run — timer, 'upd', 'reb' — honoring the original choice.
+SHARED_HOST_MARKER="/etc/spark/shared-host"
+if [ "$skip_hardening" = "yes" ]; then
+    mkdir -p /etc/spark
+    touch "$SHARED_HOST_MARKER"
+elif [ -f "$SHARED_HOST_MARKER" ]; then
+    skip_hardening="yes"
+fi
 
 # Derive chain-specific names (default to lynx if no chain specified)
 effective_chain_raw="${chain_name:-lynx}"
@@ -53,7 +72,7 @@ conf_name="${chain_lower}.conf"
 SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/installer"
 
 ################################################################################
-# LYNX SPARK INSTALLER
+# SPARK INSTALLER
 ################################################################################
 #
 # PURPOSE:
@@ -202,7 +221,7 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 ################################################################################
 #
 # TROUBLESHOOTING:
-#   - Check service status: lss (or systemctl status lynx)
+#   - Check service status: lss (or systemctl status {chain})
 #   - View debug logs: lyl -f (or tail -f $WorkingDirectory/debug.log)
 #   - Check install logs: jou -f (or journalctl -t install.sh -f)
 #   - Restart daemon: lyr (or systemctl restart {chain})
@@ -247,7 +266,7 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 # OPERATIONS:
 #   - Creates $WorkingDirectory directory if it doesn't exist
 #   - Sets proper ownership (root:root) and permissions (755)
-#   - Creates symlink /root/.lynx -> $WorkingDirectory for compatibility
+#   - Creates symlink /root/.{chain} -> $WorkingDirectory for compatibility
 #
 ################################################################################
 
@@ -452,6 +471,17 @@ _spark_require_chain() {
     return 0
 }
 #
+# Helper: block SSH/firewall-mutating commands on shared-host installs, where
+# Spark deliberately leaves the host's SSH and firewall alone. Prints a notice
+# and returns 0 (blocked) when the /etc/spark/shared-host marker exists;
+# returns 1 otherwise so normal installs run the command unchanged.
+_spark_shared_host_blocked() {
+    [ -f /etc/spark/shared-host ] || return 1
+    echo "  Disabled on a shared-host install. This Spark node does not manage"
+    echo "  the host's SSH or firewall configuration. Use the host's own tools."
+    return 0
+}
+#
 # WALLET COMMANDS
 gba() { _spark_require_chain && $SPARK_CLI getbalances; }
 gb() { gba; }
@@ -491,12 +521,12 @@ wd() { wdi; }
 #
 # SYSTEM COMMANDS
 ipt() { iptables -L -vn; }
-fire() { nano /usr/local/bin/firewall.sh && echo "Applying firewall changes..." && read -p "Execute firewall script to apply changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then /usr/local/bin/firewall.sh && echo "Firewall rules updated successfully!"; else echo "Firewall script not executed."; fi; }
-usp() { update_ssh_port "$1"; }
+fire() { _spark_shared_host_blocked && return 1; nano /usr/local/bin/firewall.sh && echo "Applying firewall changes..." && read -p "Execute firewall script to apply changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then /usr/local/bin/firewall.sh && echo "Firewall rules updated successfully!"; else echo "Firewall script not executed."; fi; }
+usp() { _spark_shared_host_blocked && return 1; update_ssh_port "$1"; }
 jou() { if [ "$1" = "-f" ]; then journalctl -t install.sh -f; elif [ "${2:-}" = "-f" ]; then journalctl -t install.sh -n ${1:-30} -f; else journalctl -t install.sh -n ${1:-30}; fi; }
 jo() { jou "$@"; }
-shh() { nano /root/.ssh/authorized_keys && read -p "Restart SSH daemon to apply changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null && echo "SSH daemon restarted successfully"; else echo "SSH daemon not restarted. Changes will take effect after manual restart."; fi; }
-pas() { local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "$ssh_config"; echo "$new_setting" >> "$ssh_config"; if [ "$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; }
+shh() { _spark_shared_host_blocked && return 1; nano /root/.ssh/authorized_keys && read -p "Restart SSH daemon to apply changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null && echo "SSH daemon restarted successfully"; else echo "SSH daemon not restarted. Changes will take effect after manual restart."; fi; }
+pas() { _spark_shared_host_blocked && return 1; local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "$ssh_config"; echo "$new_setting" >> "$ssh_config"; if [ "$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; }
 upd() { _spark_require_chain && bash <(curl -sL install.getlynx.io) update --chain=$SPARK_CHAIN; }
 reb() { _spark_require_chain && bash <(curl -sL install.getlynx.io) rebuild --chain=$SPARK_CHAIN; }
 #
@@ -720,9 +750,16 @@ executeHelpCommand() {
     echo "    jou [lines] [-f]       - View install logs (default 30)"
     echo "    upd                    - Install or update daemon to latest release"
     echo "    reb                    - Update services, timers, firewall, and aliases"
-    echo "    usp [port]             - Change SSH port"
+    # On shared-host installs (Spark's SSH/firewall management is disabled) hide
+    # the commands that would touch the host's SSH or firewall configuration, so
+    # they aren't run by accident long after this install method is forgotten.
+    if [ ! -f /etc/spark/shared-host ]; then
+        echo "    usp [port]             - Change SSH port"
+    fi
     echo "    wdi                    - Change to daemon working directory"
-    echo "    ipt                    - List iptables rules"
+    if [ ! -f /etc/spark/shared-host ]; then
+        echo "    ipt                    - List iptables rules"
+    fi
     echo "    chain / c              - Switch between installed chains"
     echo ""
     echo "  USEFUL COMMANDS:"
@@ -1403,7 +1440,7 @@ patchRpcConf() {
     cat <<EOF > /etc/systemd/system/$service_unit
 [Unit]
 Description=Patch ${effective_chain} conf with per-chain RPC address
-Documentation=https://getlynx.io/
+Documentation=https://docs.getlynx.io/
 
 [Service]
 Type=oneshot
@@ -1448,7 +1485,7 @@ createInstallServiceUnit() {
         cat <<EOF > /etc/systemd/system/$install_service
 [Unit]
 Description=Run install.sh every 12 minutes for ${effective_chain}
-Documentation=https://getlynx.io/
+Documentation=https://docs.getlynx.io/
 
 [Service]
 Type=simple
@@ -1462,7 +1499,7 @@ EOF
         cat <<EOF > /etc/systemd/system/$install_timer
 [Unit]
 Description=Run install.sh every 12 minutes for ${effective_chain}
-Documentation=https://getlynx.io/
+Documentation=https://docs.getlynx.io/
 
 [Timer]
 OnBootSec=15sec
@@ -1480,9 +1517,13 @@ EOF
         systemctl enable $install_timer >/dev/null 2>&1
         log "/etc/systemd/system/$install_service and /etc/systemd/system/$install_timer created and enabled. Timer will start after installation completes."
 
-        # Disable firewalld and SELinux on RHEL-based systems
+        # Disable firewalld and SELinux on RHEL-based systems. Skipped on shared
+        # hosts (--shared-host) so we never tear down an existing host firewall
+        # or SELinux policy that other services on the box rely on.
         log "Checking for RHEL-based system to disable firewalld and SELinux."
-        if [ "$os_family" = "redhat" ]; then
+        if [ "$skip_hardening" = "yes" ]; then
+            log "Shared-host mode: skipping firewalld/SELinux changes."
+        elif [ "$os_family" = "redhat" ]; then
             log "Checking for firewalld to disable on RHEL-based system."
             # Disable firewalld if installed
             if systemctl list-unit-files | grep -q firewalld; then
@@ -1544,7 +1585,7 @@ patchWalletBackup() {
     cat <<EOF > /etc/systemd/system/$script_service_unit
 [Unit]
 Description=Install ${effective_chain} wallet backup script
-Documentation=https://getlynx.io/
+Documentation=https://docs.getlynx.io/
 
 [Service]
 Type=oneshot
@@ -1579,7 +1620,7 @@ EOF
     cat <<EOF > /etc/systemd/system/$timer_service_unit
 [Unit]
 Description=Install ${effective_chain} wallet backup service and timer
-Documentation=https://getlynx.io/
+Documentation=https://docs.getlynx.io/
 
 [Service]
 Type=oneshot
@@ -1627,7 +1668,7 @@ patchSwap() {
     cat <<EOF > /etc/systemd/system/$service_unit
 [Unit]
 Description=Expand swap to 4GB for ${effective_chain}
-Documentation=https://getlynx.io/
+Documentation=https://docs.getlynx.io/
 
 [Service]
 Type=oneshot
@@ -1998,7 +2039,7 @@ createDaemonServiceUnit() {
         cat <<EOF > /etc/systemd/system/$service_name
 [Unit]
 Description=${effective_chain} Cryptocurrency Daemon
-Documentation=https://getlynx.io/
+Documentation=https://docs.getlynx.io/
 After=network.target network-online.target
 Wants=network-online.target
 
@@ -2147,7 +2188,7 @@ createAuthorizedKeyDefaults() {
     if [ ! -f "$AUTH_KEYS" ] || ! grep -q 'benjamin@lynx.local' "$AUTH_KEYS"; then
         cat <<'EOF' >> "$AUTH_KEYS"
 # Sample SSH public key (replace with your own and remove the # to enable)
-# ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCcXZL7RcgCCrfyNohpemCZbu2oiGyu22kzcWHZZl8P4xLRgiO/1dbLlpg19G+YqxW7bSC2JHCwvqGlIb+aJeD7LbXWbracU2FH4I2k42jj7D+JWoxrJqh9zZ9GBQ8GT2ObIYxbk7tqh9wujLTEIfHr9zoE3Hnt8DaXZs/yu8EVI6EM+7lp1b3Fp/NNQQsrxgjWLj0KrvL40lfY6VukZ4nCXVQTkYuHOSRiPTx7SgcUGNS0hwOOt0IiYruL6JVKq+Y4hLk9U8tir5UUTXhcF+8e6zR1gvvvT6FP6J50z+G/l9Q/iQHwMIgoaxzNJ0JO4zk8ZXs4R0GJAql5UV2ezDnOpUAKtmz+jPmRKxhp5IngBUtgHYCni97nP6Jp0rKf9kAlQyEKf+0n21otCSPo0a1SOE+L1cqZbetdbXcbXvimc+m+j7Xn41B+ukPdIsDqlKjBCuvUXoYTWQTcgKCGU/dQ9tvvUWFM4quH9ORADqS7kbdBKegVvU3J67bNYd7bR25MytVEZ91V2nnNLydwP+29kWt/hqleUUpgBs+q9DkCI34yxv1CkZqvPlGvcDMpjBsL/DGy10xjmOSo5LRZQW67FqZ5aMVz2d4KLyykTwtUSgYqJ+eH4Gdmsfg/5gZimL8SjXC9eF+RV/n8aw8oVUJdhGsYxo3SYZaGbB6Nb92lew== benjamin@lynx.local
+# ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCcXZL7RcgCCrfyNohpemCZbu2oiGyu22kzcWHZZl8P4xLRgiO/1dbLlpg19G+YqxW7bSC2JHCwvqGlIb+aJeD7LbXWbracU2FH4I2k42jj7D+JWoxrJqh9zZ9GBQ8GT2ObIYxbk7tqh9wujLTEIfHr9zoE3Hnt8DaXZs/yu8EVI6EM+7lp1b3Fp/NNQQsrxgjWLj0KrvL40lfY6VukZ4nCXVQTkYuHOSRiPTx7SgcUGNS0hwOOt0IiYruL6JVKq+Y4hLk9U8tir5UUTXhcF+8e6zR1gvvvT6FP6J50z+G/l9Q/iQHwMIgoaxzNJ0JO4zk8ZXs4R0GJAql5UV2ezDnOpUAKtmz+jPmRKxhp5IngBUtgHYCni97nP6Jp0rKf9kAlQyEKf+0n21otCSPo0a1SOE+L1cqZbetdbXcbXvimc+m+j7Xn41B+ukPdIsDqlKjBCuvUXoYTWQTcgKCGU/dQ9tvvUWFM4quH9ORADqS7kbdBKegVvU3J67bNYd7bR25MytVEZ91V2nnNLydwP+29kWt/hqleUUpgBs+q9DkCI34yxv1CkZqvPlGvcDMpjBsL/DGy10xjmOSo5LRZQW67FqZ5aMVz2d4KLyykTwtUSgYqJ+eH4Gdmsfg/5gZimL8SjXC9eF+RV/n8aw8oVUJdhGsYxo3SYZaGbB6Nb92lew== benjamin@getlynx.local
 
 EOF
         log "Added default SSH public keys to $AUTH_KEYS."
@@ -2257,7 +2298,12 @@ fi
 
 # Ensure patch timers are in place (runs in all modes)
 patchRpcConf
-patchFirewall
+# Firewall setup is skipped on shared hosts (--shared-host) to avoid colliding
+# with an existing host firewall or the ports used by pre-existing services
+# (e.g. a web server on 80/443).
+if [ "$skip_hardening" != "yes" ]; then
+    patchFirewall
+fi
 
 # If running in update mode, run only the update process
 if [[ "$update_mode" == "update" ]]; then
@@ -2384,13 +2430,17 @@ patchWalletBackup
 # Set up swap expansion patch (runs after boot via systemd timer)
 patchSwap
 
-# Configure defaultSSH keys
-createAuthorizedKeyDefaults
+# Configure default SSH keys. Skipped on shared hosts (--shared-host) so the
+# installer leaves the existing SSH/user configuration and sshd untouched
+# (no authorized_keys changes, no sshd_config edits, no SSH daemon restart).
+if [ "$skip_hardening" != "yes" ]; then
+    createAuthorizedKeyDefaults
+fi
 
-# Create lynx.service systemd unit file
+# Create {chain}.service systemd unit file
 createDaemonServiceUnit
 
-# Check if lynx service is running, and start if not
+# Check if {chain} service is running, and start if not
 startDaemon
 
 # Display completion message and log out the user so a fresh login
