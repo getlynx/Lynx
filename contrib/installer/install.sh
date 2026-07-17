@@ -67,8 +67,6 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 #   see Beacon (https://github.com/getlynx/Beacon).
 #
 # AUTHOR: Lynx Core Development Team
-# VERSION: 4.0
-# LAST UPDATED: 2026-04-01
 # DOCUMENTATION: https://docs.getlynx.io/
 #
 ################################################################################
