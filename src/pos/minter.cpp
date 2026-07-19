@@ -418,6 +418,20 @@ void ThreadStakeMiner(size_t nThreadID, std::vector<std::shared_ptr<wallet::CWal
             num_nodes = connman->GetNodeCount(ConnectionDirection::Both);
         }
 
+        // infiniloop: never mint a block at or below the transition height. A coinstake staked there
+        // freezes its txid in the legacy era, while the wallet stamps an unconfirmed record bidha
+        // (transaction.h:268) -> GetHash() != map key -> the AbandonOrphanedCoinstakes assert
+        // (wallet.cpp:1835) -> SIGABRT. Above the line the frozen era and the stamp agree, so a
+        // below-line attempt is the only one that can poison. Wait out the legacy range; the first
+        // block we then stake is transition+1, the first real bidha block. Inert on every other
+        // chain and after cutover: IsLegacyInfiniloopBlock short-circuits false on the chain name.
+        if (Params().GetConsensus().IsLegacyInfiniloopBlock(nBestHeight + 1)) {
+            fIsStaking = false;
+            LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: below infiniloop transition (next height %d) - staking suppressed\n", nThreadID, nBestHeight + 1);
+            condWaitFor(nThreadID, 30000);
+            continue;
+        }
+
         if (is_mining_thread_active()) {
             fIsStaking = false;
             LogPrint(BCLog::POS, "ThreadStakeMiner[%d]: Mining thread active (PoW), pausing PoS\n", nThreadID);
