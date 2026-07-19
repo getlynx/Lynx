@@ -68,7 +68,10 @@ struct ChainSpec {
     std::map<std::string, std::string> genesishash;
     // std::string genesismerkleroot;
     std::map<std::string, std::string> genesismerkleroot;
-};
+    // int checkpointHeight[4];
+    std::map<std::string, int[4]> checkpointHeight;
+    // std::string checkpointHash[4];
+    std::map<std::string, std::string[4]> checkpointHash;};
 
 ChainSpec spec;
 
@@ -254,6 +257,16 @@ public:
         spec.initauthuser["alioth"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["alioth"] = 1757546169;
 
+        spec.checkpointHeight["alioth"][0] = 0;
+        spec.checkpointHeight["alioth"][1] = -1;
+        spec.checkpointHeight["alioth"][2] = -1;
+        spec.checkpointHeight["alioth"][3] = -1;
+        
+        spec.checkpointHash["alioth"][0] = genesis.GetHash().ToString();
+        spec.checkpointHash["alioth"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["alioth"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["alioth"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
         spec.psztimestamp["borrelly"] = "Memory becomes unreliable without external verification.";
         spec.nonce["borrelly"] = 2257023;
         spec.genesishash["borrelly"] = "0xc936175d9ea6f49a595f7cd75ce065c5bb08ed5abc0e5d8b42b04735d916e4a7";
@@ -269,6 +282,16 @@ public:
         spec.uuidlastblock["borrelly"] = 1700;
         spec.initauthuser["borrelly"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["borrelly"] = 1757546169;
+
+        spec.checkpointHeight["borrelly"][0] = 0;
+        spec.checkpointHeight["borrelly"][1] = -1;
+        spec.checkpointHeight["borrelly"][2] = -1;
+        spec.checkpointHeight["borrelly"][3] = -1;
+        
+        spec.checkpointHash["borrelly"][0] = genesis.GetHash().ToString();
+        spec.checkpointHash["borrelly"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["borrelly"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["borrelly"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
         spec.psztimestamp["cassiopeia"] = "The platform shapes thought through design.";
         spec.nonce["cassiopeia"] = 962749;
@@ -286,6 +309,16 @@ public:
         spec.initauthuser["cassiopeia"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["cassiopeia"] = 1757546169;
 
+        spec.checkpointHeight["cassiopeia"][0] = 0;
+        spec.checkpointHeight["cassiopeia"][1] = -1;
+        spec.checkpointHeight["cassiopeia"][2] = -1;
+        spec.checkpointHeight["cassiopeia"][3] = -1;
+        
+        spec.checkpointHash["cassiopeia"][0] = genesis.GetHash().ToString();
+        spec.checkpointHash["cassiopeia"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["cassiopeia"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["cassiopeia"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
         spec.psztimestamp["delphinus"] = "Truth becomes what the fact-checkers approve.";
         spec.nonce["delphinus"] = 413425;
         spec.genesishash["delphinus"] = "0x2d749f17c25d34c4cd443dc44a0e895e99bce4d59a6d38404c2ab4bc3a244237";
@@ -301,6 +334,16 @@ public:
         spec.uuidlastblock["delphinus"] = 1700;
         spec.initauthuser["delphinus"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["delphinus"] = 1757546169;
+
+        spec.checkpointHeight["delphinus"][0] = 0;
+        spec.checkpointHeight["delphinus"][1] = -1;
+        spec.checkpointHeight["delphinus"][2] = -1;
+        spec.checkpointHeight["delphinus"][3] = -1;
+        
+        spec.checkpointHash["delphinus"][0] = genesis.GetHash().ToString();
+        spec.checkpointHash["delphinus"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["delphinus"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["delphinus"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
         spec.psztimestamp["enceladus"] = "Every interaction feeds machine learning.";
         spec.nonce["enceladus"] = 637913;
@@ -318,6 +361,16 @@ public:
         spec.initauthuser["enceladus"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["enceladus"] = 1757546169;
 
+        spec.checkpointHeight["enceladus"][0] = 0;
+        spec.checkpointHeight["enceladus"][1] = -1;
+        spec.checkpointHeight["enceladus"][2] = -1;
+        spec.checkpointHeight["enceladus"][3] = -1;
+        
+        spec.checkpointHash["enceladus"][0] = genesis.GetHash().ToString();
+        spec.checkpointHash["enceladus"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["enceladus"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["enceladus"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
         spec.psztimestamp["fenrir"] = "Conformity spreads through social proof.";
         spec.nonce["fenrir"] = 170269;
         spec.genesishash["fenrir"] = "0x43204086224f60f8ab041f5fc6b3c6b72b01323fb9408fc7c49412d916188c7d";
@@ -333,6 +386,16 @@ public:
         spec.uuidlastblock["fenrir"] = 1700;
         spec.initauthuser["fenrir"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["fenrir"] = 1757546169;
+
+        spec.checkpointHeight["fenrir"][0] = 0;
+        spec.checkpointHeight["fenrir"][1] = -1;
+        spec.checkpointHeight["fenrir"][2] = -1;
+        spec.checkpointHeight["fenrir"][3] = -1;
+        
+        spec.checkpointHash["fenrir"][0] = genesis.GetHash().ToString();
+        spec.checkpointHash["fenrir"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["fenrir"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["fenrir"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
         spec.psztimestamp["galatea"] = "Power manifests through permitted pathways.";
         spec.nonce["galatea"] = 556774;
@@ -350,6 +413,16 @@ public:
         spec.initauthuser["galatea"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["galatea"] = 1757546169;
 
+        spec.checkpointHeight["galatea"][0] = 0;
+        spec.checkpointHeight["galatea"][1] = -1;
+        spec.checkpointHeight["galatea"][2] = -1;
+        spec.checkpointHeight["galatea"][3] = -1;
+        
+        spec.checkpointHash["galatea"][0] = genesis.GetHash().ToString();
+        spec.checkpointHash["galatea"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["galatea"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["galatea"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
         spec.psztimestamp["halley"] = "Dissent becomes indistinguishable from noise.";
         spec.nonce["halley"] = 991604;
         spec.genesishash["halley"] = "0x77fe25810bdd8930db8e69fd85b7912a984a6a362ad8b2e528f3bd765c02a778";
@@ -365,6 +438,16 @@ public:
         spec.uuidlastblock["halley"] = 1700;
         spec.initauthuser["halley"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["halley"] = 1757546169;
+
+        spec.checkpointHeight["halley"][0] = 0;
+        spec.checkpointHeight["halley"][1] = -1;
+        spec.checkpointHeight["halley"][2] = -1;
+        spec.checkpointHeight["halley"][3] = -1;
+        
+        spec.checkpointHash["halley"][0] = genesis.GetHash().ToString();
+        spec.checkpointHash["halley"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["halley"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["halley"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
         spec.psztimestamp["indus"] = "The crawler maps all possible connections.";
         spec.nonce["indus"] = 74649;
@@ -382,6 +465,16 @@ public:
         spec.initauthuser["indus"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["indus"] = 1757546169;
 
+        spec.checkpointHeight["indus"][0] = 0;
+        spec.checkpointHeight["indus"][1] = -1;
+        spec.checkpointHeight["indus"][2] = -1;
+        spec.checkpointHeight["indus"][3] = -1;
+        
+        spec.checkpointHash["indus"][0] = genesis.GetHash().ToString();
+        spec.checkpointHash["indus"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["indus"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["indus"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
         spec.psztimestamp["infiniloop"] = "CNN: California to extend stay-at-home orders as hospitals hit breaking point due to COVID";
         spec.nonce["infiniloop"] = 703813;
         spec.genesishash["infiniloop"] = "0x000001ed1ed7503c6ef472314d8138b7440ebd0c5c8b539481705032bbed295a";
@@ -398,6 +491,16 @@ public:
         spec.initauthuser["infiniloop"] = "58721d870b5e33d55009431cd5e8c6f0b375e033";
         spec.timestamp["infiniloop"] = 1609281149;
 
+        spec.checkpointHeight["infiniloop"][0] = 0;
+        spec.checkpointHeight["infiniloop"][1] = 2801000;
+        spec.checkpointHeight["infiniloop"][2] = -1;
+        spec.checkpointHeight["infiniloop"][3] = -1;
+        
+        spec.checkpointHash["infiniloop"][0] = genesis.GetHash().ToString();
+        spec.checkpointHash["infiniloop"][1] = "0x0c1f410f94c12e134ec6fbb7fc5cfc2c51686a2baa344ed6134fe930ca0d5070";
+        spec.checkpointHash["infiniloop"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["infiniloop"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
         spec.psztimestamp["lynx"] = "ICanHazKitteh at epoch 1387779684. Meow. Now pet me.";
         spec.nonce["lynx"] = 2714385;
         spec.genesishash["lynx"] = "0x984b30fc9bb5e5ff424ad7f4ec1930538a7b14a2d93e58ad7976c23154ea4a76";
@@ -413,6 +516,16 @@ public:
         spec.uuidlastblock["lynx"] = 3084941;
         spec.initauthuser["lynx"] = "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d";
         spec.timestamp["lynx"] = 1387779684;
+
+        spec.checkpointHeight["lynx"][0] = 0;
+        spec.checkpointHeight["lynx"][1] = -1;
+        spec.checkpointHeight["lynx"][2] = -1;
+        spec.checkpointHeight["lynx"][3] = -1;
+        
+        spec.checkpointHash["lynx"][0] = genesis.GetHash().ToString();
+        spec.checkpointHash["lynx"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["lynx"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHash["lynx"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.posLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -569,11 +682,23 @@ public:
         m_is_test_chain = false;
         m_is_mockable_chain = false;
 
+        // checkpointData.mapCheckpoints[spec.checkpointHeight[CURRENT_CHAIN][0]] = uint256S( spec.checkpointHash[CURRENT_CHAIN][0]);        
+
+        for (int j=0; j<4; j++) {
+            if (spec.checkpointHeight[CURRENT_CHAIN][j] >= 0) {
+                checkpointData.mapCheckpoints[spec.checkpointHeight[CURRENT_CHAIN][j]] = uint256S (spec.checkpointHash[CURRENT_CHAIN][j]);
+            }
+        }
+        
+        /*
+
         checkpointData = {
             {
                 {     0, genesis.GetHash()},
-            }
+            }   
         };
+
+        */
 
         m_assumeutxo_data = MapAssumeutxo{
          // TODO to be specified in a future patch.
