@@ -22,7 +22,7 @@ The installer is versioned (`SPARK_INSTALLER_VERSION`) and the current version i
 - Installs system dependencies and configures the environment
 - Downloads the correct pre-built daemon binary from GitHub releases (matched by OS, version, and architecture)
 - Creates systemd services for the daemon and a wallet backup timer
-- Configures firewall rules and SSH security
+- Configures firewall rules and SSH security (skipped with [`--shared-host`](#the---shared-host-parameter))
 - Monitors blockchain sync status and restarts the daemon as needed (good for low RAM deployments)
 - Adds shell aliases and the Spark console with daemon statistics and staking yield metrics
 - Installs the `chain` / `c` selector for switching between multiple installed chains from a single shell — the menu shows each chain's wallet balance, current block height, and staking state at a glance
@@ -88,6 +88,11 @@ bash <(curl -sL install.getlynx.io) rebuild
 ```
 
 If neither `update` nor `rebuild` is passed, the script auto-detects: when the chain's systemd service already exists it runs in update mode, otherwise it runs a full installation. The `upd` and `reb` aliases wrap these flows for the currently selected chain.
+
+Install on a server that is already running other services — leaves the existing firewall and SSH configuration untouched (see [The --shared-host Parameter](#the---shared-host-parameter))
+```bash
+bash <(curl -sL install.getlynx.io) --chain=lynx --shared-host
+```
 
 > **Note:** If `curl` is not available, you can use `wget` as a fallback:
 > ```bash
@@ -175,6 +180,73 @@ Both scripts accept `--chain=<name>` to target a specific chain's binaries. The 
 - **iso-builder.sh**: Defaults to `--chain=lynx` if not specified. The chain name is baked into the generated image so that `install.sh` receives it automatically on first boot.
 
 If a binary for the specified chain has not been built and uploaded to the GitHub releases page, the installation will not proceed — no partial or broken state is left behind.
+
+## The --shared-host Parameter
+
+By default the installer takes ownership of the host's firewall and SSH configuration. That is the right posture for a dedicated node, but destructive on a server that is already doing other work. Passing `--shared-host` disables both, leaving the machine's existing network and SSH setup untouched.
+
+```bash
+bash <(curl -sL install.getlynx.io) --chain=lynx --shared-host
+```
+
+The flag is deliberately left out of the Spark console help (`h`) and the standard usage text — it is an advanced option for operators who are managing the host's security themselves.
+
+### When to use it
+
+Reach for `--shared-host` whenever the target machine is not a dedicated Spark node:
+
+- **A VPS already serving web traffic** — nginx/Apache on ports 80/443, mail, or any other public listener
+- **A host with an existing firewall policy** — `ufw`, `firewalld`, a managed/corporate ruleset, or fail2ban rules you need to keep
+- **A host with established SSH or user configuration** — a customized `sshd_config`, non-root admin accounts, or centrally managed keys
+- **A shared or multi-tenant box** where you are not the only stakeholder in the network configuration
+
+On a dedicated, single-purpose node, omit the flag and let Spark manage the firewall.
+
+### What it skips
+
+| Default behaviour | With `--shared-host` |
+|---|---|
+| Creates a `SPARK` iptables chain, inserts it at the top of `INPUT`, and terminates it with a `DROP` — anything not explicitly allowed (including 80/443) is dropped | No iptables changes at all |
+| Deletes every `INPUT` rule that is not the jump to `SPARK` (see `patch_firewall.sh`), removing pre-existing rules | `INPUT` is never touched |
+| Reapplies the firewall on boot, every 6 hours, and on each 12-minute maintenance cycle | Firewall timers are never installed |
+| On RHEL/Rocky/Alma: stops and disables `firewalld`, sets SELinux permissive and disables it in `/etc/selinux/config` | `firewalld` and SELinux are left alone |
+| Edits `/etc/ssh/sshd_config` (`PubkeyAuthentication`, `AuthorizedKeysFile`), appends to `/root/.ssh/authorized_keys`, and restarts `sshd` | SSH configuration and `sshd` are never touched |
+
+Everything else installs normally: the daemon and its systemd service, RPC configuration, wallet backups, swap, the chain registry, and the Spark console.
+
+### The choice is persistent
+
+The flag writes a marker file at `/etc/spark/shared-host`. This matters because the maintenance timer re-runs `install.sh` every 12 minutes *without* any arguments — the marker is what keeps the setting in force. Every subsequent run, including `upd` and `reb`, reads it and continues to skip the firewall and SSH steps. Without it, the firewall would be reapplied within minutes of the install.
+
+The marker is host-wide rather than per-chain: once set, every chain installed on that machine honours it.
+
+To hand firewall and SSH management back to Spark:
+
+```bash
+rm /etc/spark/shared-host
+reb
+```
+
+### Console differences on a shared host
+
+Commands that would modify the host's SSH or firewall are hidden from the console help and refuse to run while the marker is present:
+
+| Command | Normal install | Shared host |
+|---|---|---|
+| `usp` — change SSH port (edits `sshd_config`, restarts `sshd`, reboots) | Listed in `h` | Hidden and disabled |
+| `ipt` — list iptables rules (read-only) | Listed in `h` | Hidden |
+| `fire` — edit and apply the firewall script | Hidden but available | Disabled |
+| `shh` — edit `authorized_keys`, restart `sshd` | Hidden but available | Disabled |
+| `pas` — toggle password authentication, restart `sshd` | Hidden but available | Disabled |
+
+Every other console command — wallet, daemon, `chain`/`c`, `upd`, `reb`, logs — behaves normally, since each acts only on the chain's own daemon, wallet, and systemd service.
+
+### What you take on
+
+With `--shared-host`, Spark no longer manages the host's network rules, so:
+
+- **Open the chain's P2P port yourself** if the host has its own firewall or a cloud security group in front of it. Without inbound access the daemon still syncs over outbound connections, but it will not accept incoming peers.
+- **The RPC interface needs no action** — it binds to a per-chain loopback address (`127.0.0.x`) and is never exposed, regardless of firewall state.
 
 ## Spark vs Beacon
 
