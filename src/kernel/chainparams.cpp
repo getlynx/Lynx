@@ -73,6 +73,10 @@ struct ChainSpec {
     // std::string checkpointHash[4];
     std::map<std::string, std::string[4]> checkpointHash;};
 
+    // std::map<std::string, std::vector<int>> checkpointHeight;
+    // std::map<std::string, std::vector<std::string>> checkpointHash;
+
+
 ChainSpec spec;
 
 static inline std::string trim(const std::string& s) {
@@ -501,6 +505,13 @@ public:
         spec.checkpointHash["infiniloop"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
         spec.checkpointHash["infiniloop"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
+        // spec.checkpointHeight["infiniloop"].push_back(0);
+        // spec.checkpointHeight["infiniloop"].push_back(2801000);
+
+        // spec.checkpointHash["infiniloop"].push_back(genesis.GetHash().ToString());
+        // spec.checkpointHash["infiniloop"].push_back("0x0c1f410f94c12e134ec6fbb7fc5cfc2c51686a2baa344ed6134fe930ca0d5070");
+
+
         spec.psztimestamp["lynx"] = "ICanHazKitteh at epoch 1387779684. Meow. Now pet me.";
         spec.nonce["lynx"] = 2714385;
         spec.genesishash["lynx"] = "0x984b30fc9bb5e5ff424ad7f4ec1930538a7b14a2d93e58ad7976c23154ea4a76";
@@ -689,6 +700,11 @@ public:
                 checkpointData.mapCheckpoints[spec.checkpointHeight[CURRENT_CHAIN][j]] = uint256S (spec.checkpointHash[CURRENT_CHAIN][j]);
             }
         }
+
+        // for (size_t j = 0; j < spec.checkpointHeight[CURRENT_CHAIN].size(); j++) {
+            // checkpointData.mapCheckpoints[spec.checkpointHeight[CURRENT_CHAIN][j]] = uint256S(spec.checkpointHash[CURRENT_CHAIN][j]);
+        // }
+
         
         /*
 

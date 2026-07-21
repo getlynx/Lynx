@@ -1759,6 +1759,10 @@ void Chainstate::InitCoinsCache(size_t cache_size_bytes)
 // `const` so that `CValidationInterface` clients (which are given a `const Chainstate*`)
 // can call it.
 //
+static SteadyClock::time_point time_ibd_start{};
+static SteadyClock::duration time_headers{};
+static void LogIBDComponentTimes();
+
 bool Chainstate::IsInitialBlockDownload() const
 {
     // Optimization: pre-test latch before taking the lock.
@@ -1771,6 +1775,9 @@ bool Chainstate::IsInitialBlockDownload() const
     if (m_chainman.m_blockman.LoadingBlocks()) {
         return true;
     }
+    if (time_ibd_start == SteadyClock::time_point{}) {
+        time_ibd_start = SteadyClock::now();
+    }
     if (m_chain.Tip() == nullptr)
         return true;
     if (m_chain.Tip()->nChainWork < m_chainman.MinimumChainWork()) {
@@ -1780,6 +1787,7 @@ bool Chainstate::IsInitialBlockDownload() const
         return true;
     }
     LogPrint(BCLog::STARTUP, "Leaving InitialBlockDownload (latching to false)\n");
+    LogIBDComponentTimes();
     m_cached_finished_ibd.store(true, std::memory_order_relaxed);
     return false;
 }
@@ -3060,6 +3068,28 @@ static SteadyClock::duration time_flush{};
 static SteadyClock::duration time_chainstate{};
 static SteadyClock::duration time_post_connect{};
 
+static void LogIBDComponentTimes()
+{
+    const auto total = SteadyClock::now() - time_ibd_start;
+    const auto connect_sum = time_read_from_disk_total + time_check + time_forks + time_verify
+                           + time_undo + time_index + time_flush + time_chainstate + time_post_connect;
+    const auto download_wait = total - time_headers - connect_sum;
+    LogPrint(BCLog::STARTUP, "Sync component times over %d blocks:\n", num_blocks_total);
+    LogPrint(BCLog::STARTUP, "  total sync           %12.2fs\n", Ticks<SecondsDouble>(total));
+    LogPrint(BCLog::STARTUP, "  header sync          %12.2fs\n", Ticks<SecondsDouble>(time_headers));
+    LogPrint(BCLog::STARTUP, "  block download/wait  %12.2fs\n", Ticks<SecondsDouble>(download_wait));
+    LogPrint(BCLog::STARTUP, "  read block from disk %12.2fs\n", Ticks<SecondsDouble>(time_read_from_disk_total));
+    LogPrint(BCLog::STARTUP, "  sanity checks        %12.2fs\n", Ticks<SecondsDouble>(time_check));
+    LogPrint(BCLog::STARTUP, "  fork checks          %12.2fs\n", Ticks<SecondsDouble>(time_forks));
+    LogPrint(BCLog::STARTUP, "  connect (utxo apply) %12.2fs\n", Ticks<SecondsDouble>(time_connect));
+    LogPrint(BCLog::STARTUP, "  script verification  %12.2fs\n", Ticks<SecondsDouble>(time_verify - time_connect));
+    LogPrint(BCLog::STARTUP, "  write undo           %12.2fs\n", Ticks<SecondsDouble>(time_undo));
+    LogPrint(BCLog::STARTUP, "  index write          %12.2fs\n", Ticks<SecondsDouble>(time_index));
+    LogPrint(BCLog::STARTUP, "  flush blocks         %12.2fs\n", Ticks<SecondsDouble>(time_flush));
+    LogPrint(BCLog::STARTUP, "  write chainstate     %12.2fs\n", Ticks<SecondsDouble>(time_chainstate));
+    LogPrint(BCLog::STARTUP, "  connect postprocess  %12.2fs\n", Ticks<SecondsDouble>(time_post_connect));
+}
+
 struct PerBlockConnectTrace {
     CBlockIndex* pindex = nullptr;
     std::shared_ptr<const CBlock> pblock;
@@ -4106,6 +4136,11 @@ static bool ContextualCheckBlock(const CBlock& block, BlockValidationState& stat
 bool ChainstateManager::AcceptBlockHeader(const CBlockHeader& block, BlockValidationState& state, CBlockIndex** ppindex, bool min_pow_checked)
 {
     AssertLockHeld(cs_main);
+
+    struct HeaderTimeGuard {
+        SteadyClock::time_point start{SteadyClock::now()};
+        ~HeaderTimeGuard() { time_headers += SteadyClock::now() - start; }
+    } header_time_guard;
 
     // Check for duplicate
     uint256 hash = block.GetHash();
