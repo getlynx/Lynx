@@ -35,6 +35,14 @@ lynx-tx
 lynx-wallet
 Makefile
 
+# Built binaries for any chain: the build passes 'make NAME=<chain>' so it emits
+# <chain>d / <chain>-cli / <chain>-tx rather than the lynx* names above.
+src/*d
+src/*-cli
+src/*-tx
+src/*-util
+src/*-wallet
+
 
 src/config/stamp-h1
 src/test/fuzz/fuzz
