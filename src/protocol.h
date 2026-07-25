@@ -327,9 +327,6 @@ std::vector<std::string> serviceFlagsToStr(uint64_t flags);
  * guaranteed to not change dependent on state - ie they are suitable for
  * use when describing peers which we know to be desirable, but for which
  * we do not have a confirmed set of service flags.
- *
- * If the NODE_NONE return value is changed, contrib/seeds/makeseeds.py
- * should be updated appropriately to filter for the same nodes.
  */
 ServiceFlags GetDesirableServiceFlags(ServiceFlags services);
 

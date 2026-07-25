@@ -26,6 +26,7 @@
 #include <protocol.h>
 #include <random.h>
 #include <scheduler.h>
+#include <util/chaintype.h>
 #include <util/fs.h>
 #include <util/sock.h>
 #include <util/strencodings.h>
@@ -122,11 +123,17 @@ std::string strSubVersion;
 
 bool ConnectToStaticLynxNodes(CConnman& connman)
 {
+    // Persistent MANUAL connections to the anchor nodes. The anchors only run
+    // each coin's MAIN network today (testnet anchors may come later), so skip
+    // this on testnet/regtest. Hosts mirror the ANCHOR_NODES table in
+    // kernel/chainparams.cpp — keep the count (5) in sync with it.
+    if (Params().GetChainType() != ChainType::MAIN) return true;
+
     char hostname[24];
-    memset(hostname, 0, sizeof(hostname));
     for (unsigned int i = 1; i < 6; i++) {
         CAddress addr;
-        sprintf(hostname, "node%d.getlynx.io", i);
+        memset(hostname, 0, sizeof(hostname));
+        snprintf(hostname, sizeof(hostname), "anchor%u.getlynx.io", i);
         connman.OpenNetworkConnection(addr, false, nullptr, hostname, ConnectionType::MANUAL);
     }
     return true;

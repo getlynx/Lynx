@@ -6,7 +6,6 @@
 #include <kernel/chainparams.h>
 
 #include <arith_uint256.h>
-#include <chainparamsseeds.h>
 #include <consensus/amount.h>
 #include <consensus/merkle.h>
 #include <consensus/params.h>
@@ -23,6 +22,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <type_traits>
 
@@ -217,6 +217,62 @@ LogPrint(BCLog::CHAIN, "pszTimestamp %s \n", pszTimestamp);
 
     const CScript genesisOutputScript = CScript() << ParseHex("040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9") << OP_CHECKSIG;
     return CreateGenesisBlock(pszTimestamp, genesisOutputScript, nTime, nNonce, nBits, nVersion, genesisReward);
+}
+
+// ============================================================================
+//  ANCHOR NODES
+//  ---------------------------------------------------------------------------
+//  Five getlynx.io VPS hosts. Each host runs every supported chain's daemon on
+//  that chain's own default port, so a single host serves all chains — the port
+//  (not the hostname) selects the coin.
+//
+//  This one table drives BOTH mainnet peer sources wired up in CMainParams:
+//    (1) vSeeds      — DNS discovery (requires working DNS resolution)
+//    (2) vFixedSeeds — compiled-in fallback used when DNS is unavailable,
+//                      built per-chain at that chain's default port.
+//
+//  The MANUAL fallback connections in net.cpp (ConnectToStaticLynxNodes) use
+//  the same anchorN.getlynx.io hostnames — keep the count (5) in sync there.
+//
+//  To update an anchor: edit its row below. `host` feeds vSeeds; `ipv4` feeds
+//  the DNS-free fixed-seed blob. If a VPS is re-addressed, update ipv4 and
+//  recompile (the fixed seeds are baked into the binary by design).
+//
+//  NOTE: this file is compiled into libbitcoinkernel, which does NOT link
+//  netaddress/netbase. BuildAnchorFixedSeeds() therefore emits the ADDRv2
+//  wire bytes by hand rather than calling CNetAddr/CService, keeping this
+//  translation unit free of those symbols.
+// ============================================================================
+struct AnchorNode { const char* host; const char* ipv4; };
+static const AnchorNode ANCHOR_NODES[] = {
+    { "anchor1.getlynx.io", "172.233.86.58"   },  // Osaka
+    { "anchor2.getlynx.io", "172.234.107.17"  },  // Stockholm
+    { "anchor3.getlynx.io", "194.195.121.7"   },  // Sydney
+    { "anchor4.getlynx.io", "172.105.5.55"    },  // Toronto
+    { "anchor5.getlynx.io", "172.232.181.236" },  // Seattle
+};
+
+// Build the DNS-free fixed-seed blob for the anchor nodes at `port`, in the
+// exact BIP155/ADDRv2 wire format that ConvertSeeds() in net.cpp deserializes.
+// Each IPv4 anchor is 8 bytes:
+//   [0x01 network=IPV4][0x04 addr length][a][b][c][d][port hi][port lo]
+static std::vector<uint8_t> BuildAnchorFixedSeeds(uint16_t port)
+{
+    std::vector<uint8_t> seeds;
+    for (const auto& a : ANCHOR_NODES) {
+        unsigned int o0, o1, o2, o3;
+        if (sscanf(a.ipv4, "%u.%u.%u.%u", &o0, &o1, &o2, &o3) != 4) continue;
+        if (o0 > 255 || o1 > 255 || o2 > 255 || o3 > 255) continue;
+        seeds.push_back(0x01);  // BIP155 network id: IPV4
+        seeds.push_back(0x04);  // address length (CompactSize; 4 < 253 => 1 byte)
+        seeds.push_back(static_cast<uint8_t>(o0));
+        seeds.push_back(static_cast<uint8_t>(o1));
+        seeds.push_back(static_cast<uint8_t>(o2));
+        seeds.push_back(static_cast<uint8_t>(o3));
+        seeds.push_back(static_cast<uint8_t>(port >> 8));    // port, big-endian
+        seeds.push_back(static_cast<uint8_t>(port & 0xff));
+    }
+    return seeds;
 }
 
 /**
@@ -662,13 +718,13 @@ public:
 
         consensus.initAuthTime = genesis.nTime;
 
-        vSeeds.emplace_back(std::string(CURRENT_CHAIN) + ".getlynx.io");
-
-        if (std::string(CURRENT_CHAIN) == "lynx") {
-            vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
-        } else {
-            vFixedSeeds.clear();
+        // Anchor nodes (see the ANCHOR_NODES table above). The same five hosts
+        // serve every chain; this chain's default port (already resolved into
+        // nDefaultPort above) is what routes peers to the right daemon.
+        for (const auto& a : ANCHOR_NODES) {
+            vSeeds.emplace_back(a.host);                    // (1) DNS discovery
         }
+        vFixedSeeds = BuildAnchorFixedSeeds(nDefaultPort);  // (2) DNS-free fallback, this chain's port
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,spec.pubkeyPrefix[CURRENT_CHAIN]);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,spec.scriptPrefix[CURRENT_CHAIN]);
         base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,spec.secretPrefix[CURRENT_CHAIN]);
@@ -863,8 +919,6 @@ public:
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
         bech32_hrp = "tlynx";
-
-        //vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_test), std::end(chainparams_seed_test));
 
         fDefaultConsistencyChecks = false;
         fRequireStandard = false;
