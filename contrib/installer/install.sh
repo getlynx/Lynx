@@ -1092,55 +1092,128 @@ _colorize_chain() {
 # version: getnetworkinfo's subversion for a live daemon, the on-disk binary's
 # -version otherwise. The win estimate shows only for a daemon confirmed to be
 # staking — stopped or staking-off chains get "-", since no countdown is
-# running. Nothing is cached between draws; every menu render is a fresh round
-# of queries.
+# running. Balance, height, staking state and the win estimate are always
+# queried fresh; only the two version answers are cached, each keyed on
+# something that changes exactly when the answer does.
 _show_menu() {
     echo ""
     echo "  Installed chains:"
     echo ""
 
-    # Track which chains are active so we only call systemctl once per chain.
-    local -a active=()
+    # One systemctl call for every unit at once instead of one per chain: with
+    # a dozen chains the serial spawns were a measurable slice of the menu's
+    # latency. Output is blank-line-separated blocks of Key=Value, and a unit
+    # that doesn't exist still returns a well-formed inactive block. MainPID
+    # comes back in the same call and keys the version cache below — it changes
+    # exactly when a daemon restarts, which is exactly when a cached running
+    # version stops being valid.
+    local -a active=() units=()
     local cname
-    for cname in "${chains[@]}"; do
-        if systemctl is-active --quiet "${cname}.service" 2>/dev/null; then
-            active+=("$cname")
-        fi
-    done
+    for cname in "${chains[@]}"; do units+=("${cname}.service"); done
+
+    local -A mainpid=()
+    local line key val unit_id="" unit_state="" unit_pid=""
+    while IFS= read -r line; do
+        case "$line" in
+            "") # end of a block — commit what we gathered
+                cname="${unit_id%.service}"
+                if [ -n "$cname" ]; then
+                    [ "$unit_state" = "active" ] && active+=("$cname")
+                    mainpid[$cname]="$unit_pid"
+                fi
+                unit_id=""; unit_state=""; unit_pid=""
+                continue ;;
+        esac
+        key="${line%%=*}"; val="${line#*=}"
+        case "$key" in
+            Id)          unit_id="$val" ;;
+            ActiveState) unit_state="$val" ;;
+            MainPID)     unit_pid="$val" ;;
+        esac
+    done < <(systemctl show -p Id -p ActiveState -p MainPID "${units[@]}" 2>/dev/null)
+    # systemctl omits the trailing blank line, so flush the last block.
+    if [ -n "$unit_id" ]; then
+        cname="${unit_id%.service}"
+        [ "$unit_state" = "active" ] && active+=("$cname")
+        mainpid[$cname]="$unit_pid"
+    fi
 
     # Fan out queries in parallel across every chain — stopped ones still
     # contribute a version from their binary.
     local tmpdir
     tmpdir=$(mktemp -d /run/spark/menu.XXXXXX 2>/dev/null) || tmpdir=$(mktemp -d)
+
+    # Version answers get cached on tmpfs across menu draws. Both caches key on
+    # something that changes exactly when the answer does — the binary's mtime
+    # for the on-disk version, the daemon's PID for the running one — so a warm
+    # cache is never stale, and a cold one costs what it always did.
+    local vercache="/run/spark/vercache"
+    mkdir -p "$vercache" 2>/dev/null || vercache="$tmpdir"
+
     for cname in "${chains[@]}"; do
         (
             cli_bin="/usr/local/bin/${cname}-cli"
             [ -x "$cli_bin" ] || exit 0
-            # Baseline version from the binary itself — no daemon needed. This
-            # is the final answer for a stopped chain and the fallback if
-            # getnetworkinfo below doesn't come back. First line reads
-            # "Lynx Core RPC client version v27.1.1"; take the trailing field.
-            # Kept in .disk as well so the render can spot a running daemon
-            # that's behind the binary now sitting on disk.
-            "$cli_bin" -version 2>/dev/null | awk 'NR==1 {print $NF; exit}' > "$tmpdir/${cname}.disk"
-            cp "$tmpdir/${cname}.disk" "$tmpdir/${cname}.ver" 2>/dev/null || :
+
+            # On-disk version, the answer for a stopped chain and the fallback
+            # when getnetworkinfo doesn't come back. -nt is a shell builtin, so
+            # a warm cache costs no process at all — this used to exec the
+            # binary and an awk on every single draw. First line of -version
+            # reads "Lynx Core RPC client version v27.1.1"; take the last word.
+            dcache="$vercache/${cname}.disk"
+            dver=""
+            if [ -s "$dcache" ] && [ ! "$cli_bin" -nt "$dcache" ]; then
+                read -r dver < "$dcache" || :
+            else
+                dver=$("$cli_bin" -version 2>/dev/null) || :
+                dver="${dver%%$'\n'*}"
+                dver="${dver##* }"
+                [ -n "$dver" ] && printf '%s\n' "$dver" > "$dcache"
+            fi
+            [ -n "$dver" ] && printf '%s\n' "$dver" > "$tmpdir/${cname}.disk"
+            [ -n "$dver" ] && printf '%s\n' "$dver" > "$tmpdir/${cname}.ver"
 
             is_up=0
             for a in "${active[@]}"; do [ "$a" = "$cname" ] && is_up=1 && break; done
             [ "$is_up" = "1" ] || exit 0
 
+            # A running daemon can't change version without restarting, and a
+            # restart always changes MainPID, so the PID is a sound cache key.
+            # On a hit, getnetworkinfo drops out of the batch below entirely.
+            pid="${mainpid[$cname]:-0}"
+            rcache="$vercache/${cname}.run.${pid}"
+            need_net=1
+            if [ "$pid" != "0" ] && [ -s "$rcache" ]; then
+                read -r rver < "$rcache" || :
+                if [ -n "$rver" ]; then
+                    printf '%s\n' "$rver" > "$tmpdir/${cname}.ver"
+                    need_net=0
+                fi
+            fi
+
             conf="/var/lib/${cname}/${cname}.conf"
-            rpc_host=$(awk -F= '/^(main\.|test\.)?rpcbind=/ {print $2; exit}' "$conf" 2>/dev/null)
+            [ -r "$conf" ] || exit 0
+            # Bash-side parse of one short file, rather than forking awk per
+            # chain just to pull a single value out of it.
+            rpc_host=""
+            while IFS= read -r line || [ -n "$line" ]; do
+                case "$line" in
+                    rpcbind=*|main.rpcbind=*|test.rpcbind=*)
+                        rpc_host="${line#*=}"; break ;;
+                esac
+            done < "$conf"
             [ -n "$rpc_host" ] || exit 0
 
             # Issue the RPCs concurrently rather than in sequence, so a chain's
-            # cost is one round trip and not the sum of four. getblockrate is
-            # re-queried on every menu draw (nothing is cached across 'c'
-            # presses) since the estimate moves with difficulty and UTXO set.
+            # cost is one round trip and not the sum of them. getblockrate is
+            # re-queried on every menu draw (never cached across 'c' presses)
+            # since the estimate moves with difficulty and the UTXO set.
             timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalances     2>/dev/null > "$tmpdir/${cname}.bals" &
-            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getnetworkinfo  2>/dev/null > "$tmpdir/${cname}.net" &
             timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking      2>/dev/null > "$tmpdir/${cname}.stk" &
             timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate true 2>/dev/null > "$tmpdir/${cname}.rate" &
+            if [ "$need_net" = "1" ]; then
+                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getnetworkinfo 2>/dev/null > "$tmpdir/${cname}.net" &
+            fi
             wait
 
             # One getbalances call yields mine.trusted (balance) and
@@ -1158,12 +1231,29 @@ _show_menu() {
             # What's actually running beats what's on disk: a chain upgraded
             # but not yet restarted reports the old version here. subversion
             # reads "/Lynx Core:27.1.1/", optionally with a "(comment)" tail.
+            # Parsed in bash to save the awk fork, then cached under the PID so
+            # later draws skip the RPC until this daemon restarts.
             if [ -s "$tmpdir/${cname}.net" ]; then
-                sub=$(awk -F'"' '/"subversion"/ {print $4; exit}' "$tmpdir/${cname}.net")
+                sub=""
+                while IFS= read -r line || [ -n "$line" ]; do
+                    case "$line" in
+                        *'"subversion"'*)
+                            sub="${line#*: }"
+                            sub="${sub#\"}"
+                            sub="${sub%%\"*}"
+                            break ;;
+                    esac
+                done < "$tmpdir/${cname}.net"
                 sub=${sub##*:}
                 sub=${sub%%/*}
                 sub=${sub%%'('*}
-                [ -n "$sub" ] && printf 'v%s\n' "$sub" > "$tmpdir/${cname}.ver"
+                if [ -n "$sub" ]; then
+                    printf 'v%s\n' "$sub" > "$tmpdir/${cname}.ver"
+                    if [ "$pid" != "0" ]; then
+                        rm -f "$vercache/${cname}".run.* 2>/dev/null || :
+                        printf 'v%s\n' "$sub" > "$rcache"
+                    fi
+                fi
             fi
 
             # getblockrate true reports hours until the next expected staking
@@ -1187,28 +1277,37 @@ _show_menu() {
     done
     wait
 
+    # Slurp every value into memory in one pass. The width scan and the render
+    # both need all of it, and reading with the `read` builtin means the whole
+    # pass costs no processes — it used to be an awk per field here and a cat
+    # per field again below, which on a dozen chains was ~100 serial forks.
+    local -A vbal=() vhgt=() vver=() vdisk=() veta=() vstk=()
+    local slot
+    for cname in "${chains[@]}"; do
+        for slot in bal hgt ver disk eta stk; do
+            local val=""
+            [ -s "$tmpdir/${cname}.${slot}" ] && { read -r val < "$tmpdir/${cname}.${slot}" || :; }
+            case "$slot" in
+                bal)  vbal[$cname]="$val" ;;
+                hgt)  vhgt[$cname]="$val" ;;
+                ver)  vver[$cname]="$val" ;;
+                disk) vdisk[$cname]="$val" ;;
+                eta)  veta[$cname]="$val" ;;
+                stk)  vstk[$cname]="$val" ;;
+            esac
+        done
+    done
+
     # Widest chain name (for name-column padding — _colorize_chain emits
     # ANSI escapes so we can't use %-Ns), then widest balance, height, version
     # and ETA string so each column right-justifies to fit the largest value.
-    local max_name=0 max_bal=0 max_hgt=0 max_ver=0 max_eta=0 bal_len hgt_len ver_len eta_len
+    local max_name=0 max_bal=0 max_hgt=0 max_ver=0 max_eta=0
     for cname in "${chains[@]}"; do
         [ "${#cname}" -gt "$max_name" ] && max_name=${#cname}
-        if [ -s "$tmpdir/${cname}.bal" ]; then
-            bal_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.bal")
-            [ "$bal_len" -gt "$max_bal" ] && max_bal=$bal_len
-        fi
-        if [ -s "$tmpdir/${cname}.hgt" ]; then
-            hgt_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.hgt")
-            [ "$hgt_len" -gt "$max_hgt" ] && max_hgt=$hgt_len
-        fi
-        if [ -s "$tmpdir/${cname}.ver" ]; then
-            ver_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.ver")
-            [ "$ver_len" -gt "$max_ver" ] && max_ver=$ver_len
-        fi
-        if [ -s "$tmpdir/${cname}.eta" ]; then
-            eta_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.eta")
-            [ "$eta_len" -gt "$max_eta" ] && max_eta=$eta_len
-        fi
+        [ "${#vbal[$cname]}" -gt "$max_bal" ] && max_bal=${#vbal[$cname]}
+        [ "${#vhgt[$cname]}" -gt "$max_hgt" ] && max_hgt=${#vhgt[$cname]}
+        [ "${#vver[$cname]}" -gt "$max_ver" ] && max_ver=${#vver[$cname]}
+        [ "${#veta[$cname]}" -gt "$max_eta" ] && max_eta=${#veta[$cname]}
     done
     # Floor at "0.00000000" so the column doesn't collapse when no balances came back.
     [ "$max_bal" -lt 10 ] && max_bal=10
@@ -1229,17 +1328,28 @@ _show_menu() {
     # daemon badge always lines up vertically across rows.
     local i=1 is_active marker badge bal hgt ver disk eta stk staking_slot pad extra name_len
     local stale_rows=0
+    # One read of the current-chain marker rather than a cat per row.
+    local cur=""
+    [ -s "$CURRENT" ] && { read -r cur < "$CURRENT" || :; }
     for cname in "${chains[@]}"; do
         marker=""
-        if [ -f "$CURRENT" ] && [ "$(cat "$CURRENT" 2>/dev/null)" = "$cname" ]; then
-            marker=" *"
-        fi
+        [ "$cur" = "$cname" ] && marker=" *"
         is_active=0
         for a in "${active[@]}"; do [ "$a" = "$cname" ] && is_active=1 && break; done
 
+        # Balance and height are wallet state, so only a running daemon has
+        # them; version is present either way. Missing values render as an
+        # empty right-justified field, keeping the columns to the right in
+        # place instead of sliding left.
+        bal="${vbal[$cname]}"
+        hgt="${vhgt[$cname]}"
+        ver="${vver[$cname]}"
+        disk="${vdisk[$cname]}"
+        eta="${veta[$cname]}"
+
         if [ "$is_active" = "1" ]; then
             badge="🟢"
-            stk=$(cat "$tmpdir/${cname}.stk" 2>/dev/null)
+            stk="${vstk[$cname]}"
             case "$stk" in
                 true)  staking_slot="⚡" ;;
                 false) staking_slot="💤" ;;
@@ -1250,17 +1360,6 @@ _show_menu() {
             staking_slot="  "
             stk=""
         fi
-
-        # Balance and height are wallet state, so only a running daemon has
-        # them; version is present either way. Missing values render as an
-        # empty right-justified field, keeping the columns to the right in
-        # place instead of sliding left.
-        bal=""; hgt=""; ver=""; disk=""; eta=""
-        [ -s "$tmpdir/${cname}.bal" ]  && bal=$(cat "$tmpdir/${cname}.bal" 2>/dev/null)
-        [ -s "$tmpdir/${cname}.hgt" ]  && hgt=$(cat "$tmpdir/${cname}.hgt" 2>/dev/null)
-        [ -s "$tmpdir/${cname}.ver" ]  && ver=$(cat "$tmpdir/${cname}.ver" 2>/dev/null)
-        [ -s "$tmpdir/${cname}.disk" ] && disk=$(cat "$tmpdir/${cname}.disk" 2>/dev/null)
-        [ -s "$tmpdir/${cname}.eta" ]  && eta=$(cat "$tmpdir/${cname}.eta" 2>/dev/null)
 
         # A win interval only means something while the wallet is actually
         # staking. A stopped daemon can't answer getblockrate at all, and one
