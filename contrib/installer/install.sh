@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.16.0"
+SPARK_INSTALLER_VERSION="2.17.0"
 
 # ── Per-chain footer links (edit this table over time) ────────────────────────
 # Controls the two chain-specific links at the bottom of the 'h' console:
@@ -1090,8 +1090,10 @@ _colorize_chain() {
 # Chain's getbalances embeds lastprocessedblock.height inline, so balance +
 # height come from one call. Every chain — running or not — also reports a
 # version: getnetworkinfo's subversion for a live daemon, the on-disk binary's
-# -version otherwise. Nothing is cached between draws; every menu render is a
-# fresh round of queries.
+# -version otherwise. The win estimate shows only for a daemon confirmed to be
+# staking — stopped or staking-off chains get "-", since no countdown is
+# running. Nothing is cached between draws; every menu render is a fresh round
+# of queries.
 _show_menu() {
     echo ""
     echo "  Installed chains:"
@@ -1246,6 +1248,7 @@ _show_menu() {
         else
             badge="🔴"
             staking_slot="  "
+            stk=""
         fi
 
         # Balance and height are wallet state, so only a running daemon has
@@ -1259,30 +1262,38 @@ _show_menu() {
         [ -s "$tmpdir/${cname}.disk" ] && disk=$(cat "$tmpdir/${cname}.disk" 2>/dev/null)
         [ -s "$tmpdir/${cname}.eta" ]  && eta=$(cat "$tmpdir/${cname}.eta" 2>/dev/null)
 
-        extra=""
-        if [ -n "$bal$hgt$ver$eta" ]; then
-            name_len=${#cname}
-            [ -n "$marker" ] && name_len=$((name_len + 2))
-            # +4 (not +2) reserves 2 cols for the asterisk on every row so
-            # marker rows don't push the balance column right by one.
-            pad=$(( max_name + 4 - name_len ))
-            [ "$pad" -lt 1 ] && pad=1
-            # Two spaces between balance, height, version and ETA so the columns
-            # read as distinct values rather than one run-on number.
-            extra=$(printf "%*s%*s  %*s  %*s  %*s" "$pad" "" "$max_bal" "$bal" "$max_hgt" "$hgt" "$max_ver" "$ver" "$max_eta" "$eta")
-            # Trim the trailing run of spaces a blank trailing field would leave.
-            extra="${extra%"${extra##*[![:space:]]}"}"
-            # A running daemon older than the binary on disk was upgraded but
-            # never restarted. Flag it with the pending version so the row says
-            # what a restart would get you, not just that something's off. The
-            # arrow carries the meaning on its own for mono terminals; amber is
-            # reinforcement. It trails every aligned column (so it sits past the
-            # ETA, not beside the version) — keeping it inside the padded fields
-            # would need ANSI-aware width math for no real gain.
-            if [ "$is_active" = "1" ] && [ -n "$disk" ] && [ "$ver" != "$disk" ]; then
-                extra+=$(printf ' \033[1;38;5;214m↑ %s\033[0m' "$disk")
-                stale_rows=$((stale_rows + 1))
-            fi
+        # A win interval only means something while the wallet is actually
+        # staking. A stopped daemon can't answer getblockrate at all, and one
+        # with staking off has no win pending — printing a duration for either
+        # would imply a countdown that isn't running. Same for a daemon that
+        # didn't report its staking state, or a build without the RPC: absent
+        # confirmation that staking is on, show "-" rather than guess.
+        if [ "$is_active" != "1" ] || [ "$stk" != "true" ] || [ -z "$eta" ]; then
+            eta="-"
+        fi
+
+        # Every row carries at least the ETA placeholder, so the column block
+        # is always built. Blank balance/height/version stay as padded empty
+        # fields so nothing to their right shifts out of line.
+        name_len=${#cname}
+        [ -n "$marker" ] && name_len=$((name_len + 2))
+        # +4 (not +2) reserves 2 cols for the asterisk on every row so
+        # marker rows don't push the balance column right by one.
+        pad=$(( max_name + 4 - name_len ))
+        [ "$pad" -lt 1 ] && pad=1
+        # Two spaces between balance, height, version and ETA so the columns
+        # read as distinct values rather than one run-on number.
+        extra=$(printf "%*s%*s  %*s  %*s  %*s" "$pad" "" "$max_bal" "$bal" "$max_hgt" "$hgt" "$max_ver" "$ver" "$max_eta" "$eta")
+        # A running daemon older than the binary on disk was upgraded but
+        # never restarted. Flag it with the pending version so the row says
+        # what a restart would get you, not just that something's off. The
+        # arrow carries the meaning on its own for mono terminals; amber is
+        # reinforcement. It trails every aligned column (so it sits past the
+        # ETA, not beside the version) — keeping it inside the padded fields
+        # would need ANSI-aware width math for no real gain.
+        if [ "$is_active" = "1" ] && [ -n "$disk" ] && [ "$ver" != "$disk" ]; then
+            extra+=$(printf ' \033[1;38;5;214m↑ %s\033[0m' "$disk")
+            stale_rows=$((stale_rows + 1))
         fi
 
         printf "    %s %s %*d) %b%s%s\n" "$staking_slot" "$badge" "$idx_w" "$i" "$(_colorize_chain "$cname")" "$marker" "$extra"
