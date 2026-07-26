@@ -1080,13 +1080,18 @@ _colorize_chain() {
 }
 
 # Display the numbered menu. For each active chain, fetches wallet state
-# (balance + chain tip from getbalances) and staking state via background
-# RPC calls (5s timeout each) so menu latency stays bounded by the slowest
-# single RPC regardless of chain count. The 5s ceiling is generous enough
-# that healthy daemons under contention still report in (1s was too tight
-# and dropped columns under load), but tight enough that a hung daemon
-# can't stall the menu indefinitely. Chain's getbalances embeds
-# lastprocessedblock.height inline, so balance + height come from one call.
+# (balance + chain tip from getbalances), staking state, the running daemon's
+# version, and the estimated time to the next staking win via background RPC
+# calls (5s timeout each). The calls fan out both across chains and within each
+# chain, so menu latency stays bounded by the slowest single RPC regardless of
+# chain count. The 5s ceiling is generous enough that healthy daemons under
+# contention still report in (1s was too tight and dropped columns under load),
+# but tight enough that a hung daemon can't stall the menu indefinitely.
+# Chain's getbalances embeds lastprocessedblock.height inline, so balance +
+# height come from one call. Every chain — running or not — also reports a
+# version: getnetworkinfo's subversion for a live daemon, the on-disk binary's
+# -version otherwise. Nothing is cached between draws; every menu render is a
+# fresh round of queries.
 _show_menu() {
     echo ""
     echo "  Installed chains:"
@@ -1101,37 +1106,89 @@ _show_menu() {
         fi
     done
 
-    # Fan out RPC queries in parallel for active chains.
+    # Fan out queries in parallel across every chain — stopped ones still
+    # contribute a version from their binary.
     local tmpdir
     tmpdir=$(mktemp -d /run/spark/menu.XXXXXX 2>/dev/null) || tmpdir=$(mktemp -d)
-    for cname in "${active[@]}"; do
+    for cname in "${chains[@]}"; do
         (
+            cli_bin="/usr/local/bin/${cname}-cli"
+            [ -x "$cli_bin" ] || exit 0
+            # Baseline version from the binary itself — no daemon needed. This
+            # is the final answer for a stopped chain and the fallback if
+            # getnetworkinfo below doesn't come back. First line reads
+            # "Lynx Core RPC client version v27.1.1"; take the trailing field.
+            # Kept in .disk as well so the render can spot a running daemon
+            # that's behind the binary now sitting on disk.
+            "$cli_bin" -version 2>/dev/null | awk 'NR==1 {print $NF; exit}' > "$tmpdir/${cname}.disk"
+            cp "$tmpdir/${cname}.disk" "$tmpdir/${cname}.ver" 2>/dev/null || :
+
+            is_up=0
+            for a in "${active[@]}"; do [ "$a" = "$cname" ] && is_up=1 && break; done
+            [ "$is_up" = "1" ] || exit 0
+
             conf="/var/lib/${cname}/${cname}.conf"
             rpc_host=$(awk -F= '/^(main\.|test\.)?rpcbind=/ {print $2; exit}' "$conf" 2>/dev/null)
             [ -n "$rpc_host" ] || exit 0
-            cli_bin="/usr/local/bin/${cname}-cli"
-            [ -x "$cli_bin" ] || exit 0
+
+            # Issue the RPCs concurrently rather than in sequence, so a chain's
+            # cost is one round trip and not the sum of four. getblockrate is
+            # re-queried on every menu draw (nothing is cached across 'c'
+            # presses) since the estimate moves with difficulty and UTXO set.
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalances     2>/dev/null > "$tmpdir/${cname}.bals" &
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getnetworkinfo  2>/dev/null > "$tmpdir/${cname}.net" &
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking      2>/dev/null > "$tmpdir/${cname}.stk" &
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate true 2>/dev/null > "$tmpdir/${cname}.rate" &
+            wait
+
             # One getbalances call yields mine.trusted (balance) and
             # lastprocessedblock.height (chain tip), replacing what used to
             # be two RPCs. awk takes the first "trusted" line (mine.trusted,
             # which precedes any watchonly block) and the lone "height" line
             # under lastprocessedblock.
-            bals=$(timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalances 2>/dev/null)
-            if [ -n "$bals" ]; then
-                printf '%s\n' "$bals" | awk -F: -v balf="$tmpdir/${cname}.bal" -v hgtf="$tmpdir/${cname}.hgt" '
+            if [ -s "$tmpdir/${cname}.bals" ]; then
+                awk -F: -v balf="$tmpdir/${cname}.bal" -v hgtf="$tmpdir/${cname}.hgt" '
                     /"trusted":/ && !b { v=$2; gsub(/[[:space:],]/,"",v); print v > balf; b=1 }
                     /"height":/  && !h { v=$2; gsub(/[[:space:],]/,"",v); print v > hgtf; h=1 }
-                '
+                ' "$tmpdir/${cname}.bals"
             fi
-            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking 2>/dev/null > "$tmpdir/${cname}.stk"
+
+            # What's actually running beats what's on disk: a chain upgraded
+            # but not yet restarted reports the old version here. subversion
+            # reads "/Lynx Core:27.1.1/", optionally with a "(comment)" tail.
+            if [ -s "$tmpdir/${cname}.net" ]; then
+                sub=$(awk -F'"' '/"subversion"/ {print $4; exit}' "$tmpdir/${cname}.net")
+                sub=${sub##*:}
+                sub=${sub%%/*}
+                sub=${sub%%'('*}
+                [ -n "$sub" ] && printf 'v%s\n' "$sub" > "$tmpdir/${cname}.ver"
+            fi
+
+            # getblockrate true reports hours until the next expected staking
+            # win as a float. Render it as "3m 45s", capped at "99m 0s" so a
+            # long-odds chain can't widen the column. The value is an interval
+            # minus elapsed time, so it goes negative once a win is overdue —
+            # floor that at "0m 0s" rather than printing "-5m -12s".
+            if [ -s "$tmpdir/${cname}.rate" ]; then
+                awk -v out="$tmpdir/${cname}.eta" 'NR==1 && $1+0==$1 {
+                    t = $1 * 3600
+                    if (t < 0) t = 0
+                    t = int(t + 0.5)
+                    m = int(t / 60); s = t % 60
+                    if (m > 99) { m = 99; s = 0 }
+                    printf "%dm %ds\n", m, s > out
+                }' "$tmpdir/${cname}.rate"
+            fi
+
+            rm -f "$tmpdir/${cname}.bals" "$tmpdir/${cname}.net" "$tmpdir/${cname}.rate"
         ) &
     done
     wait
 
     # Widest chain name (for name-column padding — _colorize_chain emits
-    # ANSI escapes so we can't use %-Ns), widest balance string, and widest
-    # height string so each column right-justifies to fit the largest value.
-    local max_name=0 max_bal=0 max_hgt=0 bal_len hgt_len
+    # ANSI escapes so we can't use %-Ns), then widest balance, height, version
+    # and ETA string so each column right-justifies to fit the largest value.
+    local max_name=0 max_bal=0 max_hgt=0 max_ver=0 max_eta=0 bal_len hgt_len ver_len eta_len
     for cname in "${chains[@]}"; do
         [ "${#cname}" -gt "$max_name" ] && max_name=${#cname}
         if [ -s "$tmpdir/${cname}.bal" ]; then
@@ -1142,15 +1199,34 @@ _show_menu() {
             hgt_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.hgt")
             [ "$hgt_len" -gt "$max_hgt" ] && max_hgt=$hgt_len
         fi
+        if [ -s "$tmpdir/${cname}.ver" ]; then
+            ver_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.ver")
+            [ "$ver_len" -gt "$max_ver" ] && max_ver=$ver_len
+        fi
+        if [ -s "$tmpdir/${cname}.eta" ]; then
+            eta_len=$(awk '{print length($0); exit}' "$tmpdir/${cname}.eta")
+            [ "$eta_len" -gt "$max_eta" ] && max_eta=$eta_len
+        fi
     done
     # Floor at "0.00000000" so the column doesn't collapse when no balances came back.
     [ "$max_bal" -lt 10 ] && max_bal=10
     # Floor height column at 7 chars so it stays stable across early-chain heights.
     [ "$max_hgt" -lt 7 ] && max_hgt=7
+    # Floor version column at "v27.1.1" width so a chain whose binary didn't
+    # answer doesn't shrink the column out from under the ones that did.
+    [ "$max_ver" -lt 7 ] && max_ver=7
+    # Floor the ETA column at the widest value the cap allows ("99m 59s").
+    [ "$max_eta" -lt 7 ] && max_eta=7
+
+    # Width of the widest menu index so single-digit rows right-justify under
+    # double-digit ones; otherwise "10)" pushes every later column one right.
+    local idx_w=${#chains[@]}
+    idx_w=${#idx_w}
 
     # Staking-slot is two visible columns (one emoji or two spaces) so the
     # daemon badge always lines up vertically across rows.
-    local i=1 is_active marker badge bal hgt stk staking_slot pad extra name_len
+    local i=1 is_active marker badge bal hgt ver disk eta stk staking_slot pad extra name_len
+    local stale_rows=0
     for cname in "${chains[@]}"; do
         marker=""
         if [ -f "$CURRENT" ] && [ "$(cat "$CURRENT" 2>/dev/null)" = "$cname" ]; then
@@ -1159,7 +1235,6 @@ _show_menu() {
         is_active=0
         for a in "${active[@]}"; do [ "$a" = "$cname" ] && is_active=1 && break; done
 
-        extra=""
         if [ "$is_active" = "1" ]; then
             badge="🟢"
             stk=$(cat "$tmpdir/${cname}.stk" 2>/dev/null)
@@ -1168,29 +1243,58 @@ _show_menu() {
                 false) staking_slot="💤" ;;
                 *)     staking_slot="  " ;;
             esac
-            if [ -s "$tmpdir/${cname}.bal" ]; then
-                bal=$(cat "$tmpdir/${cname}.bal" 2>/dev/null)
-                hgt=$(cat "$tmpdir/${cname}.hgt" 2>/dev/null)
-                name_len=${#cname}
-                [ -n "$marker" ] && name_len=$((name_len + 2))
-                # +4 (not +2) reserves 2 cols for the asterisk on every row so
-                # marker rows don't push the balance column right by one.
-                pad=$(( max_name + 4 - name_len ))
-                [ "$pad" -lt 1 ] && pad=1
-                # Two spaces between balance and height so the columns read as
-                # distinct values rather than one run-on number.
-                extra=$(printf "%*s%*s  %*s" "$pad" "" "$max_bal" "$bal" "$max_hgt" "$hgt")
-            fi
         else
             badge="🔴"
             staking_slot="  "
         fi
 
-        printf "    %s %s %d) %b%s%s\n" "$staking_slot" "$badge" "$i" "$(_colorize_chain "$cname")" "$marker" "$extra"
+        # Balance and height are wallet state, so only a running daemon has
+        # them; version is present either way. Missing values render as an
+        # empty right-justified field, keeping the columns to the right in
+        # place instead of sliding left.
+        bal=""; hgt=""; ver=""; disk=""; eta=""
+        [ -s "$tmpdir/${cname}.bal" ]  && bal=$(cat "$tmpdir/${cname}.bal" 2>/dev/null)
+        [ -s "$tmpdir/${cname}.hgt" ]  && hgt=$(cat "$tmpdir/${cname}.hgt" 2>/dev/null)
+        [ -s "$tmpdir/${cname}.ver" ]  && ver=$(cat "$tmpdir/${cname}.ver" 2>/dev/null)
+        [ -s "$tmpdir/${cname}.disk" ] && disk=$(cat "$tmpdir/${cname}.disk" 2>/dev/null)
+        [ -s "$tmpdir/${cname}.eta" ]  && eta=$(cat "$tmpdir/${cname}.eta" 2>/dev/null)
+
+        extra=""
+        if [ -n "$bal$hgt$ver$eta" ]; then
+            name_len=${#cname}
+            [ -n "$marker" ] && name_len=$((name_len + 2))
+            # +4 (not +2) reserves 2 cols for the asterisk on every row so
+            # marker rows don't push the balance column right by one.
+            pad=$(( max_name + 4 - name_len ))
+            [ "$pad" -lt 1 ] && pad=1
+            # Two spaces between balance, height, version and ETA so the columns
+            # read as distinct values rather than one run-on number.
+            extra=$(printf "%*s%*s  %*s  %*s  %*s" "$pad" "" "$max_bal" "$bal" "$max_hgt" "$hgt" "$max_ver" "$ver" "$max_eta" "$eta")
+            # Trim the trailing run of spaces a blank trailing field would leave.
+            extra="${extra%"${extra##*[![:space:]]}"}"
+            # A running daemon older than the binary on disk was upgraded but
+            # never restarted. Flag it with the pending version so the row says
+            # what a restart would get you, not just that something's off. The
+            # arrow carries the meaning on its own for mono terminals; amber is
+            # reinforcement. It trails every aligned column (so it sits past the
+            # ETA, not beside the version) — keeping it inside the padded fields
+            # would need ANSI-aware width math for no real gain.
+            if [ "$is_active" = "1" ] && [ -n "$disk" ] && [ "$ver" != "$disk" ]; then
+                extra+=$(printf ' \033[1;38;5;214m↑ %s\033[0m' "$disk")
+                stale_rows=$((stale_rows + 1))
+            fi
+        fi
+
+        printf "    %s %s %*d) %b%s%s\n" "$staking_slot" "$badge" "$idx_w" "$i" "$(_colorize_chain "$cname")" "$marker" "$extra"
         i=$((i + 1))
     done
 
     rm -rf "$tmpdir" 2>/dev/null
+
+    # Only explain the arrow on menus that actually show one.
+    if [ "$stale_rows" -gt 0 ]; then
+        printf "\n    \033[1;38;5;214m↑\033[0m = newer binary installed; restart the chain to run it.\n"
+    fi
     echo ""
 }
 
