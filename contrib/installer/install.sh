@@ -1094,7 +1094,9 @@ _colorize_chain() {
 # staking — stopped or staking-off chains get "-", since no countdown is
 # running. Balance, height, staking state and the win estimate are always
 # queried fresh; only the two version answers are cached, each keyed on
-# something that changes exactly when the answer does.
+# something that changes exactly when the answer does. Whether to ask for the
+# estimate at all is predicted from the previous draw's staking state, so idle
+# chains don't pay for a value that won't be shown.
 _show_menu() {
     echo ""
     echo "  Installed chains:"
@@ -1204,17 +1206,55 @@ _show_menu() {
             done < "$conf"
             [ -n "$rpc_host" ] || exit 0
 
+            # The win estimate is only ever displayed for a staking wallet, so
+            # asking a non-staking chain for it is a wasted round trip — and on
+            # a host where most chains sit idle that's most of the calls. But
+            # the answer that decides it (setstaking) lands in the same round as
+            # the estimate, so gating one on the other would put a second round
+            # trip on the critical path for every staking chain.
+            #
+            # Instead, speculate from what setstaking said last draw. Staking
+            # state changes when someone toggles it, which is far rarer than
+            # pressing 'c', so the guess is nearly always right: idle chains
+            # stop paying for an estimate nobody sees, and staking chains still
+            # finish in one round. A wrong guess costs one extra round trip for
+            # that chain alone, and only in the direction that needs it.
+            #
+            # The hint never reaches the display — what gets rendered still
+            # comes from this draw's setstaking, so a stale hint can cost a
+            # round trip but can never show a wrong answer. No hint yet means
+            # fetch, matching the old unconditional behaviour on a cold cache.
+            hint="$vercache/${cname}.stkhint"
+            want_rate=1
+            if [ -s "$hint" ]; then
+                read -r hval < "$hint" || :
+                [ "$hval" = "true" ] || want_rate=0
+            fi
+
             # Issue the RPCs concurrently rather than in sequence, so a chain's
-            # cost is one round trip and not the sum of them. getblockrate is
-            # re-queried on every menu draw (never cached across 'c' presses)
-            # since the estimate moves with difficulty and the UTXO set.
-            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalances     2>/dev/null > "$tmpdir/${cname}.bals" &
-            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking      2>/dev/null > "$tmpdir/${cname}.stk" &
-            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate true 2>/dev/null > "$tmpdir/${cname}.rate" &
+            # cost is one round trip and not the sum of them. The estimate is
+            # never cached across 'c' presses — it moves with difficulty and
+            # the UTXO set, so a stale one would be misleading.
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalances 2>/dev/null > "$tmpdir/${cname}.bals" &
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking  2>/dev/null > "$tmpdir/${cname}.stk" &
+            if [ "$want_rate" = "1" ]; then
+                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate true 2>/dev/null > "$tmpdir/${cname}.rate" &
+            fi
             if [ "$need_net" = "1" ]; then
                 timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getnetworkinfo 2>/dev/null > "$tmpdir/${cname}.net" &
             fi
             wait
+
+            # Record this draw's answer for the next one, then correct a guess
+            # that came out wrong. Only the false->true direction needs fixing;
+            # guessing true when staking is off just discards a reply, which is
+            # what every draw used to do for every idle chain.
+            stk=""
+            [ -s "$tmpdir/${cname}.stk" ] && { read -r stk < "$tmpdir/${cname}.stk" || :; }
+            printf '%s\n' "$stk" > "$hint" 2>/dev/null || :
+            if [ "$stk" = "true" ] && [ "$want_rate" = "0" ]; then
+                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate true 2>/dev/null > "$tmpdir/${cname}.rate" || :
+            fi
 
             # One getbalances call yields mine.trusted (balance) and
             # lastprocessedblock.height (chain tip), replacing what used to
@@ -1260,8 +1300,9 @@ _show_menu() {
             # win as a float. Render it as "3m 45s", capped at "99m 0s" so a
             # long-odds chain can't widen the column. The value is an interval
             # minus elapsed time, so it goes negative once a win is overdue —
-            # floor that at "0m 0s" rather than printing "-5m -12s".
-            if [ -s "$tmpdir/${cname}.rate" ]; then
+            # floor that at "0m 0s" rather than printing "-5m -12s". Skipped
+            # outright unless staking is on, since the render would discard it.
+            if [ "$stk" = "true" ] && [ -s "$tmpdir/${cname}.rate" ]; then
                 awk -v out="$tmpdir/${cname}.eta" 'NR==1 && $1+0==$1 {
                     t = $1 * 3600
                     if (t < 0) t = 0
