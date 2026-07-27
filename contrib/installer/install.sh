@@ -1080,7 +1080,8 @@ _colorize_chain() {
 }
 
 # Display the numbered menu. For each active chain, fetches wallet state
-# (balance + chain tip from getbalances), staking state, the running daemon's
+# (balance + chain tip from getbalances, where the balance is mature plus
+# immature coin), staking state, the running daemon's
 # version, and the estimated time to the next staking win via background RPC
 # calls (5s timeout each). The calls fan out both across chains and within each
 # chain, so menu latency stays bounded by the slowest single RPC regardless of
@@ -1256,15 +1257,44 @@ _show_menu() {
                 timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate true 2>/dev/null > "$tmpdir/${cname}.rate" || :
             fi
 
-            # One getbalances call yields mine.trusted (balance) and
+            # One getbalances call yields the balance and
             # lastprocessedblock.height (chain tip), replacing what used to
-            # be two RPCs. awk takes the first "trusted" line (mine.trusted,
-            # which precedes any watchonly block) and the lone "height" line
-            # under lastprocessedblock.
+            # be two RPCs. awk takes the first "trusted" and first "immature"
+            # lines (both from the mine block, which precedes any watchonly
+            # one) and the lone "height" line under lastprocessedblock.
+            #
+            # The displayed balance is mine.trusted + mine.immature. Staking
+            # rewards land immature and sit there for 31 confirmations, so a
+            # trusted-only figure silently omits every recent win — on an
+            # actively staking wallet that reads as "my coins went missing".
+            # Maturity is a spending constraint, not a question the menu is
+            # answering: "what do I hold?" wants both states counted.
+            #
+            # Summed in fixed-point satoshis rather than as floats: whole and
+            # fractional halves are added as separate integers and carried, so
+            # the eight decimal places stay exact no matter how large the
+            # balance grows.
             if [ -s "$tmpdir/${cname}.bals" ]; then
                 awk -F: -v balf="$tmpdir/${cname}.bal" -v hgtf="$tmpdir/${cname}.hgt" '
-                    /"trusted":/ && !b { v=$2; gsub(/[[:space:],]/,"",v); print v > balf; b=1 }
-                    /"height":/  && !h { v=$2; gsub(/[[:space:],]/,"",v); print v > hgtf; h=1 }
+                    function addamt(v,   p, w, f) {
+                        gsub(/[[:space:],]/, "", v)
+                        p = index(v, ".")
+                        if (p) { w = substr(v, 1, p - 1); f = substr(v, p + 1) }
+                        else   { w = v; f = "" }
+                        while (length(f) < 8) f = f "0"
+                        whole += w + 0
+                        frac  += substr(f, 1, 8) + 0
+                    }
+                    /"trusted":/  && !b { addamt($2); b=1 }
+                    /"immature":/ && !m { addamt($2); m=1 }
+                    /"height":/   && !h { v=$2; gsub(/[[:space:],]/,"",v); print v > hgtf; h=1 }
+                    END {
+                        if (b || m) {
+                            whole += int(frac / 100000000)
+                            frac  = frac % 100000000
+                            printf "%d.%08d\n", whole, frac > balf
+                        }
+                    }
                 ' "$tmpdir/${cname}.bals"
             fi
 
@@ -1442,10 +1472,34 @@ _show_menu() {
 
     rm -rf "$tmpdir" 2>/dev/null
 
-    # Only explain the arrow on menus that actually show one.
+    # Legend. The rows are dense and unlabelled — six values per line with no
+    # headers — so without this the only way to learn what a column means is to
+    # already know. It sits below the chains and above the prompt: read after
+    # the thing it explains, and still on screen while the 15s timer runs.
+    #
+    # Column headers were the other option, but each row leads with two emoji
+    # whose rendered width varies by terminal, so a header could never be
+    # reliably aligned over them. A legend below sidesteps that entirely and
+    # has room to spell out the meanings, which is what the columns actually
+    # need — "win" or "height" as a bare header wouldn't have explained much.
+    #
+    # Entries are listed in the order the columns appear, each behind a plain
+    # text label so the emoji sit in the description and nothing has to line up
+    # against them. Grey keeps the whole block quieter than the chain rows.
+    local dim='\033[38;5;245m' off='\033[0m'
+    printf "\n${dim}    Columns, left to right:${off}\n"
+    printf "${dim}      staking   ⚡ on   💤 off   (blank when the daemon is stopped)${off}\n"
+    printf "${dim}      daemon    🟢 running   🔴 stopped${off}\n"
+    printf "${dim}      chain     number and name; * marks the selected chain${off}\n"
+    printf "${dim}      balance   spendable plus immature coin, added together${off}\n"
+    printf "${dim}      height    height of the last block this chain processed${off}\n"
+    printf "${dim}      version   version the daemon is running${off}\n"
+    # Only explain the arrow on menus that actually show one. Indented under
+    # the version line because that's the column it annotates.
     if [ "$stale_rows" -gt 0 ]; then
-        printf "\n    \033[1;38;5;214m↑\033[0m = newer binary installed; restart the chain to run it.\n"
+        printf "${dim}                \033[1;38;5;214m↑${off}${dim} = newer binary installed; restart to run it${off}\n"
     fi
+    printf "${dim}      win       estimated time to the next staking win; - if idle${off}\n"
     echo ""
 }
 
