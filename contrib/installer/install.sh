@@ -1081,8 +1081,8 @@ _colorize_chain() {
 
 # Display the numbered menu. For each active chain, fetches wallet state
 # (balance + chain tip from getbalances, where the balance is mature plus
-# immature coin), staking state, the running daemon's
-# version, and the estimated time to the next staking win via background RPC
+# immature coin), staking state, the running daemon's version, and the expected
+# interval between staking wins via background RPC
 # calls (5s timeout each). The calls fan out both across chains and within each
 # chain, so menu latency stays bounded by the slowest single RPC regardless of
 # chain count. The 5s ceiling is generous enough that healthy daemons under
@@ -1092,8 +1092,9 @@ _colorize_chain() {
 # height come from one call. Every chain — running or not — also reports a
 # version: getnetworkinfo's subversion for a live daemon, the on-disk binary's
 # -version otherwise. The win estimate shows only for a daemon confirmed to be
-# staking — stopped or staking-off chains get "-", since no countdown is
-# running. Balance, height, staking state and the win estimate are always
+# staking — stopped or staking-off chains get "-", since a wallet that isn't
+# trying to win has no win rate. Balance, height, staking state and the win
+# estimate are always
 # queried fresh; only the two version answers are cached, each keyed on
 # something that changes exactly when the answer does. Whether to ask for the
 # estimate at all is predicted from the previous draw's staking state, so idle
@@ -1236,10 +1237,21 @@ _show_menu() {
             # cost is one round trip and not the sum of them. The estimate is
             # never cached across 'c' presses — it moves with difficulty and
             # the UTXO set, so a stale one would be misleading.
+            #
+            # getblockrate without an argument, not `getblockrate true`. The
+            # bare form returns the expected interval between wins; `true`
+            # returns interval-minus-time-since-your-last-win, a countdown.
+            # The countdown was the wrong question: it clamps to zero the
+            # moment a win runs late, and roughly a third of intervals do
+            # (waits are exponential, so ~e^-1 of them exceed the mean), which
+            # parked most rows at "0m 0s" regardless of how well funded they
+            # were. The interval is a property of stake weight against
+            # difficulty, so it answers what this column is for — is the
+            # wallet funded enough to win, and how often.
             timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalances 2>/dev/null > "$tmpdir/${cname}.bals" &
             timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking  2>/dev/null > "$tmpdir/${cname}.stk" &
             if [ "$want_rate" = "1" ]; then
-                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate true 2>/dev/null > "$tmpdir/${cname}.rate" &
+                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate 2>/dev/null > "$tmpdir/${cname}.rate" &
             fi
             if [ "$need_net" = "1" ]; then
                 timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getnetworkinfo 2>/dev/null > "$tmpdir/${cname}.net" &
@@ -1254,7 +1266,7 @@ _show_menu() {
             [ -s "$tmpdir/${cname}.stk" ] && { read -r stk < "$tmpdir/${cname}.stk" || :; }
             printf '%s\n' "$stk" > "$hint" 2>/dev/null || :
             if [ "$stk" = "true" ] && [ "$want_rate" = "0" ]; then
-                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate true 2>/dev/null > "$tmpdir/${cname}.rate" || :
+                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate 2>/dev/null > "$tmpdir/${cname}.rate" || :
             fi
 
             # One getbalances call yields the balance and
@@ -1326,20 +1338,51 @@ _show_menu() {
                 fi
             fi
 
-            # getblockrate true reports hours until the next expected staking
-            # win as a float. Render it as "3m 45s", capped at "99m 0s" so a
-            # long-odds chain can't widen the column. The value is an interval
-            # minus elapsed time, so it goes negative once a win is overdue —
-            # floor that at "0m 0s" rather than printing "-5m -12s". Skipped
-            # outright unless staking is on, since the render would discard it.
+            # getblockrate reports the expected hours between staking wins as
+            # a float. Skipped outright unless staking is on, since the render
+            # would discard it.
+            #
+            # The unit scales with the value — "3m 45s", "2h 15m", "3d 4h" —
+            # rather than the flat minutes-and-seconds this used to print
+            # under a 99m cap. A countdown could be capped harmlessly because
+            # it only ever shrank, but an interval is unbounded: a thinly
+            # funded chain can genuinely expect days between wins, and that is
+            # exactly the row whose real number matters most, since it's the
+            # one telling the user to add funds. Every form is 7 characters up
+            # to 99 days, so the column stays the width it already was; past
+            # that it degrades to a bare "153d" rather than inventing a unit.
+            #
+            # Zero means the daemon couldn't estimate at all, which in
+            # practice means no stake-eligible UTXOs — coin that's too young,
+            # too old, too shallow, or locked. That's a funding answer, not a
+            # duration, so it gets a word instead of "0m 0s".
+            #
+            # The zero test reads the hours the RPC actually returned, before
+            # any rounding here, so a wallet expecting a win inside a second
+            # renders "< 1s" rather than being called unstaked — the exact
+            # opposite of the truth about the best-funded chain on a host.
+            #
+            # That only stretches so far. getblockrate emits four decimal
+            # places of hours, so anything under 0.36s arrives as 0.0000 and
+            # is indistinguishable from no-eligible-stake before this script
+            # ever sees it; such a wallet still reads "no stake". Difficulty
+            # retargeting is what keeps that rare — it climbs until the
+            # network's expected spacing holds, which pins a dominant staker's
+            # interval near block time rather than near zero. It takes a stake
+            # influx that difficulty hasn't caught up with yet to get there,
+            # and it resolves itself as the chain retargets. Fixing it
+            # properly means more precision from the RPC, which is not this
+            # script's to change.
             if [ "$stk" = "true" ] && [ -s "$tmpdir/${cname}.rate" ]; then
                 awk -v out="$tmpdir/${cname}.eta" 'NR==1 && $1+0==$1 {
-                    t = $1 * 3600
-                    if (t < 0) t = 0
-                    t = int(t + 0.5)
-                    m = int(t / 60); s = t % 60
-                    if (m > 99) { m = 99; s = 0 }
-                    printf "%dm %ds\n", m, s > out
+                    sec = $1 * 3600
+                    if (sec <= 0) { printf "no stake\n" > out; next }
+                    if (sec < 1)  { printf "< 1s\n" > out; next }
+                    t = int(sec + 0.5)
+                    if (t < 3600)        { printf "%dm %ds\n", int(t/60), t%60 > out }
+                    else if (t < 86400)  { printf "%dh %dm\n", int(t/3600), int((t%3600)/60) > out }
+                    else if (t < 8640000){ printf "%dd %dh\n", int(t/86400), int((t%86400)/3600) > out }
+                    else                 { printf "%dd\n", int(t/86400) > out }
                 }' "$tmpdir/${cname}.rate"
             fi
 
@@ -1387,7 +1430,9 @@ _show_menu() {
     # Floor version column at "v27.1.1" width so a chain whose binary didn't
     # answer doesn't shrink the column out from under the ones that did.
     [ "$max_ver" -lt 7 ] && max_ver=7
-    # Floor the ETA column at the widest value the cap allows ("99m 59s").
+    # Floor the win column at the width every scaled form shares ("59m 59s",
+    # "23h 59m", "99d 23h"). Longer values — "no stake", or a bare day count
+    # past 99 days — widen it through the scan above.
     [ "$max_eta" -lt 7 ] && max_eta=7
 
     # Width of the widest menu index so single-digit rows right-justify under
@@ -1434,10 +1479,11 @@ _show_menu() {
 
         # A win interval only means something while the wallet is actually
         # staking. A stopped daemon can't answer getblockrate at all, and one
-        # with staking off has no win pending — printing a duration for either
-        # would imply a countdown that isn't running. Same for a daemon that
-        # didn't report its staking state, or a build without the RPC: absent
-        # confirmation that staking is on, show "-" rather than guess.
+        # with staking off isn't trying to win — quoting how often it would
+        # win if it were trying reads as a forecast of something that isn't
+        # happening. Same for a daemon that didn't report its staking state,
+        # or a build without the RPC: absent confirmation that staking is on,
+        # show "-" rather than guess.
         if [ "$is_active" != "1" ] || [ "$stk" != "true" ] || [ -z "$eta" ]; then
             eta="-"
         fi
@@ -1499,7 +1545,8 @@ _show_menu() {
     if [ "$stale_rows" -gt 0 ]; then
         printf "${dim}                \033[1;38;5;214m↑${off}${dim} = newer binary installed; restart to run it${off}\n"
     fi
-    printf "${dim}      win       estimated time to the next staking win; - if idle${off}\n"
+    printf "${dim}      win       expected time between staking wins; - if idle${off}\n"
+    printf "${dim}                \"no stake\" = no coin currently eligible to stake${off}\n"
     echo ""
 }
 
