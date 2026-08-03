@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <validation.h>
+#include <ibd_timing.h>
 
 #include <kernel/coinstats.h>
 #include <kernel/mempool_persist.h>
@@ -1759,9 +1760,36 @@ void Chainstate::InitCoinsCache(size_t cache_size_bytes)
 // `const` so that `CValidationInterface` clients (which are given a `const Chainstate*`)
 // can call it.
 //
-static SteadyClock::time_point time_ibd_start{};
 static SteadyClock::duration time_headers{};
 static void LogIBDComponentTimes();
+std::chrono::steady_clock::time_point g_sync_start{};
+std::chrono::steady_clock::time_point g_sync_end{};
+bool g_sync_active{false};
+std::chrono::steady_clock::duration g_pnb_check{};
+std::chrono::steady_clock::duration g_pnb_accept{};
+std::chrono::steady_clock::duration g_sbd_header{};
+std::chrono::steady_clock::duration g_sbd_check{};
+std::chrono::steady_clock::duration g_sbd_save{};
+std::chrono::steady_clock::duration g_sbd_flush{};
+std::chrono::steady_clock::duration g_save_write{};
+std::chrono::steady_clock::duration g_save_received{};
+std::chrono::steady_clock::duration g_pnb_notify{};
+std::chrono::steady_clock::duration g_pnb_activate{};
+std::chrono::steady_clock::duration g_abc_flush{};
+std::chrono::steady_clock::duration g_abc_findwork{};
+std::chrono::steady_clock::duration g_abc_signals{};
+std::chrono::steady_clock::duration g_abc_prep{};
+std::chrono::steady_clock::duration g_prep_limitqueue{};
+std::chrono::steady_clock::duration g_prep_csmain{};
+std::chrono::steady_clock::duration g_prep_mempool{};
+std::chrono::steady_clock::duration g_lvq_check{};
+std::chrono::steady_clock::duration g_lvq_sync{};
+std::chrono::steady_clock::duration g_abc_step{};
+std::chrono::steady_clock::duration g_abc_misc{};
+std::chrono::steady_clock::duration g_abcs_disconnect{};
+std::chrono::steady_clock::duration g_abcs_connect{};
+std::chrono::steady_clock::duration g_abcs_connbook{};
+std::chrono::steady_clock::duration g_abcs_finish{};
 
 bool Chainstate::IsInitialBlockDownload() const
 {
@@ -1774,9 +1802,6 @@ bool Chainstate::IsInitialBlockDownload() const
         return false;
     if (m_chainman.m_blockman.LoadingBlocks()) {
         return true;
-    }
-    if (time_ibd_start == SteadyClock::time_point{}) {
-        time_ibd_start = SteadyClock::now();
     }
     if (m_chain.Tip() == nullptr)
         return true;
@@ -2219,6 +2244,29 @@ static unsigned int GetBlockScriptFlags(const CBlockIndex& block_index, const Ch
 
 
 static SteadyClock::duration time_check{};
+static SteadyClock::duration g_sc_checkblock{};
+static SteadyClock::duration g_sc_pos{};
+static SteadyClock::duration g_sc_rest{};
+static SteadyClock::duration g_cbk_header{};
+static SteadyClock::duration g_cbk_merkle{};
+static SteadyClock::duration g_cbk_struct{};
+static SteadyClock::duration g_cbk_sig{};
+static SteadyClock::duration g_cbk_tx{};
+static SteadyClock::duration g_cbk_sigops{};
+static SteadyClock::duration g_ss_loop{};
+static SteadyClock::duration g_ss_sig{};
+static SteadyClock::duration g_ss_time{};
+static SteadyClock::duration g_bs_solver{};
+static SteadyClock::duration g_bs_gethash{};
+static SteadyClock::duration g_bs_verify{};
+static SteadyClock::duration time_read_from_disk_total{};
+static SteadyClock::duration g_fk_setup{};
+static SteadyClock::duration g_fk_bip30{};
+static SteadyClock::duration g_fk_flags{};
+extern std::chrono::steady_clock::duration g_v_pubparse;
+extern std::chrono::steady_clock::duration g_v_sigparse;
+extern std::chrono::steady_clock::duration g_v_ecdsa;
+extern bool g_verify_timing_active;
 static SteadyClock::duration time_forks{};
 static SteadyClock::duration time_connect{};
 static SteadyClock::duration time_verify{};
@@ -2226,6 +2274,19 @@ static SteadyClock::duration time_undo{};
 static SteadyClock::duration time_index{};
 static SteadyClock::duration time_total{};
 static int64_t num_blocks_total = 0;
+static SteadyClock::duration g_cb_prologue{};
+static SteadyClock::duration g_cb_tail{};
+static SteadyClock::duration g_ct_prologue{};
+static SteadyClock::duration g_ct_coinsview{};
+static SteadyClock::duration g_ct_connectblock{};
+static SteadyClock::duration g_ct_blockchecked{};
+static SteadyClock::duration g_ct_epilogue{};
+static SteadyClock::duration g_cp_mempool{};
+static SteadyClock::duration g_cp_settip{};
+static SteadyClock::duration g_cp_updatetip{};
+static SteadyClock::duration g_cp_mp_removeforblock{};
+static SteadyClock::duration g_cp_mp_disconnectpool{};
+static bool SyncNoVerify() { static const bool v = gArgs.GetBoolArg("-syncnoverify", false); return v; }
 
 /** Apply the effects of this block (with given index) on the UTXO set represented by coins.
  *  Validity checks that depend on the UTXO set are also done; ConnectBlock()
@@ -2233,6 +2294,7 @@ static int64_t num_blocks_total = 0;
 bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, CBlockIndex* pindex,
                                CCoinsViewCache& view, bool fJustCheck)
 {
+    const auto cb_entry{ibd_now()};
     AssertLockHeld(cs_main);
     assert(pindex);
 
@@ -2241,6 +2303,8 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     const bool parallel_script_checks{scriptcheckqueue.HasThreads()};
 
     const auto time_start{SteadyClock::now()};
+    if (IBD_TIMING && g_sync_active) g_cb_prologue += time_start - cb_entry;
+    auto sc_prev = time_start;
     const CChainParams& params{m_chainman.GetParams()};
 
     // Check it again in case a previous version let a bad block in
@@ -2257,7 +2321,11 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     // re-enforce that rule here (at least until we make it impossible for
     // m_adjusted_time_callback() to go backward).
     g_currentValidatingBlockHeight = pindex->nHeight;
-    if (!CheckBlock(block, state, params.GetConsensus(), !fJustCheck, !fJustCheck)) {
+    // During IBD every block was already fully checked (incl. block signature)
+    // at receipt in ProcessNewBlock before being stored; skip the redundant
+    // re-check here. Tip operation and TestBlockValidity (fJustCheck) still run it.
+    const bool skip_recheck = IsInitialBlockDownload() && !fJustCheck;
+    if (!skip_recheck && !CheckBlock(block, state, params.GetConsensus(), !fJustCheck, !fJustCheck)) {
         if (state.GetResult() == BlockValidationResult::BLOCK_MUTATED) {
             // We don't write down blocks to disk if they may have been
             // corrupted, so this should be impossible unless we're having hardware
@@ -2266,6 +2334,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         }
         return error("%s: Consensus::CheckBlock: %s", __func__, state.ToString());
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_sc_checkblock += n - sc_prev; sc_prev = n; }
 
     if (block.IsProofOfWork()) {
         if (pindex->nHeight > params.GetConsensus().lastPoWBlock) {
@@ -2284,6 +2353,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
             return error("%s: Check proof of stake failed.", __func__);
         }
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_sc_pos += n - sc_prev; sc_prev = n; }
 
     // verify that the view's current state corresponds to the previous block
     uint256 hashPrevBlock = pindex->pprev == nullptr ? uint256() : pindex->pprev->GetBlockHash();
@@ -2330,7 +2400,22 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         }
     }
 
+    if (SyncNoVerify()) fScriptChecks = false;
+    if (pindex->nHeight % 100000 == 0) {
+        const uint256 av = m_chainman.AssumedValidBlock();
+        auto it = m_blockman.m_block_index.find(av);
+        bool found = !av.IsNull() && it != m_blockman.m_block_index.end();
+        LogPrintf("assumevalid h=%d fScriptChecks=%d av_null=%d found=%d anc_av=%d anc_hdr=%d minwork=%d eqtime=%d\n",
+            pindex->nHeight, fScriptChecks, av.IsNull(), found,
+            found && it->second.GetAncestor(pindex->nHeight) == pindex,
+            m_chainman.m_best_header && m_chainman.m_best_header->GetAncestor(pindex->nHeight) == pindex,
+            m_chainman.m_best_header && m_chainman.m_best_header->nChainWork >= m_chainman.MinimumChainWork(),
+            found ? (int)GetBlockProofEquivalentTime(*m_chainman.m_best_header, *pindex, *m_chainman.m_best_header, params.GetConsensus()) : -1);
+    }
+
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_sc_rest += n - sc_prev; }
     const auto time_1{SteadyClock::now()};
+    auto fk_prev = time_1;
     time_check += time_1 - time_start;
     LogPrint(BCLog::BENCH, "    - Sanity checks: %.2fms [%.2fs (%.2fms/blk)]\n",
              Ticks<MillisecondsDouble>(time_1 - time_start),
@@ -2408,6 +2493,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     CBlockIndex* pindexBIP34height = pindex->pprev->GetAncestor(params.GetConsensus().BIP34Height);
     //Only continue to enforce if we're below BIP34 activation height or the block hash at that height doesn't correspond.
     fEnforceBIP30 = fEnforceBIP30 && (!pindexBIP34height || !(pindexBIP34height->GetBlockHash() == params.GetConsensus().BIP34Hash));
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_fk_setup += n - fk_prev; fk_prev = n; }
 
     // TODO: Remove BIP30 checking from block height 1,983,702 on, once we have a
     // consensus change that ensures coinbases at those heights cannot
@@ -2422,6 +2508,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
             }
         }
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_fk_bip30 += n - fk_prev; fk_prev = n; }
 
     // Enforce BIP68 (sequence locks)
     int nLockTimeFlags = 0;
@@ -2431,6 +2518,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
 
     // Get the script flags for this block
     unsigned int flags{GetBlockScriptFlags(*pindex, m_chainman)};
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_fk_flags += n - fk_prev; }
 
     const auto time_2{SteadyClock::now()};
     time_forks += time_2 - time_1;
@@ -2698,6 +2786,7 @@ LogPrint (BCLog::STORAGE, "is_opreturn_an_authdata from validation.cpp \n");
         time_5 - time_start // in microseconds (µs)
     );
 
+    if (IBD_TIMING && g_sync_active) g_cb_tail += SteadyClock::now() - time_6;
     return true;
 }
 
@@ -2918,20 +3007,38 @@ static void UpdateTipLog(
 {
 
     AssertLockHeld(::cs_main);
-    LogPrintf("%s%s: new best=%s height=%d version=0x%08x log2_work=%f tx=%lu date='%s' progress=%f cache=%.1fMiB(%utxo)%s\n",
-        prefix, func_name,
-        tip->GetBlockHash().ToString(), tip->nHeight, tip->nVersion,
-        log(tip->nChainWork.getdouble()) / log(2.0), (unsigned long)tip->nChainTx,
-        FormatISO8601DateTime(tip->GetBlockTime()),
-        GuessVerificationProgress(params.TxData(), tip),
-        coins_tip.DynamicMemoryUsage() * (1.0 / (1 << 20)),
-        coins_tip.GetCacheSize(),
-        !warning_messages.empty() ? strprintf(" warning='%s'", warning_messages) : "");
+    // LogPrintf("%s%s: new best=%s height=%d version=0x%08x log2_work=%f tx=%lu date='%s' progress=%f cache=%.1fMiB(%utxo)%s\n",
+    //     prefix, func_name,
+    //     tip->GetBlockHash().ToString(), tip->nHeight, tip->nVersion,
+    //     log(tip->nChainWork.getdouble()) / log(2.0), (unsigned long)tip->nChainTx,
+    //     FormatISO8601DateTime(tip->GetBlockTime()),
+    //     GuessVerificationProgress(params.TxData(), tip),
+    //     coins_tip.DynamicMemoryUsage() * (1.0 / (1 << 20)),
+    //     coins_tip.GetCacheSize(),
+    //     !warning_messages.empty() ? strprintf(" warning='%s'", warning_messages) : "");
 }
 
 void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
 {
     AssertLockHeld(::cs_main);
+    if (g_sync_start == std::chrono::steady_clock::time_point{}) {
+        g_sync_start = std::chrono::steady_clock::now();
+        g_sync_active = true;
+        g_verify_timing_active = true;
+    }
+    g_sync_end = ibd_now();
+    extern std::chrono::steady_clock::duration g_ibd_wait;  // net.cpp
+    extern std::chrono::steady_clock::duration g_fn_scan;   // net_processing.cpp (candidate scan)
+    extern int64_t g_inflight_hist[5];                      // net_processing.cpp (in-flight landscape)
+    extern void LogParkStats(int height);                  // net.cpp (in-flight at each wait)
+    if (IBD_TIMING && g_sync_active && pindexNew->nHeight % 100000 == 0) {
+        LogPrint(BCLog::STARTUP, "  [h=%d] wait %.2fs | candidate scan %.2fs\n",
+                 pindexNew->nHeight, Ticks<SecondsDouble>(g_ibd_wait), Ticks<SecondsDouble>(g_fn_scan));
+        LogPrint(BCLog::STARTUP, "  [h=%d] inflight <128 %lld | <256 %lld | <512 %lld | <768 %lld | 768+ %lld\n",
+                 pindexNew->nHeight, (long long)g_inflight_hist[0], (long long)g_inflight_hist[1],
+                 (long long)g_inflight_hist[2], (long long)g_inflight_hist[3], (long long)g_inflight_hist[4]);
+        LogParkStats(pindexNew->nHeight);
+    }
     const auto& coins_tip = this->CoinsTip();
 
     const CChainParams& params{m_chainman.GetParams()};
@@ -3062,7 +3169,6 @@ bool Chainstate::DisconnectTip(BlockValidationState& state, DisconnectedBlockTra
     return true;
 }
 
-static SteadyClock::duration time_read_from_disk_total{};
 static SteadyClock::duration time_connect_total{};
 static SteadyClock::duration time_flush{};
 static SteadyClock::duration time_chainstate{};
@@ -3070,24 +3176,262 @@ static SteadyClock::duration time_post_connect{};
 
 static void LogIBDComponentTimes()
 {
-    const auto total = SteadyClock::now() - time_ibd_start;
-    const auto connect_sum = time_read_from_disk_total + time_check + time_forks + time_verify
-                           + time_undo + time_index + time_flush + time_chainstate + time_post_connect;
-    const auto download_wait = total - time_headers - connect_sum;
-    LogPrint(BCLog::STARTUP, "Sync component times over %d blocks:\n", num_blocks_total);
-    LogPrint(BCLog::STARTUP, "  total sync           %12.2fs\n", Ticks<SecondsDouble>(total));
-    LogPrint(BCLog::STARTUP, "  header sync          %12.2fs\n", Ticks<SecondsDouble>(time_headers));
-    LogPrint(BCLog::STARTUP, "  block download/wait  %12.2fs\n", Ticks<SecondsDouble>(download_wait));
-    LogPrint(BCLog::STARTUP, "  read block from disk %12.2fs\n", Ticks<SecondsDouble>(time_read_from_disk_total));
-    LogPrint(BCLog::STARTUP, "  sanity checks        %12.2fs\n", Ticks<SecondsDouble>(time_check));
-    LogPrint(BCLog::STARTUP, "  fork checks          %12.2fs\n", Ticks<SecondsDouble>(time_forks));
-    LogPrint(BCLog::STARTUP, "  connect (utxo apply) %12.2fs\n", Ticks<SecondsDouble>(time_connect));
-    LogPrint(BCLog::STARTUP, "  script verification  %12.2fs\n", Ticks<SecondsDouble>(time_verify - time_connect));
-    LogPrint(BCLog::STARTUP, "  write undo           %12.2fs\n", Ticks<SecondsDouble>(time_undo));
-    LogPrint(BCLog::STARTUP, "  index write          %12.2fs\n", Ticks<SecondsDouble>(time_index));
-    LogPrint(BCLog::STARTUP, "  flush blocks         %12.2fs\n", Ticks<SecondsDouble>(time_flush));
-    LogPrint(BCLog::STARTUP, "  write chainstate     %12.2fs\n", Ticks<SecondsDouble>(time_chainstate));
-    LogPrint(BCLog::STARTUP, "  connect postprocess  %12.2fs\n", Ticks<SecondsDouble>(time_post_connect));
+    extern std::chrono::steady_clock::duration g_ibd_process;
+    extern std::chrono::steady_clock::duration g_ibd_send;
+    extern std::chrono::steady_clock::duration g_ibd_wait;
+    extern std::chrono::steady_clock::duration g_ibd_wait_timeout_time;
+    extern std::chrono::steady_clock::duration g_ibd_wait_notify_time;
+    extern int64_t g_ibd_wait_timeout;
+    extern int64_t g_ibd_wait_notify;
+    extern int64_t g_park_prewoken;
+    extern std::chrono::steady_clock::duration g_park_prewoken_time;
+    extern int64_t g_pass_morework;
+    extern std::chrono::steady_clock::duration g_ibd_snapshot;
+    extern std::chrono::steady_clock::duration g_ibd_lock;
+    extern std::chrono::steady_clock::duration g_block_deser;
+    extern std::chrono::steady_clock::duration g_block_process;
+    extern std::chrono::steady_clock::duration g_block_wrapper;
+    extern std::chrono::steady_clock::duration g_pm_getdata;
+    extern std::chrono::steady_clock::duration g_pm_orphan;
+    extern std::chrono::steady_clock::duration g_pm_poll;
+    extern std::chrono::steady_clock::duration g_pm_dispatch;
+    extern std::chrono::steady_clock::duration g_block_pre;
+    extern std::chrono::steady_clock::duration g_pm_headers;
+    extern std::chrono::steady_clock::duration g_pm_other;
+    extern std::chrono::steady_clock::duration g_pm_guards;
+    extern std::chrono::steady_clock::duration g_pm_control;
+    extern std::chrono::steady_clock::duration g_pm_routing;
+    extern std::chrono::steady_clock::duration g_hdr_deser;
+    extern std::chrono::steady_clock::duration g_hdr_process;
+    extern std::chrono::steady_clock::duration g_hdr_presync;
+    extern std::chrono::steady_clock::duration g_rfb_gather;
+    extern std::chrono::steady_clock::duration g_rfb_policy;
+    extern std::chrono::steady_clock::duration g_rfb_remove;
+    extern std::chrono::steady_clock::duration g_rfb_tail;
+    extern std::chrono::steady_clock::duration g_pe_guard;
+    extern std::chrono::steady_clock::duration g_pe_clearcurrent;
+    extern std::chrono::steady_clock::duration g_pe_movingavg;
+    extern std::chrono::steady_clock::duration g_pe_txloop;
+    extern std::chrono::steady_clock::duration g_pe_tail;
+    extern std::chrono::steady_clock::duration g_ma_fee;
+    extern std::chrono::steady_clock::duration g_ma_short;
+    extern std::chrono::steady_clock::duration g_ma_long;
+    extern std::chrono::steady_clock::duration g_lm_conf;
+    extern std::chrono::steady_clock::duration g_lm_fail;
+    extern std::chrono::steady_clock::duration g_lm_feerate;
+    extern std::chrono::steady_clock::duration g_lm_txct;
+    extern std::chrono::steady_clock::duration g_send_dispatch;
+    extern std::chrono::steady_clock::duration g_sm_prologue;
+    extern std::chrono::steady_clock::duration g_sm_addrfetch;
+    extern std::chrono::steady_clock::duration g_sm_ping;
+    extern std::chrono::steady_clock::duration g_sm_addr;
+    extern std::chrono::steady_clock::duration g_sm_sendheaders;
+    extern std::chrono::steady_clock::duration g_sm_lock;
+    extern std::chrono::steady_clock::duration g_sm_syncstate;
+    extern std::chrono::steady_clock::duration g_sm_starthdrs;
+    extern std::chrono::steady_clock::duration g_sm_announce;
+    extern std::chrono::steady_clock::duration g_sm_invblocks;
+    extern std::chrono::steady_clock::duration g_sm_invtx;
+    extern std::chrono::steady_clock::duration g_sm_pushinv;
+    extern std::chrono::steady_clock::duration g_sm_stalling;
+    extern std::chrono::steady_clock::duration g_sm_dltimeout;
+    extern std::chrono::steady_clock::duration g_sm_hdrtimeout;
+    extern std::chrono::steady_clock::duration g_sm_eviction;
+    extern std::chrono::steady_clock::duration g_sm_getdatablocks;
+    extern std::chrono::steady_clock::duration g_sm_getdatatx;
+    extern std::chrono::steady_clock::duration g_sm_pushgetdata;
+    extern std::chrono::steady_clock::duration g_sm_unlock;
+    extern std::chrono::steady_clock::duration g_sm_feefilter;
+    extern std::chrono::steady_clock::duration g_gd_gate;
+    extern std::chrono::steady_clock::duration g_gd_find;
+    extern std::chrono::steady_clock::duration g_gd_build;
+    extern std::chrono::steady_clock::duration g_gd_stall;
+    extern std::chrono::steady_clock::duration g_fn_entry;
+    extern std::chrono::steady_clock::duration g_fn_interest;
+    extern std::chrono::steady_clock::duration g_fn_bootstrap;
+    extern std::chrono::steady_clock::duration g_fn_ancestor;
+    extern std::chrono::steady_clock::duration g_fn_window;
+    extern std::chrono::steady_clock::duration g_fn_fill;
+    extern std::chrono::steady_clock::duration g_fn_scan;
+
+    const auto total = g_sync_end - g_sync_start;
+
+    LogPrint(BCLog::STARTUP, "Sync timing (first block connected -> tip), %d blocks:\n", num_blocks_total);
+    LogPrint(BCLog::STARTUP, "  total (first block -> tip)          %12.2fs\n", Ticks<SecondsDouble>(total));
+    LogPrint(BCLog::STARTUP, "  connecting blocks + peer messages   %12.2fs\n", Ticks<SecondsDouble>(g_ibd_process));
+    LogPrint(BCLog::STARTUP, "    block connect                     %12.2fs\n", Ticks<SecondsDouble>(g_block_process));
+    LogPrint(BCLog::STARTUP, "      check block                     %12.2fs\n", Ticks<SecondsDouble>(g_pnb_check));
+    LogPrint(BCLog::STARTUP, "        header                        %12.2fs\n", Ticks<SecondsDouble>(g_cbk_header));
+    LogPrint(BCLog::STARTUP, "        merkle                        %12.2fs\n", Ticks<SecondsDouble>(g_cbk_merkle));
+    LogPrint(BCLog::STARTUP, "        struct                        %12.2fs\n", Ticks<SecondsDouble>(g_cbk_struct));
+    LogPrint(BCLog::STARTUP, "        stake sig                     %12.2fs\n", Ticks<SecondsDouble>(g_cbk_sig));
+    LogPrint(BCLog::STARTUP, "          cs loop                     %12.2fs\n", Ticks<SecondsDouble>(g_ss_loop));
+    LogPrint(BCLog::STARTUP, "          block sig                   %12.2fs\n", Ticks<SecondsDouble>(g_ss_sig));
+    LogPrint(BCLog::STARTUP, "            solver                    %12.2fs\n", Ticks<SecondsDouble>(g_bs_solver));
+    LogPrint(BCLog::STARTUP, "            gethash                   %12.2fs\n", Ticks<SecondsDouble>(g_bs_gethash));
+    LogPrint(BCLog::STARTUP, "            verify                    %12.2fs\n", Ticks<SecondsDouble>(g_bs_verify));
+    LogPrint(BCLog::STARTUP, "              pubkey parse            %12.2fs\n", Ticks<SecondsDouble>(g_v_pubparse));
+    LogPrint(BCLog::STARTUP, "              sig parse               %12.2fs\n", Ticks<SecondsDouble>(g_v_sigparse));
+    LogPrint(BCLog::STARTUP, "              ecdsa                   %12.2fs\n", Ticks<SecondsDouble>(g_v_ecdsa));
+    LogPrint(BCLog::STARTUP, "          cs time                     %12.2fs\n", Ticks<SecondsDouble>(g_ss_time));
+    LogPrint(BCLog::STARTUP, "        tx                            %12.2fs\n", Ticks<SecondsDouble>(g_cbk_tx));
+    LogPrint(BCLog::STARTUP, "        sigops                        %12.2fs\n", Ticks<SecondsDouble>(g_cbk_sigops));
+    LogPrint(BCLog::STARTUP, "      store block to disk             %12.2fs\n", Ticks<SecondsDouble>(g_pnb_accept));
+    LogPrint(BCLog::STARTUP, "        accept header                 %12.2fs\n", Ticks<SecondsDouble>(g_sbd_header));
+    LogPrint(BCLog::STARTUP, "        contextual check              %12.2fs\n", Ticks<SecondsDouble>(g_sbd_check));
+    LogPrint(BCLog::STARTUP, "        save to disk                  %12.2fs\n", Ticks<SecondsDouble>(g_sbd_save));
+    LogPrint(BCLog::STARTUP, "          write block file            %12.2fs\n", Ticks<SecondsDouble>(g_save_write));
+    {
+        extern std::chrono::steady_clock::duration g_wbf_serialize, g_wbf_findpos, g_wbf_write;
+        LogPrint(BCLog::STARTUP, "            serialize size            %12.2fs\n", Ticks<SecondsDouble>(g_wbf_serialize));
+        LogPrint(BCLog::STARTUP, "            find block pos            %12.2fs\n", Ticks<SecondsDouble>(g_wbf_findpos));
+        LogPrint(BCLog::STARTUP, "            write to disk             %12.2fs\n", Ticks<SecondsDouble>(g_wbf_write));
+        extern std::chrono::steady_clock::duration g_wtd_open, g_wtd_header, g_wtd_block;
+        LogPrint(BCLog::STARTUP, "              open block file         %12.2fs\n", Ticks<SecondsDouble>(g_wtd_open));
+        LogPrint(BCLog::STARTUP, "              write header            %12.2fs\n", Ticks<SecondsDouble>(g_wtd_header));
+        LogPrint(BCLog::STARTUP, "              write block             %12.2fs\n", Ticks<SecondsDouble>(g_wtd_block));
+    }
+    LogPrint(BCLog::STARTUP, "          received block txs          %12.2fs\n", Ticks<SecondsDouble>(g_save_received));
+    LogPrint(BCLog::STARTUP, "        flush state                   %12.2fs\n", Ticks<SecondsDouble>(g_sbd_flush));
+    LogPrint(BCLog::STARTUP, "      notify header tip               %12.2fs\n", Ticks<SecondsDouble>(g_pnb_notify));
+    LogPrint(BCLog::STARTUP, "      connect to chain                %12.2fs\n", Ticks<SecondsDouble>(g_pnb_activate));
+    LogPrint(BCLog::STARTUP, "        prep                          %12.2fs\n", Ticks<SecondsDouble>(g_abc_prep));
+    LogPrint(BCLog::STARTUP, "          limit val queue             %12.2fs\n", Ticks<SecondsDouble>(g_prep_limitqueue));
+    LogPrint(BCLog::STARTUP, "            pending check             %12.2fs\n", Ticks<SecondsDouble>(g_lvq_check));
+    LogPrint(BCLog::STARTUP, "            sync wait                 %12.2fs\n", Ticks<SecondsDouble>(g_lvq_sync));
+    {
+        extern std::chrono::steady_clock::duration g_svq_enqueue, g_svq_wait;
+        LogPrint(BCLog::STARTUP, "              enqueue                 %12.2fs\n", Ticks<SecondsDouble>(g_svq_enqueue));
+        LogPrint(BCLog::STARTUP, "              wait                    %12.2fs\n", Ticks<SecondsDouble>(g_svq_wait));
+    }
+    LogPrint(BCLog::STARTUP, "          cs_main lock                %12.2fs\n", Ticks<SecondsDouble>(g_prep_csmain));
+    LogPrint(BCLog::STARTUP, "          mempool lock                %12.2fs\n", Ticks<SecondsDouble>(g_prep_mempool));
+    LogPrint(BCLog::STARTUP, "        find most work                %12.2fs\n", Ticks<SecondsDouble>(g_abc_findwork));
+    LogPrint(BCLog::STARTUP, "        step                          %12.2fs\n", Ticks<SecondsDouble>(g_abc_step));
+    LogPrint(BCLog::STARTUP, "          disconnect (reorg)          %12.2fs\n", Ticks<SecondsDouble>(g_abcs_disconnect));
+    LogPrint(BCLog::STARTUP, "          connect                     %12.2fs\n", Ticks<SecondsDouble>(g_abcs_connect));
+    LogPrint(BCLog::STARTUP, "            connect prologue          %12.2fs\n", Ticks<SecondsDouble>(g_ct_prologue));
+    LogPrint(BCLog::STARTUP, "            read block from disk      %12.2fs\n", Ticks<SecondsDouble>(time_read_from_disk_total));
+    { extern std::chrono::steady_clock::duration g_rd_open;
+      LogPrint(BCLog::STARTUP, "              read open (cached)      %12.2fs\n", Ticks<SecondsDouble>(g_rd_open)); }
+    LogPrint(BCLog::STARTUP, "            coins view                %12.2fs\n", Ticks<SecondsDouble>(g_ct_coinsview));
+    LogPrint(BCLog::STARTUP, "            connect block             %12.2fs\n", Ticks<SecondsDouble>(g_ct_connectblock));
+    LogPrint(BCLog::STARTUP, "              block prologue          %12.2fs\n", Ticks<SecondsDouble>(g_cb_prologue));
+    LogPrint(BCLog::STARTUP, "              sanity checks           %12.2fs\n", Ticks<SecondsDouble>(time_check));
+    LogPrint(BCLog::STARTUP, "                CheckBlock            %12.2fs\n", Ticks<SecondsDouble>(g_sc_checkblock));
+    LogPrint(BCLog::STARTUP, "                proof of stake        %12.2fs\n", Ticks<SecondsDouble>(g_sc_pos));
+    LogPrint(BCLog::STARTUP, "                rest                  %12.2fs\n", Ticks<SecondsDouble>(g_sc_rest));
+    LogPrint(BCLog::STARTUP, "              fork checks             %12.2fs\n", Ticks<SecondsDouble>(time_forks));
+    LogPrint(BCLog::STARTUP, "                setup               %12.2fs\n", Ticks<SecondsDouble>(g_fk_setup));
+    LogPrint(BCLog::STARTUP, "                bip30               %12.2fs\n", Ticks<SecondsDouble>(g_fk_bip30));
+    LogPrint(BCLog::STARTUP, "                flags               %12.2fs\n", Ticks<SecondsDouble>(g_fk_flags));
+    LogPrint(BCLog::STARTUP, "              connect utxo            %12.2fs\n", Ticks<SecondsDouble>(time_connect));
+    LogPrint(BCLog::STARTUP, "              script verification     %12.2fs\n", Ticks<SecondsDouble>(time_verify - time_connect));
+    LogPrint(BCLog::STARTUP, "              write undo              %12.2fs\n", Ticks<SecondsDouble>(time_undo));
+    {
+        extern std::chrono::steady_clock::duration g_wu_findpos, g_wu_write, g_wu_rest;
+        LogPrint(BCLog::STARTUP, "                findpos             %12.2fs\n", Ticks<SecondsDouble>(g_wu_findpos));
+        LogPrint(BCLog::STARTUP, "                write               %12.2fs\n", Ticks<SecondsDouble>(g_wu_write));
+        {
+            extern std::chrono::steady_clock::duration g_uw_open, g_uw_header, g_uw_data, g_uw_checksum;
+            LogPrint(BCLog::STARTUP, "                  open              %12.2fs\n", Ticks<SecondsDouble>(g_uw_open));
+            LogPrint(BCLog::STARTUP, "                  header            %12.2fs\n", Ticks<SecondsDouble>(g_uw_header));
+            LogPrint(BCLog::STARTUP, "                  data              %12.2fs\n", Ticks<SecondsDouble>(g_uw_data));
+            LogPrint(BCLog::STARTUP, "                  checksum          %12.2fs\n", Ticks<SecondsDouble>(g_uw_checksum));
+        }
+        LogPrint(BCLog::STARTUP, "                rest                %12.2fs\n", Ticks<SecondsDouble>(g_wu_rest));
+    }
+    LogPrint(BCLog::STARTUP, "              index write             %12.2fs\n", Ticks<SecondsDouble>(time_index));
+    LogPrint(BCLog::STARTUP, "              block tail               %12.2fs\n", Ticks<SecondsDouble>(g_cb_tail));
+    LogPrint(BCLog::STARTUP, "            block checked             %12.2fs\n", Ticks<SecondsDouble>(g_ct_blockchecked));
+    LogPrint(BCLog::STARTUP, "            flush blocks              %12.2fs\n", Ticks<SecondsDouble>(time_flush));
+    LogPrint(BCLog::STARTUP, "            write chainstate          %12.2fs\n", Ticks<SecondsDouble>(time_chainstate));
+    LogPrint(BCLog::STARTUP, "            connect postprocess       %12.2fs\n", Ticks<SecondsDouble>(time_post_connect));
+    LogPrint(BCLog::STARTUP, "              mempool removal         %12.2fs\n", Ticks<SecondsDouble>(g_cp_mempool));
+    LogPrint(BCLog::STARTUP, "                removeForBlock        %12.2fs\n", Ticks<SecondsDouble>(g_cp_mp_removeforblock));
+    LogPrint(BCLog::STARTUP, "                  gather entries      %12.2fs\n", Ticks<SecondsDouble>(g_rfb_gather));
+    LogPrint(BCLog::STARTUP, "                  policy estimate     %12.2fs\n", Ticks<SecondsDouble>(g_rfb_policy));
+    LogPrint(BCLog::STARTUP, "                    reorg guard       %12.2fs\n", Ticks<SecondsDouble>(g_pe_guard));
+    LogPrint(BCLog::STARTUP, "                    clear current     %12.2fs\n", Ticks<SecondsDouble>(g_pe_clearcurrent));
+    LogPrint(BCLog::STARTUP, "                    moving averages   %12.2fs\n", Ticks<SecondsDouble>(g_pe_movingavg));
+    LogPrint(BCLog::STARTUP, "                      feeStats        %12.2fs\n", Ticks<SecondsDouble>(g_ma_fee));
+    LogPrint(BCLog::STARTUP, "                      shortStats      %12.2fs\n", Ticks<SecondsDouble>(g_ma_short));
+    LogPrint(BCLog::STARTUP, "                      longStats       %12.2fs\n", Ticks<SecondsDouble>(g_ma_long));
+    LogPrint(BCLog::STARTUP, "                        confAvg       %12.2fs\n", Ticks<SecondsDouble>(g_lm_conf));
+    LogPrint(BCLog::STARTUP, "                        failAvg       %12.2fs\n", Ticks<SecondsDouble>(g_lm_fail));
+    LogPrint(BCLog::STARTUP, "                        m_feerate_avg %12.2fs\n", Ticks<SecondsDouble>(g_lm_feerate));
+    LogPrint(BCLog::STARTUP, "                        txCtAvg       %12.2fs\n", Ticks<SecondsDouble>(g_lm_txct));
+    LogPrint(BCLog::STARTUP, "                    tx loop           %12.2fs\n", Ticks<SecondsDouble>(g_pe_txloop));
+    LogPrint(BCLog::STARTUP, "                    tail              %12.2fs\n", Ticks<SecondsDouble>(g_pe_tail));
+    LogPrint(BCLog::STARTUP, "                  removal loop        %12.2fs\n", Ticks<SecondsDouble>(g_rfb_remove));
+    LogPrint(BCLog::STARTUP, "                  fee update tail     %12.2fs\n", Ticks<SecondsDouble>(g_rfb_tail));
+    LogPrint(BCLog::STARTUP, "                disconnectpool        %12.2fs\n", Ticks<SecondsDouble>(g_cp_mp_disconnectpool));
+    LogPrint(BCLog::STARTUP, "              set tip                 %12.2fs\n", Ticks<SecondsDouble>(g_cp_settip));
+    LogPrint(BCLog::STARTUP, "              update tip              %12.2fs\n", Ticks<SecondsDouble>(g_cp_updatetip));
+    LogPrint(BCLog::STARTUP, "            connect epilogue          %12.2fs\n", Ticks<SecondsDouble>(g_ct_epilogue));
+    LogPrint(BCLog::STARTUP, "          connect bookkeeping         %12.2fs\n", Ticks<SecondsDouble>(g_abcs_connbook));
+    LogPrint(BCLog::STARTUP, "          finish / mempool            %12.2fs\n", Ticks<SecondsDouble>(g_abcs_finish));
+    LogPrint(BCLog::STARTUP, "        tip signals                   %12.2fs\n", Ticks<SecondsDouble>(g_abc_signals));
+    LogPrint(BCLog::STARTUP, "        periodic flush                %12.2fs\n", Ticks<SecondsDouble>(g_abc_flush));
+    LogPrint(BCLog::STARTUP, "        checkindex/findfork           %12.2fs\n", Ticks<SecondsDouble>(g_abc_misc));
+    LogPrint(BCLog::STARTUP, "      block wrapper                   %12.2fs\n", Ticks<SecondsDouble>(g_block_wrapper));
+    LogPrint(BCLog::STARTUP, "    block deserialize                 %12.2fs\n", Ticks<SecondsDouble>(g_block_deser));
+    LogPrint(BCLog::STARTUP, "    block pre-lock                    %12.2fs\n", Ticks<SecondsDouble>(g_block_pre));
+    LogPrint(BCLog::STARTUP, "    headers                           %12.2fs\n", Ticks<SecondsDouble>(g_pm_headers));
+    LogPrint(BCLog::STARTUP, "      header deserialize              %12.2fs\n", Ticks<SecondsDouble>(g_hdr_deser));
+    LogPrint(BCLog::STARTUP, "      process headers                 %12.2fs\n", Ticks<SecondsDouble>(g_hdr_process));
+    LogPrint(BCLog::STARTUP, "      header presync                  %12.2fs\n", Ticks<SecondsDouble>(g_hdr_presync));
+    LogPrint(BCLog::STARTUP, "    other message types               %12.2fs\n", Ticks<SecondsDouble>(g_pm_other));
+    LogPrint(BCLog::STARTUP, "    message routing                   %12.2fs\n", Ticks<SecondsDouble>(g_pm_routing));
+    LogPrint(BCLog::STARTUP, "    serving peers (getdata)           %12.2fs\n", Ticks<SecondsDouble>(g_pm_getdata));
+    LogPrint(BCLog::STARTUP, "    orphan tx                         %12.2fs\n", Ticks<SecondsDouble>(g_pm_orphan));
+    LogPrint(BCLog::STARTUP, "    message guards                    %12.2fs\n", Ticks<SecondsDouble>(g_pm_guards));
+    LogPrint(BCLog::STARTUP, "    poll message                      %12.2fs\n", Ticks<SecondsDouble>(g_pm_poll));
+    LogPrint(BCLog::STARTUP, "    post-dispatch control             %12.2fs\n", Ticks<SecondsDouble>(g_pm_control));
+    LogPrint(BCLog::STARTUP, "  requesting blocks from peers        %12.2fs\n", Ticks<SecondsDouble>(g_ibd_send));
+    LogPrint(BCLog::STARTUP, "    send dispatch                     %12.2fs\n", Ticks<SecondsDouble>(g_send_dispatch));
+    LogPrint(BCLog::STARTUP, "    send prologue                     %12.2fs\n", Ticks<SecondsDouble>(g_sm_prologue));
+    LogPrint(BCLog::STARTUP, "    addrfetch timeout                 %12.2fs\n", Ticks<SecondsDouble>(g_sm_addrfetch));
+    LogPrint(BCLog::STARTUP, "    ping                              %12.2fs\n", Ticks<SecondsDouble>(g_sm_ping));
+    LogPrint(BCLog::STARTUP, "    addr relay                        %12.2fs\n", Ticks<SecondsDouble>(g_sm_addr));
+    LogPrint(BCLog::STARTUP, "    sendheaders                       %12.2fs\n", Ticks<SecondsDouble>(g_sm_sendheaders));
+    LogPrint(BCLog::STARTUP, "    cs_main acquire                   %12.2fs\n", Ticks<SecondsDouble>(g_sm_lock));
+    LogPrint(BCLog::STARTUP, "    sync state                        %12.2fs\n", Ticks<SecondsDouble>(g_sm_syncstate));
+    LogPrint(BCLog::STARTUP, "    start headers sync                %12.2fs\n", Ticks<SecondsDouble>(g_sm_starthdrs));
+    LogPrint(BCLog::STARTUP, "    announce headers                  %12.2fs\n", Ticks<SecondsDouble>(g_sm_announce));
+    LogPrint(BCLog::STARTUP, "    inv blocks                        %12.2fs\n", Ticks<SecondsDouble>(g_sm_invblocks));
+    LogPrint(BCLog::STARTUP, "    inv tx                            %12.2fs\n", Ticks<SecondsDouble>(g_sm_invtx));
+    LogPrint(BCLog::STARTUP, "    push inv                          %12.2fs\n", Ticks<SecondsDouble>(g_sm_pushinv));
+    LogPrint(BCLog::STARTUP, "    stalling detect                   %12.2fs\n", Ticks<SecondsDouble>(g_sm_stalling));
+    LogPrint(BCLog::STARTUP, "    download timeout                  %12.2fs\n", Ticks<SecondsDouble>(g_sm_dltimeout));
+    LogPrint(BCLog::STARTUP, "    headers sync timeout              %12.2fs\n", Ticks<SecondsDouble>(g_sm_hdrtimeout));
+    LogPrint(BCLog::STARTUP, "    consider eviction                 %12.2fs\n", Ticks<SecondsDouble>(g_sm_eviction));
+    LogPrint(BCLog::STARTUP, "    getdata blocks                    %12.2fs\n", Ticks<SecondsDouble>(g_sm_getdatablocks));
+    LogPrint(BCLog::STARTUP, "      download gate                   %12.2fs\n", Ticks<SecondsDouble>(g_gd_gate));
+    LogPrint(BCLog::STARTUP, "      find next blocks                %12.2fs\n", Ticks<SecondsDouble>(g_gd_find));
+    LogPrint(BCLog::STARTUP, "        fn entry                      %12.2fs\n", Ticks<SecondsDouble>(g_fn_entry));
+    LogPrint(BCLog::STARTUP, "        interest check                %12.2fs\n", Ticks<SecondsDouble>(g_fn_interest));
+    LogPrint(BCLog::STARTUP, "        common bootstrap              %12.2fs\n", Ticks<SecondsDouble>(g_fn_bootstrap));
+    LogPrint(BCLog::STARTUP, "        last common ancestor          %12.2fs\n", Ticks<SecondsDouble>(g_fn_ancestor));
+    LogPrint(BCLog::STARTUP, "        window setup                  %12.2fs\n", Ticks<SecondsDouble>(g_fn_window));
+    LogPrint(BCLog::STARTUP, "        ancestor fill                 %12.2fs\n", Ticks<SecondsDouble>(g_fn_fill));
+    LogPrint(BCLog::STARTUP, "        candidate scan                %12.2fs\n", Ticks<SecondsDouble>(g_fn_scan));
+    LogPrint(BCLog::STARTUP, "      build getdata                   %12.2fs\n", Ticks<SecondsDouble>(g_gd_build));
+    LogPrint(BCLog::STARTUP, "      stall mark                      %12.2fs\n", Ticks<SecondsDouble>(g_gd_stall));
+    LogPrint(BCLog::STARTUP, "    getdata tx                        %12.2fs\n", Ticks<SecondsDouble>(g_sm_getdatatx));
+    LogPrint(BCLog::STARTUP, "    push getdata                      %12.2fs\n", Ticks<SecondsDouble>(g_sm_pushgetdata));
+    LogPrint(BCLog::STARTUP, "    cs_main release                   %12.2fs\n", Ticks<SecondsDouble>(g_sm_unlock));
+    LogPrint(BCLog::STARTUP, "    feefilter                         %12.2fs\n", Ticks<SecondsDouble>(g_sm_feefilter));
+    LogPrint(BCLog::STARTUP, "  waiting for the next block          %12.2fs\n", Ticks<SecondsDouble>(g_ibd_wait));
+    LogPrint(BCLog::STARTUP, "    waited then woken                 %12.2fs\n", Ticks<SecondsDouble>(g_ibd_wait_notify_time));
+    LogPrint(BCLog::STARTUP, "    already ready (instant)           %12.2fs\n", Ticks<SecondsDouble>(g_park_prewoken_time));
+    LogPrint(BCLog::STARTUP, "    timed out                         %12.2fs\n", Ticks<SecondsDouble>(g_ibd_wait_timeout_time));
+    LogPrint(BCLog::STARTUP, "    waited-then-woken count           %12d\n", g_ibd_wait_notify);
+    LogPrint(BCLog::STARTUP, "    already-ready count               %12d\n", g_park_prewoken);
+    LogPrint(BCLog::STARTUP, "    timed-out count                   %12d\n", g_ibd_wait_timeout);
+    LogPrint(BCLog::STARTUP, "    passes with work (no park)        %12d\n", g_pass_morework);
+    LogPrint(BCLog::STARTUP, "  snapshot + loop control             %12.2fs\n", Ticks<SecondsDouble>(g_ibd_snapshot));
+    LogPrint(BCLog::STARTUP, "  msgproc lock                        %12.2fs\n", Ticks<SecondsDouble>(g_ibd_lock));
 }
 
 struct PerBlockConnectTrace {
@@ -3138,16 +3482,18 @@ public:
  */
 bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew, const std::shared_ptr<const CBlock>& pblock, ConnectTrace& connectTrace, DisconnectedBlockTransactions& disconnectpool)
 {
+    const auto ct_entry{ibd_now()};
     AssertLockHeld(cs_main);
     if (m_mempool) AssertLockHeld(m_mempool->cs);
 
     assert(pindexNew->pprev == m_chain.Tip());
     // Read block from disk.
     const auto time_1{SteadyClock::now()};
+    if (IBD_TIMING && g_sync_active) g_ct_prologue += time_1 - ct_entry;
     std::shared_ptr<const CBlock> pthisBlock;
     if (!pblock) {
         std::shared_ptr<CBlock> pblockNew = std::make_shared<CBlock>();
-        if (!m_blockman.ReadBlockFromDisk(*pblockNew, *pindexNew)) {
+        if (!m_blockman.ReadBlockFromDisk(*pblockNew, *pindexNew, /*cached=*/true)) {
             return AbortNode(state, "Failed to read block");
         }
         pthisBlock = pblockNew;
@@ -3166,7 +3512,11 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
              Ticks<MillisecondsDouble>(time_read_from_disk_total) / num_blocks_total);
     {
         CCoinsViewCache view(&CoinsTip());
+        const auto ct_cb0{ibd_now()};
+        if (IBD_TIMING && g_sync_active) g_ct_coinsview += ct_cb0 - time_2;
         bool rv = ConnectBlock(blockConnecting, state, pindexNew, view);
+        const auto ct_cb1{ibd_now()};
+        if (IBD_TIMING && g_sync_active) g_ct_connectblock += ct_cb1 - ct_cb0;
         GetMainSignals().BlockChecked(blockConnecting, state);
         if (!rv) {
             if (state.IsInvalid())
@@ -3174,6 +3524,7 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
             return error("%s: ConnectBlock %s failed, %s", __func__, pindexNew->GetBlockHash().ToString(), state.ToString());
         }
         time_3 = SteadyClock::now();
+        if (IBD_TIMING && g_sync_active) g_ct_blockchecked += time_3 - ct_cb1;
         time_connect_total += time_3 - time_2;
         assert(num_blocks_total > 0);
         LogPrint(BCLog::BENCH, "  - Connect total: %.2fms [%.2fs (%.2fms/blk)]\n",
@@ -3199,14 +3550,21 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
              Ticks<MillisecondsDouble>(time_5 - time_4),
              Ticks<SecondsDouble>(time_chainstate),
              Ticks<MillisecondsDouble>(time_chainstate) / num_blocks_total);
+    auto cp_prev = time_5;
     // Remove conflicting transactions from the mempool.;
     if (m_mempool) {
-        m_mempool->removeForBlock(blockConnecting.vtx, pindexNew->nHeight);
+        auto mp_prev = cp_prev;
+        m_mempool->removeForBlock(blockConnecting.vtx, pindexNew->nHeight, IsInitialBlockDownload());
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_cp_mp_removeforblock += n - mp_prev; mp_prev = n; }
         disconnectpool.removeForBlock(blockConnecting.vtx);
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_cp_mp_disconnectpool += n - mp_prev; }
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_cp_mempool += n - cp_prev; cp_prev = n; }
     // Update m_chain & related variables.
     m_chain.SetTip(*pindexNew);
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_cp_settip += n - cp_prev; cp_prev = n; }
     UpdateTip(pindexNew);
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_cp_updatetip += n - cp_prev; cp_prev = n; }
 
     const auto time_6{SteadyClock::now()};
     time_post_connect += time_6 - time_5;
@@ -3229,6 +3587,7 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
     }
 
     connectTrace.BlockConnected(pindexNew, std::move(pthisBlock));
+    if (IBD_TIMING && g_sync_active) g_ct_epilogue += SteadyClock::now() - time_6;
     return true;
 }
 
@@ -3317,6 +3676,7 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex*
     AssertLockHeld(cs_main);
     if (m_mempool) AssertLockHeld(m_mempool->cs);
 
+    auto s_prev = ibd_now();
     const CBlockIndex* pindexOldTip = m_chain.Tip();
     const CBlockIndex* pindexFork = m_chain.FindFork(pindexMostWork);
 
@@ -3337,6 +3697,7 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex*
         }
         fBlocksDisconnected = true;
     }
+    if (IBD_TIMING && g_sync_active) { auto n = std::chrono::steady_clock::now(); g_abcs_disconnect += n - s_prev; s_prev = n; }
 
     // Build list of new blocks to connect (in descending height order).
     std::vector<CBlockIndex*> vpindexToConnect;
@@ -3357,7 +3718,10 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex*
 
         // Connect new blocks.
         for (CBlockIndex* pindexConnect : reverse_iterate(vpindexToConnect)) {
-            if (!ConnectTip(state, pindexConnect, pindexConnect == pindexMostWork ? pblock : std::shared_ptr<const CBlock>(), connectTrace, disconnectpool)) {
+            if (IBD_TIMING && g_sync_active) { auto n = std::chrono::steady_clock::now(); g_abcs_connbook += n - s_prev; s_prev = n; }
+            bool connected = ConnectTip(state, pindexConnect, pindexConnect == pindexMostWork ? pblock : std::shared_ptr<const CBlock>(), connectTrace, disconnectpool);
+            if (IBD_TIMING && g_sync_active) { auto n = std::chrono::steady_clock::now(); g_abcs_connect += n - s_prev; s_prev = n; }
+            if (!connected) {
                 if (state.IsInvalid()) {
                     // The block violates a consensus rule.
                     if (state.GetResult() != BlockValidationResult::BLOCK_MUTATED) {
@@ -3394,6 +3758,7 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex*
 
     CheckForkWarningConditions();
 
+    if (IBD_TIMING && g_sync_active) g_abcs_finish += std::chrono::steady_clock::now() - s_prev;
     return true;
 }
 
@@ -3429,8 +3794,13 @@ static bool NotifyHeaderTip(Chainstate& chainstate) LOCKS_EXCLUDED(cs_main) {
 static void LimitValidationInterfaceQueue() LOCKS_EXCLUDED(cs_main) {
     AssertLockNotHeld(cs_main);
 
+    auto lvq_prev = ibd_now();
     if (GetMainSignals().CallbacksPending() > 10) {
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_lvq_check += n - lvq_prev; lvq_prev = n; }
         SyncWithValidationInterfaceQueue();
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_lvq_sync += n - lvq_prev; }
+    } else {
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_lvq_check += n - lvq_prev; }
     }
 }
 
@@ -3461,19 +3831,25 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
     CBlockIndex *pindexMostWork = nullptr;
     CBlockIndex *pindexNewTip = nullptr;
     int nStopAtHeight = gArgs.GetIntArg("-stopatheight", DEFAULT_STOPATHEIGHT);
+    auto abc_prev = ibd_now();
     do {
+        auto prep_prev = abc_prev;
         // Block until the validation queue drains. This should largely
         // never happen in normal operation, however may happen during
         // reindex, causing memory blowup if we run too far ahead.
         // Note that if a validationinterface callback ends up calling
         // ActivateBestChain this may lead to a deadlock! We should
         // probably have a DEBUG_LOCKORDER test for this in the future.
-        LimitValidationInterfaceQueue();
+        if (!IsInitialBlockDownload()) LimitValidationInterfaceQueue();
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_prep_limitqueue += n - prep_prev; prep_prev = n; }
 
         {
             LOCK(cs_main);
+            { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_prep_csmain += n - prep_prev; prep_prev = n; }
             // Lock transaction pool for at least as long as it takes for connectTrace to be consumed
             LOCK(MempoolMutex());
+            { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_prep_mempool += n - prep_prev; }
+            if (IBD_TIMING && g_sync_active) { auto n = std::chrono::steady_clock::now(); g_abc_prep += n - abc_prev; abc_prev = n; }
             CBlockIndex* starting_tip = m_chain.Tip();
             bool blocks_connected = false;
             do {
@@ -3484,6 +3860,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                 if (pindexMostWork == nullptr) {
                     pindexMostWork = FindMostWorkChain();
                 }
+                if (IBD_TIMING && g_sync_active) { auto n = std::chrono::steady_clock::now(); g_abc_findwork += n - abc_prev; abc_prev = n; }
 
                 // Whether we have anything to do at all.
                 if (pindexMostWork == nullptr || pindexMostWork == m_chain.Tip()) {
@@ -3496,6 +3873,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                     // A system error occurred
                     return false;
                 }
+                if (IBD_TIMING && g_sync_active) { auto n = std::chrono::steady_clock::now(); g_abc_step += n - abc_prev; abc_prev = n; }
                 blocks_connected = true;
 
                 if (fInvalidFound) {
@@ -3508,6 +3886,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                     assert(trace.pblock && trace.pindex);
                     GetMainSignals().BlockConnected(trace.pblock, trace.pindex);
                 }
+                if (IBD_TIMING && g_sync_active) { auto n = std::chrono::steady_clock::now(); g_abc_signals += n - abc_prev; abc_prev = n; }
 
                 // This will have been toggled in
                 // ActivateBestChainStep -> ConnectTip -> MaybeCompleteSnapshotValidation,
@@ -3518,9 +3897,13 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                     break;
                 }
             } while (!m_chain.Tip() || (starting_tip && CBlockIndexWorkComparator()(m_chain.Tip(), starting_tip)));
-            if (!blocks_connected) return true;
+            if (!blocks_connected) {
+                if (IBD_TIMING && g_sync_active) g_abc_misc += std::chrono::steady_clock::now() - abc_prev;
+                return true;
+            }
 
             const CBlockIndex* pindexFork = m_chain.FindFork(starting_tip);
+            if (IBD_TIMING && g_sync_active) { auto n = std::chrono::steady_clock::now(); g_abc_misc += n - abc_prev; abc_prev = n; }
             bool fInitialDownload = IsInitialBlockDownload();
 
             // Notify external listeners about the new tip.
@@ -3531,6 +3914,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
 
                 // Always notify the UI if a new block tip was connected
                 uiInterface.NotifyBlockTip(GetSynchronizationState(fInitialDownload), pindexNewTip);
+                if (IBD_TIMING && g_sync_active) { auto n = std::chrono::steady_clock::now(); g_abc_signals += n - abc_prev; abc_prev = n; }
             }
         }
         // When we reach this point, we switched to a new tip (stored in pindexNewTip).
@@ -3549,11 +3933,13 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
         if (ShutdownRequested()) break;
     } while (pindexNewTip != pindexMostWork);
     CheckBlockIndex();
+    if (IBD_TIMING && g_sync_active) { auto n = std::chrono::steady_clock::now(); g_abc_misc += n - abc_prev; abc_prev = n; }
 
     // Write changes periodically to disk, after relay.
     if (!FlushStateToDisk(state, FlushStateMode::PERIODIC)) {
         return false;
     }
+    if (IBD_TIMING && g_sync_active) g_abc_flush += std::chrono::steady_clock::now() - abc_prev;
 
     return true;
 }
@@ -3822,16 +4208,22 @@ static bool CheckBlockHeader(const CBlockHeader& block, BlockValidationState& st
 
 bool CheckBlockSignature(const CBlock& block)
 {
+    auto bs_prev = ibd_now();
     std::vector<valtype> vSolutions;
     const CTxOut& txout = block.vtx[1]->vout[1];
 
     TxoutType whichType = Solver(txout.scriptPubKey, vSolutions);
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_bs_solver += n - bs_prev; bs_prev = n; }
     valtype& vchPubKey = vSolutions[0];
     if (whichType == TxoutType::PUBKEY)
     {
         CPubKey key(vchPubKey);
         if (block.vchBlockSig.empty()) return false;
-        return key.Verify(block.GetHash(), block.vchBlockSig);
+        uint256 h = block.GetHash();
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_bs_gethash += n - bs_prev; bs_prev = n; }
+        bool ok = key.Verify(h, block.vchBlockSig);
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_bs_verify += n - bs_prev; }
+        return ok;
     }
     else if (whichType == TxoutType::PUBKEYHASH)
     {
@@ -3841,7 +4233,11 @@ bool CheckBlockSignature(const CBlock& block)
 
         if (!pubkey.IsValid()) return false;
         if (block.vchBlockSig.empty()) return false;
-        return pubkey.Verify(block.GetHash(), block.vchBlockSig);
+        uint256 h = block.GetHash();
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_bs_gethash += n - bs_prev; bs_prev = n; }
+        bool ok = pubkey.Verify(h, block.vchBlockSig);
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_bs_verify += n - bs_prev; }
+        return ok;
     }
 
     return false;
@@ -3853,6 +4249,7 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
 
     if (block.fChecked)
         return true;
+    auto cbk_prev = ibd_now();
 
     // Check that the header is valid (particularly PoW).  This is mostly
     // redundant with the call in AcceptBlockHeader.
@@ -3863,6 +4260,7 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
     if (consensusParams.signet_blocks && fCheckPOW && !CheckSignetBlockSolution(block, consensusParams)) {
         return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-signet-blksig", "signet block signature validation failure");
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_cbk_header += n - cbk_prev; cbk_prev = n; }
 
     // Check the merkle root.
     if (fCheckMerkleRoot) {
@@ -3877,6 +4275,7 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
         if (mutated)
             return state.Invalid(BlockValidationResult::BLOCK_MUTATED, "bad-txns-duplicate", "duplicate transaction");
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_cbk_merkle += n - cbk_prev; cbk_prev = n; }
 
     // All potential-corruption validation must be done before we do any
     // transaction validation, as otherwise we may mark the header as invalid
@@ -3897,22 +4296,24 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
         if (block.vtx[i]->IsCoinBase())
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-multiple", "more than one coinbase");
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_cbk_struct += n - cbk_prev; cbk_prev = n; }
 
     if (block.IsProofOfStake())
     {
+        auto ss_prev = ibd_now();
         for (unsigned int i = 2; i < block.vtx.size(); i++) {
 	    if (block.vtx[i]->IsCoinStake())
 	        return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-missing", "coinstake in wrong position");
         }
-
-        if (!CheckBlockSignature(block)) {
-            return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-block-signature", "bad block signature");
-        }
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ss_loop += n - ss_prev; ss_prev = n; }
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ss_sig += n - ss_prev; ss_prev = n; }
 
         if (!CheckCoinStakeTimestamp(block.GetBlockTime())) {
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-time", "coinstake timestamp violation");
         }
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ss_time += n - ss_prev; }
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_cbk_sig += n - cbk_prev; cbk_prev = n; }
 
     // Check transactions
     // Must check for duplicate inputs (see CVE-2018-17144)
@@ -3926,6 +4327,7 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
                                  strprintf("Transaction check failed (tx hash %s) %s", tx->GetHash().ToString(), tx_state.GetDebugMessage()));
         }
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_cbk_tx += n - cbk_prev; cbk_prev = n; }
     unsigned int nSigOps = 0;
     for (const auto& tx : block.vtx)
     {
@@ -3933,6 +4335,7 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
     }
     if (nSigOps * WITNESS_SCALE_FACTOR > MAX_BLOCK_SIGOPS_COST)
         return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-blk-sigops", "out-of-bounds SigOpCount");
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_cbk_sigops += n - cbk_prev; }
 
     if (fCheckPOW && fCheckMerkleRoot)
         block.fChecked = true;
@@ -4138,8 +4541,8 @@ bool ChainstateManager::AcceptBlockHeader(const CBlockHeader& block, BlockValida
     AssertLockHeld(cs_main);
 
     struct HeaderTimeGuard {
-        SteadyClock::time_point start{SteadyClock::now()};
-        ~HeaderTimeGuard() { time_headers += SteadyClock::now() - start; }
+        SteadyClock::time_point start{ibd_now()};
+        ~HeaderTimeGuard() { if (IBD_TIMING) time_headers += SteadyClock::now() - start; }
     } header_time_guard;
 
     // Check for duplicate
@@ -4308,6 +4711,7 @@ void ChainstateManager::ReportHeadersPresync(const arith_uint256& work, int64_t 
 bool Chainstate::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, BlockValidationState& state, CBlockIndex** ppindex, bool fRequested, const FlatFilePos* dbp, bool* fNewBlock, bool min_pow_checked)
 {
     const CBlock& block = *pblock;
+    auto sbd_prev = ibd_now();
 
     if (fNewBlock) *fNewBlock = false;
     AssertLockHeld(cs_main);
@@ -4356,6 +4760,7 @@ bool Chainstate::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, BlockV
 
     const CChainParams& params{m_chainman.GetParams()};
 
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_sbd_header += n - sbd_prev; sbd_prev = n; }
     g_currentValidatingBlockHeight = pindex->nHeight;
     if (!CheckBlock(block, state, params.GetConsensus()) ||
         !ContextualCheckBlock(block, state, m_chainman, pindex->pprev)) {
@@ -4366,6 +4771,8 @@ bool Chainstate::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, BlockV
         return error("%s: %s", __func__, state.ToString());
     }
 
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_sbd_check += n - sbd_prev; sbd_prev = n; }
+
     // Header is valid/has work, merkle tree and segwit merkle tree are good...RELAY NOW
     // (but if it does not build on our best tip, let the SendMessages loop relay it)
     if (!IsInitialBlockDownload() && m_chain.Tip() == pindex->pprev)
@@ -4373,20 +4780,25 @@ bool Chainstate::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, BlockV
 
     // Write block to history file
     if (fNewBlock) *fNewBlock = true;
+    auto save_prev = sbd_prev;
     try {
         FlatFilePos blockPos{m_blockman.SaveBlockToDisk(block, pindex->nHeight, m_chain, dbp)};
         if (blockPos.IsNull()) {
             state.Error(strprintf("%s: Failed to find position to write new block to disk", __func__));
             return false;
         }
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_save_write += n - save_prev; save_prev = n; }
         ReceivedBlockTransactions(block, pindex, blockPos);
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_save_received += n - save_prev; }
     } catch (const std::runtime_error& e) {
         return AbortNode(state, std::string("System error: ") + e.what());
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_sbd_save += n - sbd_prev; sbd_prev = n; }
 
     FlushStateToDisk(state, FlushStateMode::NONE);
 
     CheckBlockIndex();
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_sbd_flush += n - sbd_prev; sbd_prev = n; }
 
     return true;
 }
@@ -4394,6 +4806,7 @@ bool Chainstate::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, BlockV
 bool ChainstateManager::ProcessNewBlock(const std::shared_ptr<const CBlock>& block, bool force_processing, bool min_pow_checked, bool* new_block)
 {
     AssertLockNotHeld(cs_main);
+    auto pnb_prev = ibd_now();
 
     {
         CBlockIndex *pindex = nullptr;
@@ -4411,9 +4824,11 @@ bool ChainstateManager::ProcessNewBlock(const std::shared_ptr<const CBlock>& blo
         // not very expensive, the anti-DoS benefits of caching failure (of a definitely-invalid block) are not substantial.
         g_currentValidatingBlockHeight = 0;
         bool ret = CheckBlock(*block, state, GetConsensus());
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pnb_check += n - pnb_prev; pnb_prev = n; }
         if (ret) {
             // Store to disk
             ret = ActiveChainstate().AcceptBlock(block, state, &pindex, force_processing, nullptr, new_block, min_pow_checked);
+            { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pnb_accept += n - pnb_prev; pnb_prev = n; }
         }
         if (!ret) {
             GetMainSignals().BlockChecked(*block, state);
@@ -4422,11 +4837,13 @@ bool ChainstateManager::ProcessNewBlock(const std::shared_ptr<const CBlock>& blo
     }
 
     NotifyHeaderTip(ActiveChainstate());
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pnb_notify += n - pnb_prev; pnb_prev = n; }
 
     BlockValidationState state; // Only used to report errors, not invalidity - ignore it
     if (!ActiveChainstate().ActivateBestChain(state, block)) {
         return error("%s: ActivateBestChain failed (%s)", __func__, state.ToString());
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pnb_activate += n - pnb_prev; pnb_prev = n; }
 
     return true;
 }

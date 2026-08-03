@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <policy/fees.h>
+#include <ibd_timing.h>
 
 #include <clientversion.h>
 #include <consensus/amount.h>
@@ -60,6 +61,24 @@ struct EncodedDoubleFormatter
     }
 };
 
+// Dedicated float formatter (used for confAvg and decay). Same on-disk encoding
+// as EncodedDoubleFormatter (8-byte encoded double), so fee_estimates.dat is
+// format-compatible; only the in-memory value is float.
+struct EncodedFloatFormatter
+{
+    template<typename Stream> void Ser(Stream &s, float v)
+    {
+        s << EncodeDouble(v);
+    }
+
+    template<typename Stream> void Unser(Stream& s, float& v)
+    {
+        uint64_t encoded;
+        s >> encoded;
+        v = DecodeDouble(encoded);
+    }
+};
+
 } // namespace
 
 /**
@@ -80,24 +99,24 @@ private:
     // For each bucket X:
     // Count the total # of txs in each bucket
     // Track the historical moving average of this total over blocks
-    std::vector<double> txCtAvg;
+    std::vector<float> txCtAvg;
 
     // Count the total # of txs confirmed within Y blocks in each bucket
     // Track the historical moving average of these totals over blocks
-    std::vector<std::vector<double>> confAvg; // confAvg[Y][X]
+    std::vector<std::vector<float>> confAvg; // confAvg[Y][X]
 
     // Track moving avg of txs which have been evicted from the mempool
     // after failing to be confirmed within Y blocks
-    std::vector<std::vector<double>> failAvg; // failAvg[Y][X]
+    std::vector<std::vector<float>> failAvg; // failAvg[Y][X]
 
     // Sum the total feerate of all tx's in each bucket
     // Track the historical moving average of this total over blocks
-    std::vector<double> m_feerate_avg;
+    std::vector<float> m_feerate_avg;
 
     // Combine the conf counts with tx counts to calculate the confirmation % for each Y,X
     // Combine the total value with the tx counts to calculate the avg feerate per bucket
 
-    double decay;
+    float decay;
 
     // Resolution (# of blocks) with which confirmations are tracked
     unsigned int scale;
@@ -142,7 +161,7 @@ public:
 
     /** Update our estimates by decaying our historical moving average and updating
         with the data gathered from the current block */
-    void UpdateMovingAverages();
+    void UpdateMovingAverages(bool tile = false);
 
     /**
      * Calculate a feerate estimate.  Find the lowest value bucket (or range of buckets
@@ -223,17 +242,35 @@ void TxConfirmStats::Record(int blocksToConfirm, double feerate)
     m_feerate_avg[bucketindex] += feerate;
 }
 
-void TxConfirmStats::UpdateMovingAverages()
+extern bool g_sync_active;
+std::chrono::steady_clock::duration g_lm_conf{};
+std::chrono::steady_clock::duration g_lm_fail{};
+std::chrono::steady_clock::duration g_lm_feerate{};
+std::chrono::steady_clock::duration g_lm_txct{};
+
+void TxConfirmStats::UpdateMovingAverages(bool tile)
 {
     assert(confAvg.size() == failAvg.size());
-    for (unsigned int j = 0; j < buckets.size(); j++) {
-        for (unsigned int i = 0; i < confAvg.size(); i++) {
+    // Fused loop split into one pass per decayed array so each can be timed
+    // separately. Same math; access pattern (bucket-major) preserved.
+    const unsigned int conf_size    = confAvg.size();
+    const unsigned int fail_size    = failAvg.size();
+    const unsigned int buckets_size = buckets.size();
+    auto lm_prev = ibd_now();
+    for (unsigned int i = 0; i < conf_size; i++)
+        for (unsigned int j = 0; j < buckets_size; j++)
             confAvg[i][j] *= decay;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active && tile) g_lm_conf += n - lm_prev; lm_prev = n; }
+    for (unsigned int i = 0; i < fail_size; i++)
+        for (unsigned int j = 0; j < buckets_size; j++)
             failAvg[i][j] *= decay;
-        }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active && tile) g_lm_fail += n - lm_prev; lm_prev = n; }
+    for (unsigned int j = 0; j < buckets_size; j++)
         m_feerate_avg[j] *= decay;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active && tile) g_lm_feerate += n - lm_prev; lm_prev = n; }
+    for (unsigned int j = 0; j < buckets_size; j++)
         txCtAvg[j] *= decay;
-    }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active && tile) g_lm_txct += n - lm_prev; lm_prev = n; }
 }
 
 // returns -1 on error conditions
@@ -392,12 +429,12 @@ double TxConfirmStats::EstimateMedianVal(int confTarget, double sufficientTxVal,
 
 void TxConfirmStats::Write(AutoFile& fileout) const
 {
-    fileout << Using<EncodedDoubleFormatter>(decay);
+    fileout << Using<EncodedFloatFormatter>(decay);
     fileout << scale;
-    fileout << Using<VectorFormatter<EncodedDoubleFormatter>>(m_feerate_avg);
-    fileout << Using<VectorFormatter<EncodedDoubleFormatter>>(txCtAvg);
-    fileout << Using<VectorFormatter<VectorFormatter<EncodedDoubleFormatter>>>(confAvg);
-    fileout << Using<VectorFormatter<VectorFormatter<EncodedDoubleFormatter>>>(failAvg);
+    fileout << Using<VectorFormatter<EncodedFloatFormatter>>(m_feerate_avg);
+    fileout << Using<VectorFormatter<EncodedFloatFormatter>>(txCtAvg);
+    fileout << Using<VectorFormatter<VectorFormatter<EncodedFloatFormatter>>>(confAvg);
+    fileout << Using<VectorFormatter<VectorFormatter<EncodedFloatFormatter>>>(failAvg);
 }
 
 void TxConfirmStats::Read(AutoFile& filein, int nFileVersion, size_t numBuckets)
@@ -408,7 +445,7 @@ void TxConfirmStats::Read(AutoFile& filein, int nFileVersion, size_t numBuckets)
     size_t maxConfirms, maxPeriods;
 
     // The current version will store the decay with each individual TxConfirmStats and also keep a scale factor
-    filein >> Using<EncodedDoubleFormatter>(decay);
+    filein >> Using<EncodedFloatFormatter>(decay);
     if (decay <= 0 || decay >= 1) {
         throw std::runtime_error("Corrupt estimates file. Decay must be between 0 and 1 (non-inclusive)");
     }
@@ -417,15 +454,15 @@ void TxConfirmStats::Read(AutoFile& filein, int nFileVersion, size_t numBuckets)
         throw std::runtime_error("Corrupt estimates file. Scale must be non-zero");
     }
 
-    filein >> Using<VectorFormatter<EncodedDoubleFormatter>>(m_feerate_avg);
+    filein >> Using<VectorFormatter<EncodedFloatFormatter>>(m_feerate_avg);
     if (m_feerate_avg.size() != numBuckets) {
         throw std::runtime_error("Corrupt estimates file. Mismatch in feerate average bucket count");
     }
-    filein >> Using<VectorFormatter<EncodedDoubleFormatter>>(txCtAvg);
+    filein >> Using<VectorFormatter<EncodedFloatFormatter>>(txCtAvg);
     if (txCtAvg.size() != numBuckets) {
         throw std::runtime_error("Corrupt estimates file. Mismatch in tx count bucket count");
     }
-    filein >> Using<VectorFormatter<VectorFormatter<EncodedDoubleFormatter>>>(confAvg);
+    filein >> Using<VectorFormatter<VectorFormatter<EncodedFloatFormatter>>>(confAvg);
     maxPeriods = confAvg.size();
     maxConfirms = scale * maxPeriods;
 
@@ -438,7 +475,7 @@ void TxConfirmStats::Read(AutoFile& filein, int nFileVersion, size_t numBuckets)
         }
     }
 
-    filein >> Using<VectorFormatter<VectorFormatter<EncodedDoubleFormatter>>>(failAvg);
+    filein >> Using<VectorFormatter<VectorFormatter<EncodedFloatFormatter>>>(failAvg);
     if (maxPeriods != failAvg.size()) {
         throw std::runtime_error("Corrupt estimates file. Mismatch in confirms tracked for failures");
     }
@@ -621,16 +658,28 @@ bool CBlockPolicyEstimator::processBlockTx(unsigned int nBlockHeight, const CTxM
     return true;
 }
 
+extern bool g_sync_active;
+std::chrono::steady_clock::duration g_pe_guard{};
+std::chrono::steady_clock::duration g_pe_clearcurrent{};
+std::chrono::steady_clock::duration g_pe_movingavg{};
+std::chrono::steady_clock::duration g_pe_txloop{};
+std::chrono::steady_clock::duration g_pe_tail{};
+std::chrono::steady_clock::duration g_ma_fee{};
+std::chrono::steady_clock::duration g_ma_short{};
+std::chrono::steady_clock::duration g_ma_long{};
+
 void CBlockPolicyEstimator::processBlock(unsigned int nBlockHeight,
                                          std::vector<const CTxMemPoolEntry*>& entries)
 {
     LOCK(m_cs_fee_estimator);
+    auto pe_prev = ibd_now();
     if (nBlockHeight <= nBestSeenHeight) {
         // Ignore side chains and re-orgs; assuming they are random
         // they don't affect the estimate.
         // And if an attacker can re-org the chain at will, then
         // you've got much bigger problems than "attacker can influence
         // transaction fees."
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_guard += n - pe_prev; }
         return;
     }
 
@@ -638,16 +687,23 @@ void CBlockPolicyEstimator::processBlock(unsigned int nBlockHeight,
     // calls to removeTx (via processBlockTx) correctly calculate age
     // of unconfirmed txs to remove from tracking.
     nBestSeenHeight = nBlockHeight;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_guard += n - pe_prev; pe_prev = n; }
 
     // Update unconfirmed circular buffer
     feeStats->ClearCurrent(nBlockHeight);
     shortStats->ClearCurrent(nBlockHeight);
     longStats->ClearCurrent(nBlockHeight);
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_clearcurrent += n - pe_prev; pe_prev = n; }
 
     // Decay all exponential averages
+    auto ma_prev = pe_prev;
     feeStats->UpdateMovingAverages();
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ma_fee += n - ma_prev; ma_prev = n; }
     shortStats->UpdateMovingAverages();
-    longStats->UpdateMovingAverages();
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ma_short += n - ma_prev; ma_prev = n; }
+    longStats->UpdateMovingAverages(/*tile=*/true);
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ma_long += n - ma_prev; }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_movingavg += n - pe_prev; pe_prev = n; }
 
     unsigned int countedTxs = 0;
     // Update averages with data points from current block
@@ -655,6 +711,7 @@ void CBlockPolicyEstimator::processBlock(unsigned int nBlockHeight,
         if (processBlockTx(nBlockHeight, entry))
             countedTxs++;
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_txloop += n - pe_prev; pe_prev = n; }
 
     if (firstRecordedHeight == 0 && countedTxs > 0) {
         firstRecordedHeight = nBestSeenHeight;
@@ -668,6 +725,7 @@ void CBlockPolicyEstimator::processBlock(unsigned int nBlockHeight,
 
     trackedTxs = 0;
     untrackedTxs = 0;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_tail += n - pe_prev; pe_prev = n; }
 }
 
 CFeeRate CBlockPolicyEstimator::estimateFee(int confTarget) const

@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <validationinterface.h>
+#include <ibd_timing.h>
 
 #include <attributes.h>
 #include <chain.h>
@@ -162,15 +163,22 @@ void CallFunctionInValidationInterfaceQueue(std::function<void()> func)
     g_signals.m_internals->m_schedulerClient.AddToProcessQueue(std::move(func));
 }
 
+extern bool g_sync_active;
+std::chrono::steady_clock::duration g_svq_enqueue{};
+std::chrono::steady_clock::duration g_svq_wait{};
+
 void SyncWithValidationInterfaceQueue()
 {
     AssertLockNotHeld(cs_main);
     // Block until the validation queue drains
+    auto svq_prev = ibd_now();
     std::promise<void> promise;
     CallFunctionInValidationInterfaceQueue([&promise] {
         promise.set_value();
     });
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_svq_enqueue += n - svq_prev; svq_prev = n; }
     promise.get_future().wait();
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_svq_wait += n - svq_prev; }
 }
 
 // Use a macro instead of a function for conditional logging to prevent

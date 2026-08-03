@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <net_processing.h>
+#include <ibd_timing.h>
 
 #include <addrman.h>
 #include <banman.h>
@@ -106,7 +107,7 @@ static constexpr auto GETDATA_TX_INTERVAL{60s};
 /** Limit to avoid sending big packets. Not used in processing incoming GETDATA for compatibility */
 static const unsigned int MAX_GETDATA_SZ = 1000;
 /** Number of blocks that can be requested at any given time from a single peer. */
-static const int MAX_BLOCKS_IN_TRANSIT_PER_PEER = 1024;
+static const int MAX_BLOCKS_IN_TRANSIT_PER_PEER = 4096;
 /** Default time during which a peer must stall block download progress before being disconnected.
  * the actual timeout is increased temporarily if peers are disconnected for hitting the timeout */
 static constexpr auto BLOCK_STALLING_TIMEOUT_DEFAULT{2s};
@@ -124,7 +125,7 @@ static const int MAX_BLOCKTXN_DEPTH = 10;
  *  Larger windows tolerate larger download speed differences between peer, but increase the potential
  *  degree of disordering of blocks on disk (which make reindexing and pruning harder). We'll probably
  *  want to make this a per-peer adaptive value at some point. */
-static const unsigned int BLOCK_DOWNLOAD_WINDOW = 1024;
+static const unsigned int BLOCK_DOWNLOAD_WINDOW = 4096;
 /** Block download timeout base, expressed in multiples of the block interval (i.e. 10 min) */
 static constexpr double BLOCK_DOWNLOAD_TIMEOUT_BASE = 1;
 /** Additional block download timeout per parallel downloading peer (i.e. 5 min) */
@@ -182,6 +183,46 @@ static constexpr size_t MAX_ADDR_PROCESSING_TOKEN_BUCKET{MAX_ADDR_TO_SEND};
 /** The compactblocks version we support. See BIP 152. */
 static constexpr uint64_t CMPCTBLOCKS_VERSION{2};
 
+extern bool g_sync_active;
+std::chrono::steady_clock::duration g_fn_entry{};
+std::chrono::steady_clock::duration g_fn_interest{};
+std::chrono::steady_clock::duration g_fn_bootstrap{};
+std::chrono::steady_clock::duration g_fn_ancestor{};
+std::chrono::steady_clock::duration g_fn_window{};
+std::chrono::steady_clock::duration g_fn_fill{};
+std::chrono::steady_clock::duration g_fn_scan{};
+// In-flight occupancy landscape: how many blocks are in flight, counted at every throttle-gate pass.
+// Buckets: <128, <256, <512, <768, 768+. Sampled at the gate (not inside the scan timer).
+int64_t g_inflight_hist[5] = {0, 0, 0, 0, 0};
+
+// --- IBD wait diagnosis instrumentation (file scope: read from net.cpp) ---
+// M1: count of blocks requested-but-not-yet-received (in-flight occupancy), sampled at the
+// message-handler park in net.cpp to tell saturated (pipe full) from starved (under-requesting).
+std::atomic<int> g_blocks_in_flight{0};
+// M2: per-peer received-block delivery latency (in-flight microseconds), to see which peers in the
+// current mix are the delivery drag. Only touched under cs_main.
+static std::map<NodeId, std::pair<int64_t, int64_t>> g_frontblock_by_peer; // peer -> {count, total_us}
+// M4: outstanding age of the tip+1 (frontier) block when it arrives — the per-block wait on the frontier.
+static int64_t g_frontier_wait_us{0};
+static int64_t g_frontier_count{0};
+static int64_t g_frontier_max_us{0};
+
+void LogFrontblockByPeer(int height)
+{
+    LOCK(cs_main);
+    LogPrint(BCLog::STARTUP, "  [h=%d] block delivery by peer (in-flight avg):\n", height);
+    for (const auto& [node_id, ct] : g_frontblock_by_peer) {
+        const auto& [count, total_us] = ct;
+        if (count == 0) continue;
+        LogPrint(BCLog::STARTUP, "    peer %-4d : %8d blocks, avg %8.1f ms\n",
+                 (int)node_id, (int)count, (double)total_us / count / 1000.0);
+    }
+    LogPrint(BCLog::STARTUP, "  [h=%d] frontier wait: %d blocks | avg %.1f ms | max %.1f ms\n",
+             height, (int)g_frontier_count,
+             g_frontier_count ? (double)g_frontier_wait_us / g_frontier_count / 1000.0 : 0.0,
+             (double)g_frontier_max_us / 1000.0);
+}
+
 // Internal stuff
 namespace {
 /** Blocks that are in flight, and that are in the queue to be downloaded. */
@@ -190,6 +231,8 @@ struct QueuedBlock {
     const CBlockIndex* pindex;
     /** Optional, used for CMPCTBLOCK downloads */
     std::unique_ptr<PartiallyDownloadedBlock> partialBlock;
+    /** When this block was marked in flight (for measuring per-peer delivery latency). */
+    std::chrono::microseconds m_requested{0};
 };
 
 /**
@@ -432,6 +475,8 @@ struct CNodeState {
     //! When the first entry in vBlocksInFlight started downloading. Don't care when vBlocksInFlight is empty.
     std::chrono::microseconds m_downloading_since{0us};
     int nBlocksInFlight{0};
+    //! Counts eligible getdata-blocks passes; used to throttle FindNextBlocksToDownload.
+    uint64_t m_find_throttle{0};
     //! Whether we consider this a preferred download peer.
     bool fPreferredDownload{false};
     /** Whether this peer wants invs or cmpctblocks (when possible) for block announcements. */
@@ -884,7 +929,7 @@ private:
      * flight from that peer (to avoid one peer's network traffic from
      * affecting another's state).
      */
-    void RemoveBlockRequest(const uint256& hash, std::optional<NodeId> from_peer) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void RemoveBlockRequest(const uint256& hash, std::optional<NodeId> from_peer, bool received = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     /* Mark a block as in flight
      * Returns false, still setting pit, if the block was already in flight from the same peer
@@ -900,6 +945,30 @@ private:
     void FindNextBlocksToDownload(const Peer& peer, unsigned int count, std::vector<const CBlockIndex*>& vBlocks, NodeId& nodeStaller) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     std::map<uint256, std::pair<NodeId, std::list<QueuedBlock>::iterator> > mapBlocksInFlight GUARDED_BY(cs_main);
+
+    // Fast in-flight membership by block height, mirroring mapBlocksInFlight's membership 1:1 (every
+    // populate/depopulate of the map is applied here too). The candidate scan consults this instead of
+    // the uint256 map::find for heights below INFLIGHT_HEIGHT_TRANSITION — below the reorg zone near the
+    // network tip, so at most one block per height is ever in flight and a bare presence bit is exact.
+    // At/above the transition the scan falls back to hash-keyed IsBlockRequested, where competing blocks
+    // can share a height. Guarded by cs_main.
+    static constexpr int INFLIGHT_HEIGHT_TRANSITION = 2800800; // TESTING value
+    std::vector<bool> m_inflight_by_height GUARDED_BY(cs_main);
+
+    void SetInFlightByHeight(int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        if (height < 0) return;
+        if ((size_t)height >= m_inflight_by_height.size()) m_inflight_by_height.resize(height + 1, false);
+        m_inflight_by_height[height] = true;
+    }
+    void ClearInFlightByHeight(int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        if (height >= 0 && (size_t)height < m_inflight_by_height.size()) m_inflight_by_height[height] = false;
+    }
+    // Membership test used by the candidate scan: bit array below the transition, hash map at/above it.
+    bool IsBlockInFlightForScan(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        if (pindex->nHeight < INFLIGHT_HEIGHT_TRANSITION)
+            return (size_t)pindex->nHeight < m_inflight_by_height.size() && m_inflight_by_height[pindex->nHeight];
+        return IsBlockRequested(pindex->GetBlockHash());
+    }
 
     /** When our tip was last updated. */
     std::atomic<std::chrono::seconds> m_last_tip_update{0s};
@@ -1120,7 +1189,7 @@ bool PeerManagerImpl::IsBlockRequested(const uint256& hash)
     return mapBlocksInFlight.find(hash) != mapBlocksInFlight.end();
 }
 
-void PeerManagerImpl::RemoveBlockRequest(const uint256& hash, std::optional<NodeId> from_peer)
+void PeerManagerImpl::RemoveBlockRequest(const uint256& hash, std::optional<NodeId> from_peer, bool received)
 {
     auto it = mapBlocksInFlight.find(hash);
     if (it == mapBlocksInFlight.end()) {
@@ -1142,6 +1211,21 @@ void PeerManagerImpl::RemoveBlockRequest(const uint256& hash, std::optional<Node
         // First block on the queue was received, update the start download time for the next one
         state->m_downloading_since = std::max(state->m_downloading_since, GetTime<std::chrono::microseconds>());
     }
+    // M2: on a genuine receipt, record this block's in-flight duration under the delivering peer.
+    if (received && g_sync_active && list_it->m_requested.count() != 0) {
+        const int64_t inflight_us = (GetTime<std::chrono::microseconds>() - list_it->m_requested).count();
+        auto& ct = g_frontblock_by_peer[node_id];
+        ct.first++;
+        ct.second += inflight_us;
+        // M4 frontier: if this is the block the connect thread needs next (tip+1), record how long it
+        // was outstanding — that is the wait the connect thread eats on the frontier per block.
+        if (list_it->pindex && list_it->pindex->nHeight == m_chainman.ActiveChain().Height() + 1) {
+            g_frontier_wait_us += inflight_us;
+            g_frontier_count++;
+            if (inflight_us > g_frontier_max_us) g_frontier_max_us = inflight_us;
+        }
+    }
+    if (list_it->pindex) ClearInFlightByHeight(list_it->pindex->nHeight); // mirror: height no longer in flight
     state->vBlocksInFlight.erase(list_it);
 
     state->nBlocksInFlight--;
@@ -1151,6 +1235,7 @@ void PeerManagerImpl::RemoveBlockRequest(const uint256& hash, std::optional<Node
     }
     state->m_stalling_since = 0us;
     mapBlocksInFlight.erase(it);
+    g_blocks_in_flight.store((int)mapBlocksInFlight.size(), std::memory_order_relaxed);
 }
 
 bool PeerManagerImpl::BlockRequested(NodeId nodeid, const CBlockIndex& block, std::list<QueuedBlock>::iterator** pit)
@@ -1173,7 +1258,8 @@ bool PeerManagerImpl::BlockRequested(NodeId nodeid, const CBlockIndex& block, st
     RemoveBlockRequest(hash, std::nullopt);
 
     std::list<QueuedBlock>::iterator it = state->vBlocksInFlight.insert(state->vBlocksInFlight.end(),
-            {&block, std::unique_ptr<PartiallyDownloadedBlock>(pit ? new PartiallyDownloadedBlock(&m_mempool) : nullptr)});
+            {&block, std::unique_ptr<PartiallyDownloadedBlock>(pit ? new PartiallyDownloadedBlock(&m_mempool) : nullptr),
+             GetTime<std::chrono::microseconds>()});
     state->nBlocksInFlight++;
     if (state->nBlocksInFlight == 1) {
         // We're starting a block download (batch) from this peer.
@@ -1181,6 +1267,8 @@ bool PeerManagerImpl::BlockRequested(NodeId nodeid, const CBlockIndex& block, st
         m_peers_downloading_from++;
     }
     itInFlight = mapBlocksInFlight.insert(std::make_pair(hash, std::make_pair(nodeid, it))).first;
+    SetInFlightByHeight(block.nHeight);                       // mirror: block height now in flight
+    g_blocks_in_flight.store((int)mapBlocksInFlight.size(), std::memory_order_relaxed);
     if (pit) {
         *pit = &itInFlight->second.second;
     }
@@ -1304,8 +1392,17 @@ void PeerManagerImpl::UpdateBlockAvailability(NodeId nodeid, const uint256 &hash
 
 void PeerManagerImpl::FindNextBlocksToDownload(const Peer& peer, unsigned int count, std::vector<const CBlockIndex*>& vBlocks, NodeId& nodeStaller)
 {
-    if (count == 0)
+    auto fn_prev = ibd_now();
+    auto fn_stamp = [&fn_prev](std::chrono::steady_clock::duration& b) {
+        auto n = ibd_now();
+        if (IBD_TIMING && g_sync_active) b += n - fn_prev;
+        fn_prev = n;
+    };
+
+    if (count == 0) {
+        fn_stamp(g_fn_entry);
         return;
+    }
 
     vBlocks.reserve(vBlocks.size() + count);
     CNodeState *state = State(peer.m_id);
@@ -1313,8 +1410,11 @@ void PeerManagerImpl::FindNextBlocksToDownload(const Peer& peer, unsigned int co
 
     // Make sure pindexBestKnownBlock is up to date, we'll need it.
     ProcessBlockAvailability(peer.m_id);
+    fn_stamp(g_fn_entry);
 
-    if (state->pindexBestKnownBlock == nullptr || state->pindexBestKnownBlock->nChainWork < m_chainman.ActiveChain().Tip()->nChainWork || state->pindexBestKnownBlock->nChainWork < m_chainman.MinimumChainWork()) {
+    const bool fn_nothing = (state->pindexBestKnownBlock == nullptr || state->pindexBestKnownBlock->nChainWork < m_chainman.ActiveChain().Tip()->nChainWork || state->pindexBestKnownBlock->nChainWork < m_chainman.MinimumChainWork());
+    fn_stamp(g_fn_interest);
+    if (fn_nothing) {
         // This peer has nothing interesting.
         return;
     }
@@ -1324,21 +1424,33 @@ void PeerManagerImpl::FindNextBlocksToDownload(const Peer& peer, unsigned int co
         // Guessing wrong in either direction is not a problem.
         state->pindexLastCommonBlock = m_chainman.ActiveChain()[std::min(state->pindexBestKnownBlock->nHeight, m_chainman.ActiveChain().Height())];
     }
+    fn_stamp(g_fn_bootstrap);
 
     // If the peer reorganized, our previous pindexLastCommonBlock may not be an ancestor
     // of its current tip anymore. Go back enough to fix that.
     state->pindexLastCommonBlock = LastCommonAncestor(state->pindexLastCommonBlock, state->pindexBestKnownBlock);
-    if (state->pindexLastCommonBlock == state->pindexBestKnownBlock)
+    // Advance lastCommon over the contiguous downloaded prefix here (cheaply, every pass) rather than
+    // relying on the walk to do it — so the window keeps sliding even on cheap scans that don't reach it.
+    for (const CBlockIndex* nxt;
+         (nxt = state->pindexBestKnownBlock->GetAncestor(state->pindexLastCommonBlock->nHeight + 1)) != nullptr
+         && nxt->HaveTxsDownloaded();) {
+        state->pindexLastCommonBlock = nxt;
+    }
+    const bool fn_caughtup = (state->pindexLastCommonBlock == state->pindexBestKnownBlock);
+    fn_stamp(g_fn_ancestor);
+    if (fn_caughtup)
         return;
 
-    std::vector<const CBlockIndex*> vToFetch;
-    const CBlockIndex *pindexWalk = state->pindexLastCommonBlock;
     // Never fetch further than the best block we know the peer has, or more than BLOCK_DOWNLOAD_WINDOW + 1 beyond the last
     // linked block we have in common with this peer. The +1 is so we can detect stalling, namely if we would be able to
     // download that next block if the window were 1 larger.
     int nWindowEnd = state->pindexLastCommonBlock->nHeight + BLOCK_DOWNLOAD_WINDOW;
+
+    std::vector<const CBlockIndex*> vToFetch;
+    const CBlockIndex *pindexWalk = state->pindexLastCommonBlock;
     int nMaxHeight = std::min<int>(state->pindexBestKnownBlock->nHeight, nWindowEnd + 1);
     NodeId waitingfor = -1;
+    fn_stamp(g_fn_window);
     while (pindexWalk->nHeight < nMaxHeight) {
         // Read up to 128 (or more, if more blocks than that are needed) successors of pindexWalk (towards
         // pindexBestKnownBlock) into vToFetch. We fetch 128, because CBlockIndex::GetAncestor may be as expensive
@@ -1350,6 +1462,7 @@ void PeerManagerImpl::FindNextBlocksToDownload(const Peer& peer, unsigned int co
         for (unsigned int i = nToFetch - 1; i > 0; i--) {
             vToFetch[i - 1] = vToFetch[i]->pprev;
         }
+        fn_stamp(g_fn_fill);
 
         // Iterate over those blocks in vToFetch (in forward direction), adding the ones that
         // are not yet downloaded and not in flight to vBlocks. In the meantime, update
@@ -1358,16 +1471,19 @@ void PeerManagerImpl::FindNextBlocksToDownload(const Peer& peer, unsigned int co
         for (const CBlockIndex* pindex : vToFetch) {
             if (!pindex->IsValid(BLOCK_VALID_TREE)) {
                 // We consider the chain that this peer is on invalid.
+                fn_stamp(g_fn_scan);
                 return;
             }
             if (!CanServeWitnesses(peer) && DeploymentActiveAt(*pindex, m_chainman, Consensus::DEPLOYMENT_SEGWIT)) {
                 // We wouldn't download this block or its descendants from this peer.
+                fn_stamp(g_fn_scan);
                 return;
             }
             if (pindex->nStatus & BLOCK_HAVE_DATA || m_chainman.ActiveChain().Contains(pindex)) {
                 if (pindex->HaveTxsDownloaded())
                     state->pindexLastCommonBlock = pindex;
-            } else if (!IsBlockRequested(pindex->GetBlockHash())) {
+            } else if (!IsBlockInFlightForScan(pindex)) {   // aversion: height bit array below transition
+            //} else if (!IsBlockRequested(pindex->GetBlockHash())) {   // OLD WAY (map find) — parked for measurement
                 // The block is not already downloaded, and not yet in flight.
                 if (pindex->nHeight > nWindowEnd) {
                     // We reached the end of the window.
@@ -1375,10 +1491,12 @@ void PeerManagerImpl::FindNextBlocksToDownload(const Peer& peer, unsigned int co
                         // We aren't able to fetch anything, but we would be if the download window was one larger.
                         nodeStaller = waitingfor;
                     }
+                    fn_stamp(g_fn_scan);
                     return;
                 }
                 vBlocks.push_back(pindex);
                 if (vBlocks.size() == count) {
+                    fn_stamp(g_fn_scan);
                     return;
                 }
             } else if (waitingfor == -1) {
@@ -1386,6 +1504,7 @@ void PeerManagerImpl::FindNextBlocksToDownload(const Peer& peer, unsigned int co
                 waitingfor = mapBlocksInFlight[pindex->GetBlockHash()].first;
             }
         }
+        fn_stamp(g_fn_scan);
     }
 }
 
@@ -1513,8 +1632,10 @@ void PeerManagerImpl::FinalizeNode(const CNode& node)
         nSyncStarted--;
 
     for (const QueuedBlock& entry : state->vBlocksInFlight) {
+        if (entry.pindex) ClearInFlightByHeight(entry.pindex->nHeight); // mirror: height no longer in flight
         mapBlocksInFlight.erase(entry.pindex->GetBlockHash());
     }
+    g_blocks_in_flight.store((int)mapBlocksInFlight.size(), std::memory_order_relaxed);
     m_orphanage.EraseForPeer(nodeid);
     m_txrequest.DisconnectedPeer(nodeid);
     if (m_txreconciliation) m_txreconciliation->ForgetPeer(nodeid);
@@ -3181,28 +3302,84 @@ void PeerManagerImpl::ProcessGetCFCheckPt(CNode& node, Peer& peer, CDataStream& 
     m_connman.PushMessage(&node, std::move(msg));
 }
 
+extern bool g_sync_active;
+extern std::chrono::steady_clock::duration g_block_wrapper;
 void PeerManagerImpl::ProcessBlock(CNode& node, const std::shared_ptr<const CBlock>& block, bool force_processing, bool min_pow_checked)
 {
     bool new_block{false};
     m_chainman.ProcessNewBlock(block, force_processing, min_pow_checked, &new_block);
+    const auto pb_post = ibd_now();
     if (new_block) {
         node.m_last_block_time = GetTime<std::chrono::seconds>();
         // In case this block came from a different peer than we requested
         // from, we can erase the block request now anyway (as we just stored
         // this block to disk).
         LOCK(cs_main);
-        RemoveBlockRequest(block->GetHash(), std::nullopt);
+        RemoveBlockRequest(block->GetHash(), std::nullopt, /*received=*/true);
     } else {
         LOCK(cs_main);
         mapBlockSource.erase(block->GetHash());
     }
+    if (IBD_TIMING && g_sync_active) g_block_wrapper += std::chrono::steady_clock::now() - pb_post;
 }
+
+extern bool g_sync_active;
+std::chrono::steady_clock::duration g_block_deser{};
+std::chrono::steady_clock::duration g_block_process{};
+std::chrono::steady_clock::duration g_block_wrapper{};
+std::chrono::steady_clock::duration g_pm_getdata{};
+std::chrono::steady_clock::duration g_pm_orphan{};
+std::chrono::steady_clock::duration g_block_pre{};
+std::chrono::steady_clock::duration g_pm_headers{};
+std::chrono::steady_clock::duration g_pm_routing{};
+std::chrono::steady_clock::duration g_hdr_deser{};
+std::chrono::steady_clock::duration g_hdr_process{};
+std::chrono::steady_clock::duration g_hdr_presync{};
+std::chrono::steady_clock::duration g_pm_guards{};
+std::chrono::steady_clock::duration g_pm_poll{};
+std::chrono::steady_clock::duration g_pm_dispatch{};
+std::chrono::steady_clock::duration g_pm_control{};
+std::chrono::steady_clock::duration g_pm_other{};
+std::chrono::steady_clock::duration g_sm_prologue{};
+std::chrono::steady_clock::duration g_sm_addrfetch{};
+std::chrono::steady_clock::duration g_sm_ping{};
+std::chrono::steady_clock::duration g_sm_addr{};
+std::chrono::steady_clock::duration g_sm_sendheaders{};
+std::chrono::steady_clock::duration g_sm_lock{};
+std::chrono::steady_clock::duration g_sm_syncstate{};
+std::chrono::steady_clock::duration g_sm_starthdrs{};
+std::chrono::steady_clock::duration g_sm_announce{};
+std::chrono::steady_clock::duration g_sm_invblocks{};
+std::chrono::steady_clock::duration g_sm_invtx{};
+std::chrono::steady_clock::duration g_sm_pushinv{};
+std::chrono::steady_clock::duration g_sm_stalling{};
+std::chrono::steady_clock::duration g_sm_dltimeout{};
+std::chrono::steady_clock::duration g_sm_hdrtimeout{};
+std::chrono::steady_clock::duration g_sm_eviction{};
+std::chrono::steady_clock::duration g_sm_getdatablocks{};
+std::chrono::steady_clock::duration g_sm_getdatatx{};
+std::chrono::steady_clock::duration g_sm_pushgetdata{};
+std::chrono::steady_clock::duration g_sm_unlock{};
+std::chrono::steady_clock::duration g_sm_feefilter{};
+std::chrono::steady_clock::duration g_gd_gate{};
+std::chrono::steady_clock::duration g_gd_find{};
+std::chrono::steady_clock::duration g_gd_build{};
+std::chrono::steady_clock::duration g_gd_stall{};
 
 void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, CDataStream& vRecv,
                                      const std::chrono::microseconds time_received,
                                      const std::atomic<bool>& interruptMsgProc)
 {
     AssertLockHeld(g_msgproc_mutex);
+    struct MsgOtherGuard {
+        std::chrono::steady_clock::time_point start;
+        const std::string& mt;
+        MsgOtherGuard(const std::string& m) : start(ibd_now()), mt(m) {}
+        ~MsgOtherGuard() {
+            if (IBD_TIMING && g_sync_active && mt != NetMsgType::BLOCK && mt != NetMsgType::HEADERS)
+                g_pm_other += std::chrono::steady_clock::now() - start;
+        }
+    } msg_other_guard{msg_type};
 
     LogPrint(BCLog::NET, "received: %s (%u bytes) peer=%d\n", SanitizeString(msg_type), vRecv.size(), pfrom.GetId());
 
@@ -4440,7 +4617,7 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
                 // process from some other peer.  We do this after calling
                 // ProcessNewBlock so that a malleated cmpctblock announcement
                 // can't be used to interfere with block relay.
-                RemoveBlockRequest(pblock->GetHash(), std::nullopt);
+                RemoveBlockRequest(pblock->GetHash(), std::nullopt, /*received=*/true);
             }
         }
         return;
@@ -4500,7 +4677,7 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
                 // though the block was successfully read, and rely on the
                 // handling in ProcessNewBlock to ensure the block index is
                 // updated, etc.
-                RemoveBlockRequest(resp.blockhash, pfrom.GetId()); // it is now an empty pointer
+                RemoveBlockRequest(resp.blockhash, pfrom.GetId(), /*received=*/true); // it is now an empty pointer
                 fBlockRead = true;
                 // mapBlockSource is used for potentially punishing peers and
                 // updating which peers send us compact blocks, so the race
@@ -4535,6 +4712,9 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         // request we may have sent, and clear out the time of our last request
         peer->m_last_getheaders_timestamp = {};
 
+        if (IBD_TIMING && g_sync_active) g_pm_routing += std::chrono::steady_clock::now() - msg_other_guard.start;
+        const auto hdr0 = ibd_now();
+        auto hdr_prev = hdr0;
         std::vector<CBlockHeader> headers;
 
         // Bypass the normal CBlock deserialization, as we don't want to risk deserializing 2000 full blocks.
@@ -4556,8 +4736,10 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
                 ReadCompactSize(vRecv); // discard trailing vchBlockSig count varint
             }
         }
+        if (IBD_TIMING && g_sync_active) { auto n = ibd_now(); g_hdr_deser += n - hdr_prev; hdr_prev = n; }
 
         ProcessHeadersMessage(pfrom, *peer, std::move(headers), /*via_compact_block=*/false);
+        if (IBD_TIMING && g_sync_active) { auto n = ibd_now(); g_hdr_process += n - hdr_prev; hdr_prev = n; }
 
         // Check if the headers presync progress needs to be reported to validation.
         // This needs to be done without holding the m_headers_presync_mutex lock.
@@ -4572,6 +4754,7 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
                 m_chainman.ReportHeadersPresync(stats.first, stats.second->first, stats.second->second);
             }
         }
+        if (IBD_TIMING && g_sync_active) { auto n = ibd_now(); g_hdr_presync += n - hdr_prev; g_pm_headers += n - hdr0; }
 
         return;
     }
@@ -4585,9 +4768,26 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         }
 
         std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
-        // A received block extends our chain; deserialize its txs in that height's format.
-        g_currentValidatingBlockHeight = m_chainman.ActiveChain().Height() + 1;
+        // Deserialize this block's txs in the format of the block's OWN height,
+        // not the tip's. A deep download window lets blocks arrive far ahead of
+        // the tip, so tip+1 can name the wrong era across the infiniloop->bidha
+        // transition and misparse the per-tx nTime. Peek hashPrevBlock (fixed
+        // offset 4, right after the 4-byte nVersion) without consuming the
+        // stream and take the parent's height + 1; fall back to tip+1 if the
+        // parent isn't indexed yet (rare in IBD, headers lead blocks).
+        int height_for_format = m_chainman.ActiveChain().Height() + 1;
+        if (vRecv.size() >= 36) {
+            uint256 hashPrevBlock(Span<const unsigned char>{reinterpret_cast<const unsigned char*>(vRecv.data()) + 4, 32});
+            LOCK(cs_main);
+            const CBlockIndex* prev = m_chainman.m_blockman.LookupBlockIndex(hashPrevBlock);
+            if (prev) height_for_format = prev->nHeight + 1;
+        }
+        g_currentValidatingBlockHeight = height_for_format;
+        if (IBD_TIMING && g_sync_active) g_pm_routing += std::chrono::steady_clock::now() - msg_other_guard.start;
+        const auto blk_d0 = ibd_now();
         vRecv >> *pblock;
+        if (IBD_TIMING && g_sync_active) g_block_deser += std::chrono::steady_clock::now() - blk_d0;
+        const auto blk_pre0 = ibd_now();
 
         LogPrint(BCLog::NET, "received block %s peer=%d\n", pblock->GetHash().ToString(), pfrom.GetId());
 
@@ -4599,7 +4799,7 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
             // Always process the block if we requested it, since we may
             // need it even when it's not a candidate for a new best tip.
             forceProcessing = IsBlockRequested(hash);
-            RemoveBlockRequest(hash, pfrom.GetId());
+            RemoveBlockRequest(hash, pfrom.GetId(), /*received=*/true);
             // mapBlockSource is only used for punishing peers and setting
             // which peers send us compact blocks, so the race between here and
             // cs_main in ProcessNewBlock is fine.
@@ -4611,7 +4811,10 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
                 min_pow_checked = true;
             }
         }
+        if (IBD_TIMING && g_sync_active) g_block_pre += std::chrono::steady_clock::now() - blk_pre0;
+        const auto blk_p0 = ibd_now();
         ProcessBlock(pfrom, pblock, forceProcessing, min_pow_checked);
+        if (IBD_TIMING && g_sync_active) g_block_process += std::chrono::steady_clock::now() - blk_p0;
         return;
     }
 
@@ -4919,6 +5122,7 @@ bool PeerManagerImpl::MaybeDiscourageAndDisconnect(CNode& pnode, Peer& peer)
 bool PeerManagerImpl::ProcessMessages(CNode* pfrom, std::atomic<bool>& interruptMsgProc)
 {
     AssertLockHeld(g_msgproc_mutex);
+    auto pm_prev = ibd_now();
 
     PeerRef peer = GetPeerRef(pfrom->GetId());
     if (peer == nullptr) return false;
@@ -4929,27 +5133,42 @@ bool PeerManagerImpl::ProcessMessages(CNode* pfrom, std::atomic<bool>& interrupt
             ProcessGetData(*pfrom, *peer, interruptMsgProc);
         }
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pm_getdata += n - pm_prev; pm_prev = n; }
 
     const bool processed_orphan = ProcessOrphanTx(*peer);
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pm_orphan += n - pm_prev; pm_prev = n; }
 
-    if (pfrom->fDisconnect)
+    if (pfrom->fDisconnect) {
+        if (IBD_TIMING && g_sync_active) g_pm_guards += std::chrono::steady_clock::now() - pm_prev;
         return false;
+    }
 
-    if (processed_orphan) return true;
+    if (processed_orphan) {
+        if (IBD_TIMING && g_sync_active) g_pm_guards += std::chrono::steady_clock::now() - pm_prev;
+        return true;
+    }
 
     // this maintains the order of responses
     // and prevents m_getdata_requests to grow unbounded
     {
         LOCK(peer->m_getdata_requests_mutex);
-        if (!peer->m_getdata_requests.empty()) return true;
+        if (!peer->m_getdata_requests.empty()) {
+            if (IBD_TIMING && g_sync_active) g_pm_guards += std::chrono::steady_clock::now() - pm_prev;
+            return true;
+        }
     }
 
     // Don't bother if send buffer is too full to respond anyway
-    if (pfrom->fPauseSend) return false;
+    if (pfrom->fPauseSend) {
+        if (IBD_TIMING && g_sync_active) g_pm_guards += std::chrono::steady_clock::now() - pm_prev;
+        return false;
+    }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pm_guards += n - pm_prev; pm_prev = n; }
 
     auto poll_result{pfrom->PollMessage()};
     if (!poll_result) {
         // No message to process
+        if (IBD_TIMING && g_sync_active) g_pm_poll += std::chrono::steady_clock::now() - pm_prev;
         return false;
     }
 
@@ -4970,9 +5189,11 @@ bool PeerManagerImpl::ProcessMessages(CNode* pfrom, std::atomic<bool>& interrupt
     }
 
     msg.SetVersion(pfrom->GetCommonVersion());
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pm_poll += n - pm_prev; pm_prev = n; }
 
     try {
         ProcessMessage(*pfrom, msg.m_type, msg.m_recv, msg.m_time, interruptMsgProc);
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pm_dispatch += n - pm_prev; pm_prev = n; }
         if (interruptMsgProc) return false;
         {
             LOCK(peer->m_getdata_requests_mutex);
@@ -4989,6 +5210,7 @@ bool PeerManagerImpl::ProcessMessages(CNode* pfrom, std::atomic<bool>& interrupt
     } catch (...) {
         LogPrint(BCLog::NET, "%s(%s, %u bytes): Unknown exception caught\n", __func__, SanitizeString(msg.m_type), msg.m_message_size);
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pm_control += n - pm_prev; pm_prev = n; }
 
     return fMoreWork;
 }
@@ -5427,40 +5649,53 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
 {
     AssertLockHeld(g_msgproc_mutex);
 
+    auto sm_prev = ibd_now();
+    auto sm_stamp = [&sm_prev](std::chrono::steady_clock::duration& b) {
+        auto n = ibd_now();
+        if (IBD_TIMING && g_sync_active) b += n - sm_prev;
+        sm_prev = n;
+    };
+
     PeerRef peer = GetPeerRef(pto->GetId());
-    if (!peer) return false;
+    if (!peer) { sm_stamp(g_sm_prologue); return false; }
     const Consensus::Params& consensusParams = m_chainparams.GetConsensus();
 
     // We must call MaybeDiscourageAndDisconnect first, to ensure that we'll
     // disconnect misbehaving peers even before the version handshake is complete.
-    if (MaybeDiscourageAndDisconnect(*pto, *peer)) return true;
+    if (MaybeDiscourageAndDisconnect(*pto, *peer)) { sm_stamp(g_sm_prologue); return true; }
 
     // Don't send anything until the version handshake is complete
-    if (!pto->fSuccessfullyConnected || pto->fDisconnect)
-        return true;
+    if (!pto->fSuccessfullyConnected || pto->fDisconnect) { sm_stamp(g_sm_prologue); return true; }
 
     // If we get here, the outgoing message serialization version is set and can't change.
     const CNetMsgMaker msgMaker(pto->GetCommonVersion());
 
     const auto current_time{GetTime<std::chrono::microseconds>()};
+    sm_stamp(g_sm_prologue);
 
     if (pto->IsAddrFetchConn() && current_time - pto->m_connected > 10 * AVG_ADDRESS_BROADCAST_INTERVAL) {
         LogPrint(BCLog::NET, "addrfetch connection timeout; disconnecting peer=%d\n", pto->GetId());
         pto->fDisconnect = true;
+        sm_stamp(g_sm_addrfetch);
         return true;
     }
+    sm_stamp(g_sm_addrfetch);
 
     MaybeSendPing(*pto, *peer, current_time);
 
     // MaybeSendPing may have marked peer for disconnection
-    if (pto->fDisconnect) return true;
+    if (pto->fDisconnect) { sm_stamp(g_sm_ping); return true; }
+    sm_stamp(g_sm_ping);
 
     MaybeSendAddr(*pto, *peer, current_time);
+    sm_stamp(g_sm_addr);
 
     MaybeSendSendHeaders(*pto, *peer);
+    sm_stamp(g_sm_sendheaders);
 
     {
         LOCK(cs_main);
+        sm_stamp(g_sm_lock);
 
         CNodeState &state = *State(pto->GetId());
 
@@ -5489,6 +5724,7 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                 sync_blocks_and_headers_from_peer = true;
             }
         }
+        sm_stamp(g_sm_syncstate);
 
         if (!state.fSyncStarted && CanServeBlocks(*peer) && !m_chainman.m_blockman.LoadingBlocks()) {
             // Only actively request headers from a single peer, unless we're close to today.
@@ -5518,6 +5754,7 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                 }
             }
         }
+        sm_stamp(g_sm_starthdrs);
 
         //
         // Try sending block announcements via headers
@@ -5652,6 +5889,7 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
             }
             peer->m_blocks_for_headers_relay.clear();
         }
+        sm_stamp(g_sm_announce);
 
         //
         // Message: inventory
@@ -5671,6 +5909,7 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
             }
             peer->m_blocks_for_inv_relay.clear();
         }
+        sm_stamp(g_sm_invblocks);
 
         if (auto tx_relay = peer->GetTxRelay(); tx_relay != nullptr) {
                 LOCK(tx_relay->m_tx_inventory_mutex);
@@ -5803,8 +6042,10 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                     }
                 }
         }
+        sm_stamp(g_sm_invtx);
         if (!vInv.empty())
             m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::INV, vInv));
+        sm_stamp(g_sm_pushinv);
 
         // Detect whether we're stalling
         auto stalling_timeout = m_block_stalling_timeout.load();
@@ -5820,8 +6061,10 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
             if (stalling_timeout != new_timeout && m_block_stalling_timeout.compare_exchange_strong(stalling_timeout, new_timeout)) {
                 LogPrint(BCLog::NET, "Increased stalling timeout temporarily to %d seconds\n", count_seconds(new_timeout));
             }
+            sm_stamp(g_sm_stalling);
             return true;
         }
+        sm_stamp(g_sm_stalling);
         // In case there is a block that has been in flight from this peer for block_interval * (1 + 0.5 * N)
         // (with N the number of peers from which we're downloading validated blocks), disconnect due to timeout.
         // We compensate for other peers to prevent killing off peers due to our own downstream link
@@ -5833,9 +6076,11 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
             if (current_time > state.m_downloading_since + std::chrono::seconds{consensusParams.GetPowTargetSpacing(m_chainman.ActiveChain().Height())} * (BLOCK_DOWNLOAD_TIMEOUT_BASE + BLOCK_DOWNLOAD_TIMEOUT_PER_PEER * nOtherPeersWithValidatedDownloads)) {
                 LogPrintf("Timeout downloading block %s from peer=%d, disconnecting\n", queuedBlock.pindex->GetBlockHash().ToString(), pto->GetId());
                 pto->fDisconnect = true;
+                sm_stamp(g_sm_dltimeout);
                 return true;
             }
         }
+        sm_stamp(g_sm_dltimeout);
         // Check for headers sync timeouts
         if (state.fSyncStarted && peer->m_headers_sync_timeout < std::chrono::microseconds::max()) {
             // Detect whether this is a stalling initial-headers-sync peer
@@ -5849,6 +6094,7 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                     if (!pto->HasPermission(NetPermissionFlags::NoBan)) {
                         LogPrintf("Timeout downloading headers from peer=%d, disconnecting\n", pto->GetId());
                         pto->fDisconnect = true;
+                        sm_stamp(g_sm_hdrtimeout);
                         return true;
                     } else {
                         LogPrintf("Timeout downloading headers from noban peer=%d, not disconnecting\n", pto->GetId());
@@ -5868,19 +6114,36 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                 peer->m_headers_sync_timeout = std::chrono::microseconds::max();
             }
         }
+        sm_stamp(g_sm_hdrtimeout);
 
         // Check that outbound peers have reasonable chains
         // GetTime() is used by this anti-DoS logic so we can test this using mocktime
         ConsiderEviction(*pto, *peer, GetTime<std::chrono::seconds>());
+        sm_stamp(g_sm_eviction);
 
         //
         // Message: getdata (blocks)
         //
         std::vector<CInv> vGetData;
-        if (CanServeBlocks(*peer) && ((sync_blocks_and_headers_from_peer && !IsLimitedPeer(*peer)) || !m_chainman.ActiveChainstate().IsInitialBlockDownload()) && state.nBlocksInFlight < MAX_BLOCKS_IN_TRANSIT_PER_PEER) {
+        const auto gd_entry = sm_prev;
+        const bool gd_go = CanServeBlocks(*peer) && ((sync_blocks_and_headers_from_peer && !IsLimitedPeer(*peer)) || !m_chainman.ActiveChainstate().IsInitialBlockDownload()) && state.nBlocksInFlight < MAX_BLOCKS_IN_TRANSIT_PER_PEER;
+        // 80% throttle: run the scan every pass while the in-flight window is low (drain), otherwise on
+        // 20% of passes. Caps the candidate-scan cost without starving refill.
+        const int bif = g_blocks_in_flight.load(std::memory_order_relaxed);
+        if (IBD_TIMING && g_sync_active) {   // in-flight landscape, counted every gate pass (off the scan timer)
+            if (bif < 128) g_inflight_hist[0]++;
+            else if (bif < 256) g_inflight_hist[1]++;
+            else if (bif < 512) g_inflight_hist[2]++;
+            else if (bif < 768) g_inflight_hist[3]++;
+            else g_inflight_hist[4]++;
+        }
+        const bool gd_run = state.m_find_throttle++ % 100 < 1;
+        sm_stamp(g_gd_gate);
+        if (gd_go && gd_run) {
             std::vector<const CBlockIndex*> vToDownload;
             NodeId staller = -1;
             FindNextBlocksToDownload(*peer, MAX_BLOCKS_IN_TRANSIT_PER_PEER - state.nBlocksInFlight, vToDownload, staller);
+            sm_stamp(g_gd_find);
             for (const CBlockIndex *pindex : vToDownload) {
                 uint32_t nFetchFlags = GetFetchFlags(*peer);
                 vGetData.push_back(CInv(MSG_BLOCK | nFetchFlags, pindex->GetBlockHash()));
@@ -5888,13 +6151,16 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                 LogPrint(BCLog::NET, "Requesting block %s (%d) peer=%d\n", pindex->GetBlockHash().ToString(),
                     pindex->nHeight, pto->GetId());
             }
+            sm_stamp(g_gd_build);
             if (state.nBlocksInFlight == 0 && staller != -1) {
                 if (State(staller)->m_stalling_since == 0us) {
                     State(staller)->m_stalling_since = current_time;
                     LogPrint(BCLog::NET, "Stall started peer=%d\n", staller);
                 }
             }
+            sm_stamp(g_gd_stall);
         }
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_sm_getdatablocks += n - gd_entry; sm_prev = n; }
 
         //
         // Message: getdata (transactions)
@@ -5921,11 +6187,15 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                 m_txrequest.ForgetTxHash(gtxid.GetHash());
             }
         }
+        sm_stamp(g_sm_getdatatx);
 
 
         if (!vGetData.empty())
             m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::GETDATA, vGetData));
+        sm_stamp(g_sm_pushgetdata);
     } // release cs_main
+    sm_stamp(g_sm_unlock);
     MaybeSendFeefilter(*pto, *peer, current_time);
+    sm_stamp(g_sm_feefilter);
     return true;
 }

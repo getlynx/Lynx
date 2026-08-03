@@ -8,6 +8,7 @@
 #endif
 
 #include <net.h>
+#include <ibd_timing.h>
 
 #include <addrdb.h>
 #include <addrman.h>
@@ -2064,11 +2065,43 @@ void CConnman::OpenNetworkConnection(const CAddress& addrConnect, bool fCountFai
 
 Mutex NetEventsInterface::g_msgproc_mutex;
 
+extern bool g_sync_active;
+std::chrono::steady_clock::duration g_ibd_process{};
+std::chrono::steady_clock::duration g_ibd_send{};
+std::chrono::steady_clock::duration g_send_dispatch{};
+std::chrono::steady_clock::duration g_ibd_wait{};
+std::chrono::steady_clock::duration g_ibd_wait_timeout_time{};
+std::chrono::steady_clock::duration g_ibd_wait_notify_time{};
+int64_t g_ibd_wait_timeout{};
+int64_t g_ibd_wait_notify{};
+int64_t g_park_prewoken{};
+std::chrono::steady_clock::duration g_park_prewoken_time{};
+int64_t g_pass_morework{};
+std::chrono::steady_clock::duration g_ibd_snapshot{};
+std::chrono::steady_clock::duration g_ibd_lock{};
+
+// M1: in-flight occupancy sampled at each park. Tells saturated (pipe full) from starved.
+extern std::atomic<int> g_blocks_in_flight;
+int64_t g_park_inflight_sum{};   // sum of occupancy over all parks
+int64_t g_park_count{};          // number of parks
+int64_t g_park_starved{};        // parks where occupancy was 0
+
+// M1 100K live line + M2 per-peer table, called from UpdateTip every 100K blocks.
+extern void LogFrontblockByPeer(int height);
+void LogParkStats(int height)
+{
+    const double avg = g_park_count ? (double)g_park_inflight_sum / g_park_count : 0.0;
+    LogPrint(BCLog::STARTUP, "  [h=%d] in-flight@park avg %.1f | starved %d | wait %.2fs\n",
+             height, avg, (int)g_park_starved, Ticks<SecondsDouble>(g_ibd_wait));
+    LogFrontblockByPeer(height);
+}
+
 void CConnman::ThreadMessageHandler()
 {
     LOCK(NetEventsInterface::g_msgproc_mutex);
 
     SetSyscallSandboxPolicy(SyscallSandboxPolicy::MESSAGE_HANDLER);
+    auto loop_prev = ibd_now();
     while (!flagInterruptMsgProc)
     {
         bool fMoreWork = false;
@@ -2078,6 +2111,7 @@ void CConnman::ThreadMessageHandler()
             // This prevents attacks in which an attacker exploits having multiple
             // consecutive connections in the m_nodes list.
             const NodesSnapshot snap{*this, /*shuffle=*/true};
+            { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ibd_snapshot += n - loop_prev; loop_prev = n; }
 
             for (CNode* pnode : snap.Nodes()) {
                 if (pnode->fDisconnect)
@@ -2085,11 +2119,14 @@ void CConnman::ThreadMessageHandler()
 
                 // Receive messages
                 bool fMoreNodeWork = m_msgproc->ProcessMessages(pnode, flagInterruptMsgProc);
+                { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ibd_process += n - loop_prev; loop_prev = n; }
                 fMoreWork |= (fMoreNodeWork && !pnode->fPauseSend);
                 if (flagInterruptMsgProc)
                     return;
                 // Send messages
+                { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_send_dispatch += n - loop_prev; }
                 m_msgproc->SendMessages(pnode);
+                { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ibd_send += n - loop_prev; loop_prev = n; }
 
                 if (flagInterruptMsgProc)
                     return;
@@ -2097,8 +2134,18 @@ void CConnman::ThreadMessageHandler()
         }
 
         WAIT_LOCK(mutexMsgProc, lock);
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ibd_lock += n - loop_prev; loop_prev = n; }
         if (!fMoreWork) {
-            condMsgProc.wait_until(lock, std::chrono::steady_clock::now() + std::chrono::milliseconds(100), [this]() EXCLUSIVE_LOCKS_REQUIRED(mutexMsgProc) { return fMsgProcWake; });
+            // M1: sample in-flight occupancy at the moment we decide to park (before waiting).
+            if (IBD_TIMING && g_sync_active) {
+                const int occ = g_blocks_in_flight.load(std::memory_order_relaxed);
+                g_park_inflight_sum += occ; g_park_count++; if (occ == 0) g_park_starved++;
+            }
+            bool prewoken = fMsgProcWake;
+            bool woken = condMsgProc.wait_until(lock, std::chrono::steady_clock::now() + std::chrono::milliseconds(100), [this]() EXCLUSIVE_LOCKS_REQUIRED(mutexMsgProc) { return fMsgProcWake; });
+            { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) { auto d = n - loop_prev; g_ibd_wait += d; if (!woken) { g_ibd_wait_timeout_time += d; g_ibd_wait_timeout++; } else if (prewoken) { g_park_prewoken_time += d; g_park_prewoken++; } else { g_ibd_wait_notify_time += d; g_ibd_wait_notify++; } } loop_prev = n; }
+        } else if (IBD_TIMING && g_sync_active) {
+            g_pass_morework++;
         }
         fMsgProcWake = false;
     }
