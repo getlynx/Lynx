@@ -965,7 +965,12 @@ private:
     }
     // Membership test used by the candidate scan: bit array below the transition, hash map at/above it.
     bool IsBlockInFlightForScan(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
-        if (pindex->nHeight < INFLIGHT_HEIGHT_TRANSITION)
+        // The height-keyed bit array is safe only below the reorg zone near the
+        // tip (where competing blocks can share a height). Use it up to 1000
+        // blocks behind the network tip (best header) and hash-key within that
+        // window. Tip-relative so it follows the chain instead of a fixed height.
+        const int fast_below = m_chainman.m_best_header ? m_chainman.m_best_header->nHeight - 1000 : 0;
+        if (pindex->nHeight < fast_below)
             return (size_t)pindex->nHeight < m_inflight_by_height.size() && m_inflight_by_height[pindex->nHeight];
         return IsBlockRequested(pindex->GetBlockHash());
     }
@@ -6137,7 +6142,7 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
             else if (bif < 768) g_inflight_hist[3]++;
             else g_inflight_hist[4]++;
         }
-        const bool gd_run = state.m_find_throttle++ % 100 < 1;
+        const bool gd_run = !m_chainman.ActiveChainstate().IsInitialBlockDownload() || (state.m_find_throttle++ % 100 < 1);
         sm_stamp(g_gd_gate);
         if (gd_go && gd_run) {
             std::vector<const CBlockIndex*> vToDownload;

@@ -15,6 +15,10 @@ inline constexpr bool IBD_TIMING = true;
 
 // Clock read for the instrumentation only. Real (no syscall elided) when timing
 // is compiled in; a zero time_point when it is not.
+// Defined here (inline) rather than in a node TU so ibd_now() can gate on it
+// from the lower-level consensus library too, without a cross-library symbol.
+inline bool g_sync_active{false};
+
 inline std::chrono::steady_clock::time_point ibd_now()
 {
     if constexpr (IBD_TIMING) return std::chrono::steady_clock::now();

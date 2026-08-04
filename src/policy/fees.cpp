@@ -61,24 +61,6 @@ struct EncodedDoubleFormatter
     }
 };
 
-// Dedicated float formatter (used for confAvg and decay). Same on-disk encoding
-// as EncodedDoubleFormatter (8-byte encoded double), so fee_estimates.dat is
-// format-compatible; only the in-memory value is float.
-struct EncodedFloatFormatter
-{
-    template<typename Stream> void Ser(Stream &s, float v)
-    {
-        s << EncodeDouble(v);
-    }
-
-    template<typename Stream> void Unser(Stream& s, float& v)
-    {
-        uint64_t encoded;
-        s >> encoded;
-        v = DecodeDouble(encoded);
-    }
-};
-
 } // namespace
 
 /**
@@ -99,24 +81,24 @@ private:
     // For each bucket X:
     // Count the total # of txs in each bucket
     // Track the historical moving average of this total over blocks
-    std::vector<float> txCtAvg;
+    std::vector<double> txCtAvg;
 
     // Count the total # of txs confirmed within Y blocks in each bucket
     // Track the historical moving average of these totals over blocks
-    std::vector<std::vector<float>> confAvg; // confAvg[Y][X]
+    std::vector<std::vector<double>> confAvg; // confAvg[Y][X]
 
     // Track moving avg of txs which have been evicted from the mempool
     // after failing to be confirmed within Y blocks
-    std::vector<std::vector<float>> failAvg; // failAvg[Y][X]
+    std::vector<std::vector<double>> failAvg; // failAvg[Y][X]
 
     // Sum the total feerate of all tx's in each bucket
     // Track the historical moving average of this total over blocks
-    std::vector<float> m_feerate_avg;
+    std::vector<double> m_feerate_avg;
 
     // Combine the conf counts with tx counts to calculate the confirmation % for each Y,X
     // Combine the total value with the tx counts to calculate the avg feerate per bucket
 
-    float decay;
+    double decay;
 
     // Resolution (# of blocks) with which confirmations are tracked
     unsigned int scale;
@@ -399,8 +381,8 @@ double TxConfirmStats::EstimateMedianVal(int confTarget, double sufficientTxVal,
         failBucket.leftMempool = failNum;
     }
 
-    float passed_within_target_perc = 0.0;
-    float failed_within_target_perc = 0.0;
+    double passed_within_target_perc = 0.0;
+    double failed_within_target_perc = 0.0;
     if ((passBucket.totalConfirmed + passBucket.inMempool + passBucket.leftMempool)) {
         passed_within_target_perc = 100 * passBucket.withinTarget / (passBucket.totalConfirmed + passBucket.inMempool + passBucket.leftMempool);
     }
@@ -429,12 +411,12 @@ double TxConfirmStats::EstimateMedianVal(int confTarget, double sufficientTxVal,
 
 void TxConfirmStats::Write(AutoFile& fileout) const
 {
-    fileout << Using<EncodedFloatFormatter>(decay);
+    fileout << Using<EncodedDoubleFormatter>(decay);
     fileout << scale;
-    fileout << Using<VectorFormatter<EncodedFloatFormatter>>(m_feerate_avg);
-    fileout << Using<VectorFormatter<EncodedFloatFormatter>>(txCtAvg);
-    fileout << Using<VectorFormatter<VectorFormatter<EncodedFloatFormatter>>>(confAvg);
-    fileout << Using<VectorFormatter<VectorFormatter<EncodedFloatFormatter>>>(failAvg);
+    fileout << Using<VectorFormatter<EncodedDoubleFormatter>>(m_feerate_avg);
+    fileout << Using<VectorFormatter<EncodedDoubleFormatter>>(txCtAvg);
+    fileout << Using<VectorFormatter<VectorFormatter<EncodedDoubleFormatter>>>(confAvg);
+    fileout << Using<VectorFormatter<VectorFormatter<EncodedDoubleFormatter>>>(failAvg);
 }
 
 void TxConfirmStats::Read(AutoFile& filein, int nFileVersion, size_t numBuckets)
@@ -445,7 +427,7 @@ void TxConfirmStats::Read(AutoFile& filein, int nFileVersion, size_t numBuckets)
     size_t maxConfirms, maxPeriods;
 
     // The current version will store the decay with each individual TxConfirmStats and also keep a scale factor
-    filein >> Using<EncodedFloatFormatter>(decay);
+    filein >> Using<EncodedDoubleFormatter>(decay);
     if (decay <= 0 || decay >= 1) {
         throw std::runtime_error("Corrupt estimates file. Decay must be between 0 and 1 (non-inclusive)");
     }
@@ -454,15 +436,15 @@ void TxConfirmStats::Read(AutoFile& filein, int nFileVersion, size_t numBuckets)
         throw std::runtime_error("Corrupt estimates file. Scale must be non-zero");
     }
 
-    filein >> Using<VectorFormatter<EncodedFloatFormatter>>(m_feerate_avg);
+    filein >> Using<VectorFormatter<EncodedDoubleFormatter>>(m_feerate_avg);
     if (m_feerate_avg.size() != numBuckets) {
         throw std::runtime_error("Corrupt estimates file. Mismatch in feerate average bucket count");
     }
-    filein >> Using<VectorFormatter<EncodedFloatFormatter>>(txCtAvg);
+    filein >> Using<VectorFormatter<EncodedDoubleFormatter>>(txCtAvg);
     if (txCtAvg.size() != numBuckets) {
         throw std::runtime_error("Corrupt estimates file. Mismatch in tx count bucket count");
     }
-    filein >> Using<VectorFormatter<VectorFormatter<EncodedFloatFormatter>>>(confAvg);
+    filein >> Using<VectorFormatter<VectorFormatter<EncodedDoubleFormatter>>>(confAvg);
     maxPeriods = confAvg.size();
     maxConfirms = scale * maxPeriods;
 
@@ -475,7 +457,7 @@ void TxConfirmStats::Read(AutoFile& filein, int nFileVersion, size_t numBuckets)
         }
     }
 
-    filein >> Using<VectorFormatter<VectorFormatter<EncodedFloatFormatter>>>(failAvg);
+    filein >> Using<VectorFormatter<VectorFormatter<EncodedDoubleFormatter>>>(failAvg);
     if (maxPeriods != failAvg.size()) {
         throw std::runtime_error("Corrupt estimates file. Mismatch in confirms tracked for failures");
     }

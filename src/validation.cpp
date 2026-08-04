@@ -1764,7 +1764,6 @@ static SteadyClock::duration time_headers{};
 static void LogIBDComponentTimes();
 std::chrono::steady_clock::time_point g_sync_start{};
 std::chrono::steady_clock::time_point g_sync_end{};
-bool g_sync_active{false};
 std::chrono::steady_clock::duration g_pnb_check{};
 std::chrono::steady_clock::duration g_pnb_accept{};
 std::chrono::steady_clock::duration g_sbd_header{};
@@ -2401,6 +2400,12 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     }
 
     if (SyncNoVerify()) fScriptChecks = false;
+    // Re-enable script (tx signature) verification for the last 1000 blocks
+    // before the network tip even when sync-skipping, so the tip we land on is
+    // fully verified while the deep history stays skipped.
+    if (m_chainman.m_best_header && pindex->nHeight + 1000 >= m_chainman.m_best_header->nHeight) {
+        fScriptChecks = true;
+    }
     if (pindex->nHeight % 100000 == 0) {
         const uint256 av = m_chainman.AssumedValidBlock();
         auto it = m_blockman.m_block_index.find(av);
@@ -3493,7 +3498,7 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
     std::shared_ptr<const CBlock> pthisBlock;
     if (!pblock) {
         std::shared_ptr<CBlock> pblockNew = std::make_shared<CBlock>();
-        if (!m_blockman.ReadBlockFromDisk(*pblockNew, *pindexNew, /*cached=*/true)) {
+        if (!m_blockman.ReadBlockFromDisk(*pblockNew, *pindexNew, /*cached=*/IsInitialBlockDownload())) {
             return AbortNode(state, "Failed to read block");
         }
         pthisBlock = pblockNew;
@@ -4243,7 +4248,7 @@ bool CheckBlockSignature(const CBlock& block)
     return false;
 }
 
-bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW, bool fCheckMerkleRoot)
+bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSignature)
 {
     // These are checks that are independent of context.
 
@@ -4306,6 +4311,9 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
 	        return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-missing", "coinstake in wrong position");
         }
         { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ss_loop += n - ss_prev; ss_prev = n; }
+        if (fCheckSignature && !CheckBlockSignature(block)) {
+            return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-blk-signature", "bad block signature");
+        }
         { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ss_sig += n - ss_prev; ss_prev = n; }
 
         if (!CheckCoinStakeTimestamp(block.GetBlockTime())) {
@@ -4762,7 +4770,12 @@ bool Chainstate::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, BlockV
 
     { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_sbd_header += n - sbd_prev; sbd_prev = n; }
     g_currentValidatingBlockHeight = pindex->nHeight;
-    if (!CheckBlock(block, state, params.GetConsensus()) ||
+    // Verify the block signature outside IBD, and for the last 1000 blocks
+    // before the network tip (best known header) even during IBD, so the tip of
+    // the chain we land on is signature-checked while the deep history is not.
+    const bool check_block_sig = !IsInitialBlockDownload() ||
+        (m_chainman.m_best_header && pindex->nHeight + 1000 >= m_chainman.m_best_header->nHeight);
+    if (!CheckBlock(block, state, params.GetConsensus(), /*fCheckPOW=*/true, /*fCheckMerkleRoot=*/true, /*fCheckSignature=*/check_block_sig) ||
         !ContextualCheckBlock(block, state, m_chainman, pindex->pprev)) {
         if (state.IsInvalid() && state.GetResult() != BlockValidationResult::BLOCK_MUTATED) {
             pindex->nStatus |= BLOCK_FAILED_VALID;
@@ -4823,7 +4836,7 @@ bool ChainstateManager::ProcessNewBlock(const std::shared_ptr<const CBlock>& blo
         // https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2019-February/016697.html.  Because CheckBlock() is
         // not very expensive, the anti-DoS benefits of caching failure (of a definitely-invalid block) are not substantial.
         g_currentValidatingBlockHeight = 0;
-        bool ret = CheckBlock(*block, state, GetConsensus());
+        bool ret = CheckBlock(*block, state, GetConsensus(), /*fCheckPOW=*/true, /*fCheckMerkleRoot=*/true, /*fCheckSignature=*/!ActiveChainstate().IsInitialBlockDownload());
         { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pnb_check += n - pnb_prev; pnb_prev = n; }
         if (ret) {
             // Store to disk
