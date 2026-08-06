@@ -122,9 +122,19 @@ private:
      */
     void FindFilesToPrune(std::set<int>& setFilesToPrune, uint64_t nPruneAfterHeight, int chain_tip_height, int prune_height, bool is_ibd);
 
-    RecursiveMutex cs_LastBlockFile;
+    mutable RecursiveMutex cs_LastBlockFile;
     std::vector<CBlockFileInfo> m_blockfile_info;
     int m_last_blockfile = 0;
+    //! Cached append handle for the current block file, so WriteBlockToDisk does not
+    //! reopen the file for every block. Closed on rollover and in FlushBlockFile.
+    mutable FILE* m_block_write_file GUARDED_BY(cs_LastBlockFile) {nullptr};
+    mutable int m_block_write_file_num GUARDED_BY(cs_LastBlockFile) {-1};
+    //! Cached append handle for the current undo (rev) file, same pattern as the block handle.
+    mutable FILE* m_undo_write_file GUARDED_BY(cs_LastBlockFile) {nullptr};
+    mutable int m_undo_write_file_num GUARDED_BY(cs_LastBlockFile) {-1};
+    //! Cached read handle for the connect-thread block read (cached=true path only).
+    mutable FILE* m_block_read_file GUARDED_BY(cs_LastBlockFile) {nullptr};
+    mutable int m_block_read_file_num GUARDED_BY(cs_LastBlockFile) {-1};
     /** Global flag to indicate we should check to see if there are
      *  block/undo files that should be deleted.  Set on startup
      *  or if we allocate more file space when we're in prune mode
@@ -240,8 +250,8 @@ public:
     void UnlinkPrunedFiles(const std::set<int>& setFilesToPrune) const;
 
     /** Functions for disk access for blocks */
-    bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos) const;
-    bool ReadBlockFromDisk(CBlock& block, const CBlockIndex& index) const;
+    bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, bool cached = false) const;
+    bool ReadBlockFromDisk(CBlock& block, const CBlockIndex& index, bool cached = false) const;
     bool ReadRawBlockFromDisk(std::vector<uint8_t>& block, const FlatFilePos& pos, const CMessageHeader::MessageStartChars& message_start) const;
 
     bool UndoReadFromDisk(CBlockUndo& blockundo, const CBlockIndex& index) const;

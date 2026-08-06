@@ -3012,15 +3012,15 @@ static void UpdateTipLog(
 {
 
     AssertLockHeld(::cs_main);
-    LogPrintf("%s%s: new best=%s height=%d version=0x%08x log2_work=%f tx=%lu date='%s' progress=%f cache=%.1fMiB(%utxo)%s\n",
-        prefix, func_name,
-        tip->GetBlockHash().ToString(), tip->nHeight, tip->nVersion,
-        log(tip->nChainWork.getdouble()) / log(2.0), (unsigned long)tip->nChainTx,
-        FormatISO8601DateTime(tip->GetBlockTime()),
-        GuessVerificationProgress(params.TxData(), tip),
-        coins_tip.DynamicMemoryUsage() * (1.0 / (1 << 20)),
-        coins_tip.GetCacheSize(),
-        !warning_messages.empty() ? strprintf(" warning='%s'", warning_messages) : "");
+    // LogPrintf("%s%s: new best=%s height=%d version=0x%08x log2_work=%f tx=%lu date='%s' progress=%f cache=%.1fMiB(%utxo)%s\n",
+    //     prefix, func_name,
+    //     tip->GetBlockHash().ToString(), tip->nHeight, tip->nVersion,
+    //     log(tip->nChainWork.getdouble()) / log(2.0), (unsigned long)tip->nChainTx,
+    //     FormatISO8601DateTime(tip->GetBlockTime()),
+    //     GuessVerificationProgress(params.TxData(), tip),
+    //     coins_tip.DynamicMemoryUsage() * (1.0 / (1 << 20)),
+    //     coins_tip.GetCacheSize(),
+    //     !warning_messages.empty() ? strprintf(" warning='%s'", warning_messages) : "");
 }
 
 void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
@@ -3086,18 +3086,7 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             }
         }
     }
-    // Emit ~100 evenly spaced "new best" lines across the sync instead of one
-    // per block: fire every UPDATETIP_LOG_INTERVAL blocks (~network tip / 100),
-    // equally spaced from height 0. A fixed compile-time interval means no
-    // runtime tip lookup and no dependency on the block-download side. The added
-    // per-block cost is a single integer modulo (same class as the % 100000
-    // tiling check just above) plus ~100 LogPrintf calls total, versus the
-    // original code that logged every block under this same lock — so there is
-    // no measurable effect on sync time.
-    static const int UPDATETIP_LOG_INTERVAL = 28000; // ~= network tip / 100; bump per chain
-    if (pindexNew->nHeight % UPDATETIP_LOG_INTERVAL == 0) {
-        UpdateTipLog(coins_tip, pindexNew, params, __func__, "", warning_messages.original);
-    }
+    UpdateTipLog(coins_tip, pindexNew, params, __func__, "", warning_messages.original);
 
     // The idea here is to reduce the number of writes to the debug log.
     // The BlockStatistics output printed after each UpdateTip gets a bit noisy, 
