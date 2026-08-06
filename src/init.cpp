@@ -1791,9 +1791,35 @@ node.scheduler->scheduleEvery([&node] {
             return InitError(*error);
         }
 
-        g_txindex = std::make_unique<TxIndex>(interfaces::MakeChain(node), cache_sizes.tx_index, false, fReindex);
-        if (!g_txindex->Start()) {
-            return false;
+        // Build the transaction index, but defer it past a pending initial sync.
+        // Its background ThreadSync reads every block and writes a fresh LevelDB;
+        // run concurrently with IBD it contends for the disk the (disk-bound) sync
+        // is bottlenecked on (~9% slower, measured). So if a sync is pending, start
+        // it only once IBD completes, from the scheduler thread -- the safe context
+        // Start() needs (it registers a validation interface and spawns a thread).
+        // If already synced, build immediately as before. Either way txindex ends
+        // up enabled and built; nothing here runs on the block-connect path.
+        auto build_txindex = [&node, tx_cache = cache_sizes.tx_index, fReindex]() -> bool {
+            auto idx = std::make_unique<TxIndex>(interfaces::MakeChain(node), tx_cache, false, fReindex);
+            if (!idx->Start()) return false;
+            g_txindex = std::move(idx); // publish the global handle only once fully started
+            return true;
+        };
+
+        if (!chainman.ActiveChainstate().IsInitialBlockDownload()) {
+            if (!build_txindex()) {
+                return false;
+            }
+        } else {
+            LogPrintf("txindex: deferring build until the initial block sync completes\n");
+            node.scheduler->scheduleEvery([&node, build_txindex]() {
+                if (g_txindex) return; // built already; one-shot guard (scheduleEvery has no self-cancel)
+                if (node.chainman->ActiveChainstate().IsInitialBlockDownload()) return; // still syncing
+                LogPrintf("txindex: initial sync complete -- starting background build\n");
+                if (!build_txindex()) {
+                    LogPrintf("txindex: failed to start background build; will retry\n");
+                }
+            }, std::chrono::seconds{10});
         }
     }
 
