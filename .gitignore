@@ -96,3 +96,7 @@ deps/
 src/test/.deps/
 contrib/installer/MULTI_CHAIN_PLAN.md
 contrib/installer/docs-spark-page.md
+# Private chain-spec reference for unreleased chains. compile.sh no longer reads it —
+# the buildable chain list comes from src/kernel/chainparams.cpp — and it must never be
+# published, since it carries the parameters for chains that have not been released.
+contrib/compiler/grunge.txt
