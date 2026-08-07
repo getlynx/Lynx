@@ -1,4 +1,4 @@
-# Lynx Blockchain Builder
+# Lynx Data Storage Network (LDSN) Compiler
 
 This directory contains `compile.sh` — a self-contained build script that compiles the
 Lynx Core daemon, CLI, and transaction tool from source for any chain defined in the
@@ -315,5 +315,5 @@ The summary lists each chain with ✅ or ❌; check the log for the failing chai
 
 | File | Description |
 | --- | --- |
-| `compile.sh` | The builder. Self-contained; no other files from this directory are needed at runtime. |
+| `compile.sh` | The LDSN Compiler. Self-contained; no other files from this directory are needed at runtime. |
 | `README.md` | This document. |

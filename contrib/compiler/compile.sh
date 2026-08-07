@@ -23,7 +23,7 @@ set -e
 #   directory it was launched from). The loose binaries are deleted once zipped, so the
 #   archives are the only artifacts left behind.
 
-echo "🚀 Starting the Lynx Blockchain Builder..."
+echo "🚀 Starting the Lynx Data Storage Network (LDSN) Compiler..."
 
 # Require root on the target VPS.
 if [ "${EUID:-$(id -u)}" -ne 0 ]; then
@@ -819,7 +819,7 @@ if kill -0 "$PID" 2>/dev/null; then
     kill -KILL -- "-$PGID"
 fi
 rm -f "$PID_FILE"
-echo "✅ Build stopped. Re-run the builder script to start a new batch."
+echo "✅ Build stopped. Re-run the LDSN Compiler to start a new batch."
 STOPSCRIPT
 chmod 755 "$BIN_DIR/chain-build-stop"
 # Ignore HUP in the PARENT before forking: the subshell inherits the ignore from
