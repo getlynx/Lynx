@@ -2025,7 +2025,7 @@ static RPCHelpMan auth()
         }
 
         // Sleep
-        sleep (intSleep);
+	sleep (intSleep);
 
         // Exit
         return unvResults;
@@ -2057,7 +2057,7 @@ static RPCHelpMan auth()
             }
 
             // Sleep
-            sleep (intSleep);
+            // sleep (intSleep);
 
             // Exit
             return unvResults;

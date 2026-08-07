@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <txmempool.h>
+#include <ibd_timing.h>
 
 #include <chain.h>
 #include <chainparams.h>
@@ -619,9 +620,16 @@ void CTxMemPool::removeConflicts(const CTransaction &tx)
 /**
  * Called when a block is connected. Removes from mempool and updates the miner fee estimator.
  */
-void CTxMemPool::removeForBlock(const std::vector<CTransactionRef>& vtx, unsigned int nBlockHeight)
+extern bool g_sync_active;
+std::chrono::steady_clock::duration g_rfb_gather{};
+std::chrono::steady_clock::duration g_rfb_policy{};
+std::chrono::steady_clock::duration g_rfb_remove{};
+std::chrono::steady_clock::duration g_rfb_tail{};
+
+void CTxMemPool::removeForBlock(const std::vector<CTransactionRef>& vtx, unsigned int nBlockHeight, bool ibd)
 {
     AssertLockHeld(cs);
+    auto rfb_prev = ibd_now();
     std::vector<const CTxMemPoolEntry*> entries;
     for (const auto& tx : vtx)
     {
@@ -631,8 +639,12 @@ void CTxMemPool::removeForBlock(const std::vector<CTransactionRef>& vtx, unsigne
         if (i != mapTx.end())
             entries.push_back(&*i);
     }
-    // Before the txs in the new block have been removed from the mempool, update policy estimates
-    if (minerPolicyEstimator) {minerPolicyEstimator->processBlock(nBlockHeight, entries);}
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_rfb_gather += n - rfb_prev; rfb_prev = n; }
+    // Before the txs in the new block have been removed from the mempool, update policy estimates.
+    // During IBD the mempool is empty (loose txs are rejected until synced, net_processing TX gate),
+    // so entries is always empty and processBlock would only decay all-zero averages — skip it.
+    if (minerPolicyEstimator && !ibd) {minerPolicyEstimator->processBlock(nBlockHeight, entries);}
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_rfb_policy += n - rfb_prev; rfb_prev = n; }
     for (const auto& tx : vtx)
     {
         txiter it = mapTx.find(tx->GetHash());
@@ -644,8 +656,10 @@ void CTxMemPool::removeForBlock(const std::vector<CTransactionRef>& vtx, unsigne
         removeConflicts(*tx);
         ClearPrioritisation(tx->GetHash());
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_rfb_remove += n - rfb_prev; rfb_prev = n; }
     lastRollingFeeUpdate = GetTime();
     blockSinceLastRollingFeeBump = true;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_rfb_tail += n - rfb_prev; rfb_prev = n; }
 }
 
 void CTxMemPool::check(const CCoinsViewCache& active_coins_tip, int64_t spendheight) const

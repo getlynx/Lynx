@@ -15,6 +15,14 @@
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
+
+#include <ibd_timing.h>
+
+bool g_verify_timing_active{false};
+std::chrono::steady_clock::duration g_v_pubparse{};
+std::chrono::steady_clock::duration g_v_sigparse{};
+std::chrono::steady_clock::duration g_v_ecdsa{};
 
 namespace {
 
@@ -259,18 +267,23 @@ std::optional<std::pair<XOnlyPubKey, bool>> XOnlyPubKey::CreateTapTweak(const ui
 bool CPubKey::Verify(const uint256 &hash, const std::vector<unsigned char>& vchSig) const {
     if (!IsValid())
         return false;
+    auto v_prev = ibd_now();
     secp256k1_pubkey pubkey;
     secp256k1_ecdsa_signature sig;
     if (!secp256k1_ec_pubkey_parse(secp256k1_context_static, &pubkey, vch, size())) {
         return false;
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_verify_timing_active) g_v_pubparse += n - v_prev; v_prev = n; }
     if (!ecdsa_signature_parse_der_lax(&sig, vchSig.data(), vchSig.size())) {
         return false;
     }
     /* libsecp256k1's ECDSA verification requires lower-S signatures, which have
      * not historically been enforced in Bitcoin, so normalize them first. */
     secp256k1_ecdsa_signature_normalize(secp256k1_context_static, &sig, &sig);
-    return secp256k1_ecdsa_verify(secp256k1_context_static, &sig, hash.begin(), &pubkey);
+    { auto n = ibd_now(); if (IBD_TIMING && g_verify_timing_active) g_v_sigparse += n - v_prev; v_prev = n; }
+    bool ok = secp256k1_ecdsa_verify(secp256k1_context_static, &sig, hash.begin(), &pubkey);
+    { auto n = ibd_now(); if (IBD_TIMING && g_verify_timing_active) g_v_ecdsa += n - v_prev; }
+    return ok;
 }
 
 bool CPubKey::RecoverCompact(const uint256 &hash, const std::vector<unsigned char>& vchSig) {

@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <node/blockstorage.h>
+#include <ibd_timing.h>
 
 #include <chain.h>
 #include <clientversion.h>
@@ -23,7 +24,25 @@
 #include <validation.h>
 
 #include <map>
+#include <unistd.h>
 #include <unordered_map>
+
+
+extern bool g_sync_active;
+std::chrono::steady_clock::duration g_wbf_serialize{};
+std::chrono::steady_clock::duration g_wbf_findpos{};
+std::chrono::steady_clock::duration g_wbf_write{};
+std::chrono::steady_clock::duration g_wtd_open{};
+std::chrono::steady_clock::duration g_rd_open{};
+std::chrono::steady_clock::duration g_wtd_header{};
+std::chrono::steady_clock::duration g_wtd_block{};
+std::chrono::steady_clock::duration g_wu_findpos{};
+std::chrono::steady_clock::duration g_wu_write{};
+std::chrono::steady_clock::duration g_wu_rest{};
+std::chrono::steady_clock::duration g_uw_open{};
+std::chrono::steady_clock::duration g_uw_header{};
+std::chrono::steady_clock::duration g_uw_data{};
+std::chrono::steady_clock::duration g_uw_checksum{};
 
 namespace node {
 std::atomic_bool fReindex(false);
@@ -463,29 +482,49 @@ CBlockFileInfo* BlockManager::GetBlockFileInfo(size_t n)
 
 bool BlockManager::UndoWriteToDisk(const CBlockUndo& blockundo, FlatFilePos& pos, const uint256& hashBlock, const CMessageHeader::MessageStartChars& messageStart) const
 {
-    // Open history file to append
-    AutoFile fileout{OpenUndoFile(pos)};
-    if (fileout.IsNull()) {
+    auto uw_prev = ibd_now();
+    LOCK(cs_LastBlockFile);
+    // Reuse the cached append handle across blocks; reopen only when the undo file
+    // rolls over to a new number. Mirrors WriteBlockToDisk, avoiding an open/close per block.
+    if (m_undo_write_file_num != pos.nFile) {
+        if (m_undo_write_file) { fclose(m_undo_write_file); m_undo_write_file = nullptr; }
+        m_undo_write_file = OpenUndoFile(pos);
+        m_undo_write_file_num = (m_undo_write_file != nullptr) ? pos.nFile : -1;
+    }
+    if (m_undo_write_file == nullptr) {
         return error("%s: OpenUndoFile failed", __func__);
     }
+    // On a reused handle the position is wherever the last write left it, so seek explicitly.
+    if (fseek(m_undo_write_file, pos.nPos, SEEK_SET) != 0) {
+        fclose(m_undo_write_file); m_undo_write_file = nullptr; m_undo_write_file_num = -1;
+        return error("%s: fseek failed", __func__);
+    }
+    AutoFile fileout{m_undo_write_file};
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_uw_open += n - uw_prev; uw_prev = n; }
 
     // Write index header
     unsigned int nSize = GetSerializeSize(blockundo, CLIENT_VERSION);
     fileout << messageStart << nSize;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_uw_header += n - uw_prev; uw_prev = n; }
 
     // Write undo data
     long fileOutPos = ftell(fileout.Get());
     if (fileOutPos < 0) {
+        fileout.fclose(); m_undo_write_file = nullptr; m_undo_write_file_num = -1;
         return error("%s: ftell failed", __func__);
     }
     pos.nPos = (unsigned int)fileOutPos;
     fileout << blockundo;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_uw_data += n - uw_prev; uw_prev = n; }
 
     // calculate & write checksum
     HashWriter hasher{};
     hasher << hashBlock;
     hasher << blockundo;
     fileout << hasher.GetHash();
+    fflush(fileout.Get());  // push to the OS buffer (matches the durability of the prior per-block fclose)
+    fileout.release();      // keep the handle open in the cache; do not close it here
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_uw_checksum += n - uw_prev; }
 
     return true;
 }
@@ -525,6 +564,9 @@ bool BlockManager::UndoReadFromDisk(CBlockUndo& blockundo, const CBlockIndex& in
 
 void BlockManager::FlushUndoFile(int block_file, bool finalize)
 {
+    LOCK(cs_LastBlockFile);
+    // Close the cached undo write handle so its buffered data reaches the OS before we fsync.
+    if (m_undo_write_file) { fclose(m_undo_write_file); m_undo_write_file = nullptr; m_undo_write_file_num = -1; }
     FlatFilePos undo_pos_old(block_file, m_blockfile_info[block_file].nUndoSize);
     if (!UndoFileSeq().Flush(undo_pos_old, finalize)) {
         AbortNode("Flushing undo file to disk failed. This is likely the result of an I/O error.");
@@ -534,6 +576,11 @@ void BlockManager::FlushUndoFile(int block_file, bool finalize)
 void BlockManager::FlushBlockFile(bool fFinalize, bool finalize_undo)
 {
     LOCK(cs_LastBlockFile);
+
+    // Close the cached write handle so its buffered data reaches the OS before we
+    // fsync below, and so a finalized/rolled block file is not left held open.
+    if (m_block_write_file) { fclose(m_block_write_file); m_block_write_file = nullptr; m_block_write_file_num = -1; }
+    if (m_block_read_file) { fclose(m_block_read_file); m_block_read_file = nullptr; m_block_read_file_num = -1; }
 
     if (m_blockfile_info.size() < 1) {
         // Return if we haven't loaded any blockfiles yet. This happens during
@@ -693,11 +740,25 @@ bool BlockManager::FindUndoPos(BlockValidationState& state, int nFile, FlatFileP
 
 bool BlockManager::WriteBlockToDisk(const CBlock& block, FlatFilePos& pos, const CMessageHeader::MessageStartChars& messageStart) const
 {
-    // Open history file to append
-    CAutoFile fileout(OpenBlockFile(pos), SER_DISK, CLIENT_VERSION);
-    if (fileout.IsNull()) {
+    auto wtd_prev = ibd_now();
+    LOCK(cs_LastBlockFile);
+    // Reuse the cached append handle across blocks; reopen only when the block file
+    // rolls over to a new number. This avoids an open/close syscall pair per block.
+    if (m_block_write_file_num != pos.nFile) {
+        if (m_block_write_file) { fclose(m_block_write_file); m_block_write_file = nullptr; }
+        m_block_write_file = OpenBlockFile(pos, false);
+        m_block_write_file_num = (m_block_write_file != nullptr) ? pos.nFile : -1;
+    }
+    if (m_block_write_file == nullptr) {
         return error("WriteBlockToDisk: OpenBlockFile failed");
     }
+    // On a reused handle the position is wherever the last write left it, so seek explicitly.
+    if (fseek(m_block_write_file, pos.nPos, SEEK_SET) != 0) {
+        fclose(m_block_write_file); m_block_write_file = nullptr; m_block_write_file_num = -1;
+        return error("WriteBlockToDisk: fseek failed");
+    }
+    CAutoFile fileout(m_block_write_file, SER_DISK, CLIENT_VERSION);
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_wtd_open += n - wtd_prev; wtd_prev = n; }
 
     // Write index header
     unsigned int nSize = GetSerializeSize(block, fileout.GetVersion());
@@ -706,10 +767,15 @@ bool BlockManager::WriteBlockToDisk(const CBlock& block, FlatFilePos& pos, const
     // Write block
     long fileOutPos = ftell(fileout.Get());
     if (fileOutPos < 0) {
+        fileout.fclose(); m_block_write_file = nullptr; m_block_write_file_num = -1;
         return error("WriteBlockToDisk: ftell failed");
     }
     pos.nPos = (unsigned int)fileOutPos;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_wtd_header += n - wtd_prev; wtd_prev = n; }
     fileout << block;
+    fflush(fileout.Get());  // push to the OS buffer (matches the durability of the prior per-block fclose)
+    fileout.release();      // keep the handle open in the cache; do not close it here
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_wtd_block += n - wtd_prev; }
 
     return true;
 }
@@ -719,13 +785,16 @@ bool BlockManager::WriteUndoDataForBlock(const CBlockUndo& blockundo, BlockValid
     AssertLockHeld(::cs_main);
     // Write undo information to disk
     if (block.GetUndoPos().IsNull()) {
+        auto wu_prev = ibd_now();
         FlatFilePos _pos;
         if (!FindUndoPos(state, block.nFile, _pos, ::GetSerializeSize(blockundo, CLIENT_VERSION) + 40)) {
             return error("ConnectBlock(): FindUndoPos failed");
         }
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_wu_findpos += n - wu_prev; wu_prev = n; }
         if (!UndoWriteToDisk(blockundo, _pos, block.pprev->GetBlockHash(), GetParams().MessageStart())) {
             return AbortNode(state, "Failed to write undo data");
         }
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_wu_write += n - wu_prev; wu_prev = n; }
         // rev files are written in block height order, whereas blk files are written as blocks come in (often out of order)
         // we want to flush the rev (undo) file once we've written the last block, which is indicated by the last height
         // in the block file info as below; note that this does not catch the case where the undo writes are keeping up
@@ -739,26 +808,71 @@ bool BlockManager::WriteUndoDataForBlock(const CBlockUndo& blockundo, BlockValid
         block.nUndoPos = _pos.nPos;
         block.nStatus |= BLOCK_HAVE_UNDO;
         m_dirty_blockindex.insert(&block);
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_wu_rest += n - wu_prev; }
     }
 
     return true;
 }
 
-bool BlockManager::ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos) const
+bool BlockManager::ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, bool cached) const
 {
     block.SetNull();
 
-    // Open history file to read
-    CAutoFile filein(OpenBlockFile(pos, true), SER_DISK, CLIENT_VERSION);
-    if (filein.IsNull()) {
-        return error("ReadBlockFromDisk: OpenBlockFile failed for %s", pos.ToString());
-    }
+    if (cached) {
+        // Persistent per-thread fd, read via pread. pread reads straight from the OS at the given
+        // offset: no stdio read buffer (so it can never serve stale bytes the way a reused FILE*
+        // did) and no shared seek position (so it is safe across threads and across the growing
+        // file). We keep a FILE* only to own the fd's lifetime; we never fread/fseek it. Reopen
+        // only on a block-file-number change.
+        thread_local FILE* t_read_file = nullptr;
+        thread_local int   t_read_file_num = -1;
+        auto ro_prev = ibd_now();
+        if (t_read_file_num != pos.nFile) {
+            if (t_read_file) fclose(t_read_file);
+            t_read_file = OpenBlockFile(pos, true);
+            t_read_file_num = (t_read_file != nullptr) ? pos.nFile : -1;
+        }
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_rd_open += n - ro_prev; }
+        if (t_read_file == nullptr) {
+            return error("ReadBlockFromDisk: OpenBlockFile failed for %s", pos.ToString());
+        }
+        const int fd = fileno(t_read_file);
+        // The 8-byte meta header ([4]magic [4]size) precedes the block data at pos.nPos, so the
+        // serialized block length is the little-endian uint32 at pos.nPos - 4 (cf. ReadRawBlockFromDisk).
+        unsigned char szbuf[4];
+        if (::pread(fd, szbuf, sizeof(szbuf), (off_t)pos.nPos - 4) != (ssize_t)sizeof(szbuf)) {
+            fclose(t_read_file); t_read_file = nullptr; t_read_file_num = -1;
+            return error("ReadBlockFromDisk: pread size failed for %s", pos.ToString());
+        }
+        const uint32_t blk_size = (uint32_t)szbuf[0] | ((uint32_t)szbuf[1] << 8) |
+                                  ((uint32_t)szbuf[2] << 16) | ((uint32_t)szbuf[3] << 24);
+        if (blk_size == 0 || blk_size > MAX_SIZE) {
+            return error("ReadBlockFromDisk: bad block size %u for %s", blk_size, pos.ToString());
+        }
+        std::vector<uint8_t> buf(blk_size);
+        if (::pread(fd, buf.data(), blk_size, (off_t)pos.nPos) != (ssize_t)blk_size) {
+            fclose(t_read_file); t_read_file = nullptr; t_read_file_num = -1;
+            return error("ReadBlockFromDisk: pread block failed for %s", pos.ToString());
+        }
+        try {
+            CDataStream ds(buf, SER_DISK, CLIENT_VERSION);
+            ds >> block;
+        } catch (const std::exception& e) {
+            return error("%s: Deserialize error - %s at %s", __func__, e.what(), pos.ToString());
+        }
+    } else {
+        // Open history file to read
+        CAutoFile filein(OpenBlockFile(pos, true), SER_DISK, CLIENT_VERSION);
+        if (filein.IsNull()) {
+            return error("ReadBlockFromDisk: OpenBlockFile failed for %s", pos.ToString());
+        }
 
-    // Read block
-    try {
-        filein >> block;
-    } catch (const std::exception& e) {
-        return error("%s: Deserialize or I/O error - %s at %s", __func__, e.what(), pos.ToString());
+        // Read block
+        try {
+            filein >> block;
+        } catch (const std::exception& e) {
+            return error("%s: Deserialize or I/O error - %s at %s", __func__, e.what(), pos.ToString());
+        }
     }
 
     // Check the header
@@ -790,14 +904,14 @@ fclose(f);
     return true;
 }
 
-bool BlockManager::ReadBlockFromDisk(CBlock& block, const CBlockIndex& index) const
+bool BlockManager::ReadBlockFromDisk(CBlock& block, const CBlockIndex& index, bool cached) const
 {
     const FlatFilePos block_pos{WITH_LOCK(cs_main, return index.GetBlockPos())};
 
     // Deserialize this block's txs in its own height's format: legacy (with nTime) at or below the
     // transition, Lynx above. Without this a stale global (e.g. left by mining) misreads the tx stream.
     g_currentValidatingBlockHeight = index.nHeight;
-    if (!ReadBlockFromDisk(block, block_pos)) {
+    if (!ReadBlockFromDisk(block, block_pos, cached)) {
         return false;
     }
     if (block.GetHash() != index.GetBlockHash()) {
@@ -846,8 +960,10 @@ FlatFilePos BlockManager::SaveBlockToDisk(const CBlock& block, int nHeight, CCha
 {
     // Serialize this block's txs in its own height's format (legacy with nTime at or below the
     // transition, Lynx above) for both the size computation and the disk write below.
+    auto wbf_prev = ibd_now();
     g_currentValidatingBlockHeight = nHeight;
     unsigned int nBlockSize = ::GetSerializeSize(block, CLIENT_VERSION);
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_wbf_serialize += n - wbf_prev; wbf_prev = n; }
     FlatFilePos blockPos;
     const auto position_known {dbp != nullptr};
     if (position_known) {
@@ -862,12 +978,14 @@ FlatFilePos BlockManager::SaveBlockToDisk(const CBlock& block, int nHeight, CCha
         error("%s: FindBlockPos failed", __func__);
         return FlatFilePos();
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_wbf_findpos += n - wbf_prev; wbf_prev = n; }
     if (!position_known) {
         if (!WriteBlockToDisk(block, blockPos, GetParams().MessageStart())) {
             AbortNode("Failed to write block");
             return FlatFilePos();
         }
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_wbf_write += n - wbf_prev; }
     return blockPos;
 }
 

@@ -604,6 +604,7 @@ void SetupServerArgs(ArgsManager& argsman)
     argsman.AddArg("-deprecatedrpc=<method>", "Allows deprecated RPC method(s) to be used", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-stopafterblockimport", strprintf("Stop running after importing blocks from disk (default: %u)", DEFAULT_STOPAFTERBLOCKIMPORT), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-stopatheight", strprintf("Stop running after reaching the given height in the main chain (default: %u)", DEFAULT_STOPATHEIGHT), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-syncnoverify", "Skip all block verification during sync (merkle, PoS kernel, BIP30, sigops, scripts, amounts); build chainstate on trust. DEV/SYNC ONLY (default: 0)", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-limitancestorcount=<n>", strprintf("Do not accept transactions if number of in-mempool ancestors is <n> or more (default: %u)", DEFAULT_ANCESTOR_LIMIT), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-limitancestorsize=<n>", strprintf("Do not accept transactions whose size with all in-mempool ancestors exceeds <n> kilobytes (default: %u)", DEFAULT_ANCESTOR_SIZE_LIMIT_KVB), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-limitdescendantcount=<n>", strprintf("Do not accept transactions if any ancestor would have <n> or more in-mempool descendants (default: %u)", DEFAULT_DESCENDANT_LIMIT), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
@@ -1790,9 +1791,35 @@ node.scheduler->scheduleEvery([&node] {
             return InitError(*error);
         }
 
-        g_txindex = std::make_unique<TxIndex>(interfaces::MakeChain(node), cache_sizes.tx_index, false, fReindex);
-        if (!g_txindex->Start()) {
-            return false;
+        // Build the transaction index, but defer it past a pending initial sync.
+        // Its background ThreadSync reads every block and writes a fresh LevelDB;
+        // run concurrently with IBD it contends for the disk the (disk-bound) sync
+        // is bottlenecked on (~9% slower, measured). So if a sync is pending, start
+        // it only once IBD completes, from the scheduler thread -- the safe context
+        // Start() needs (it registers a validation interface and spawns a thread).
+        // If already synced, build immediately as before. Either way txindex ends
+        // up enabled and built; nothing here runs on the block-connect path.
+        auto build_txindex = [&node, tx_cache = cache_sizes.tx_index, fReindex]() -> bool {
+            auto idx = std::make_unique<TxIndex>(interfaces::MakeChain(node), tx_cache, false, fReindex);
+            if (!idx->Start()) return false;
+            g_txindex = std::move(idx); // publish the global handle only once fully started
+            return true;
+        };
+
+        if (!chainman.ActiveChainstate().IsInitialBlockDownload()) {
+            if (!build_txindex()) {
+                return false;
+            }
+        } else {
+            LogPrintf("txindex: deferring build until the initial block sync completes\n");
+            node.scheduler->scheduleEvery([&node, build_txindex]() {
+                if (g_txindex) return; // built already; one-shot guard (scheduleEvery has no self-cancel)
+                if (node.chainman->ActiveChainstate().IsInitialBlockDownload()) return; // still syncing
+                LogPrintf("txindex: initial sync complete -- starting background build\n");
+                if (!build_txindex()) {
+                    LogPrintf("txindex: failed to start background build; will retry\n");
+                }
+            }, std::chrono::seconds{10});
         }
     }
 

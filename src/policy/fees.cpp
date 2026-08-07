@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <policy/fees.h>
+#include <ibd_timing.h>
 
 #include <clientversion.h>
 #include <consensus/amount.h>
@@ -142,7 +143,7 @@ public:
 
     /** Update our estimates by decaying our historical moving average and updating
         with the data gathered from the current block */
-    void UpdateMovingAverages();
+    void UpdateMovingAverages(bool tile = false);
 
     /**
      * Calculate a feerate estimate.  Find the lowest value bucket (or range of buckets
@@ -223,17 +224,35 @@ void TxConfirmStats::Record(int blocksToConfirm, double feerate)
     m_feerate_avg[bucketindex] += feerate;
 }
 
-void TxConfirmStats::UpdateMovingAverages()
+extern bool g_sync_active;
+std::chrono::steady_clock::duration g_lm_conf{};
+std::chrono::steady_clock::duration g_lm_fail{};
+std::chrono::steady_clock::duration g_lm_feerate{};
+std::chrono::steady_clock::duration g_lm_txct{};
+
+void TxConfirmStats::UpdateMovingAverages(bool tile)
 {
     assert(confAvg.size() == failAvg.size());
-    for (unsigned int j = 0; j < buckets.size(); j++) {
-        for (unsigned int i = 0; i < confAvg.size(); i++) {
+    // Fused loop split into one pass per decayed array so each can be timed
+    // separately. Same math; access pattern (bucket-major) preserved.
+    const unsigned int conf_size    = confAvg.size();
+    const unsigned int fail_size    = failAvg.size();
+    const unsigned int buckets_size = buckets.size();
+    auto lm_prev = ibd_now();
+    for (unsigned int i = 0; i < conf_size; i++)
+        for (unsigned int j = 0; j < buckets_size; j++)
             confAvg[i][j] *= decay;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active && tile) g_lm_conf += n - lm_prev; lm_prev = n; }
+    for (unsigned int i = 0; i < fail_size; i++)
+        for (unsigned int j = 0; j < buckets_size; j++)
             failAvg[i][j] *= decay;
-        }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active && tile) g_lm_fail += n - lm_prev; lm_prev = n; }
+    for (unsigned int j = 0; j < buckets_size; j++)
         m_feerate_avg[j] *= decay;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active && tile) g_lm_feerate += n - lm_prev; lm_prev = n; }
+    for (unsigned int j = 0; j < buckets_size; j++)
         txCtAvg[j] *= decay;
-    }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active && tile) g_lm_txct += n - lm_prev; lm_prev = n; }
 }
 
 // returns -1 on error conditions
@@ -362,8 +381,8 @@ double TxConfirmStats::EstimateMedianVal(int confTarget, double sufficientTxVal,
         failBucket.leftMempool = failNum;
     }
 
-    float passed_within_target_perc = 0.0;
-    float failed_within_target_perc = 0.0;
+    double passed_within_target_perc = 0.0;
+    double failed_within_target_perc = 0.0;
     if ((passBucket.totalConfirmed + passBucket.inMempool + passBucket.leftMempool)) {
         passed_within_target_perc = 100 * passBucket.withinTarget / (passBucket.totalConfirmed + passBucket.inMempool + passBucket.leftMempool);
     }
@@ -621,16 +640,28 @@ bool CBlockPolicyEstimator::processBlockTx(unsigned int nBlockHeight, const CTxM
     return true;
 }
 
+extern bool g_sync_active;
+std::chrono::steady_clock::duration g_pe_guard{};
+std::chrono::steady_clock::duration g_pe_clearcurrent{};
+std::chrono::steady_clock::duration g_pe_movingavg{};
+std::chrono::steady_clock::duration g_pe_txloop{};
+std::chrono::steady_clock::duration g_pe_tail{};
+std::chrono::steady_clock::duration g_ma_fee{};
+std::chrono::steady_clock::duration g_ma_short{};
+std::chrono::steady_clock::duration g_ma_long{};
+
 void CBlockPolicyEstimator::processBlock(unsigned int nBlockHeight,
                                          std::vector<const CTxMemPoolEntry*>& entries)
 {
     LOCK(m_cs_fee_estimator);
+    auto pe_prev = ibd_now();
     if (nBlockHeight <= nBestSeenHeight) {
         // Ignore side chains and re-orgs; assuming they are random
         // they don't affect the estimate.
         // And if an attacker can re-org the chain at will, then
         // you've got much bigger problems than "attacker can influence
         // transaction fees."
+        { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_guard += n - pe_prev; }
         return;
     }
 
@@ -638,16 +669,23 @@ void CBlockPolicyEstimator::processBlock(unsigned int nBlockHeight,
     // calls to removeTx (via processBlockTx) correctly calculate age
     // of unconfirmed txs to remove from tracking.
     nBestSeenHeight = nBlockHeight;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_guard += n - pe_prev; pe_prev = n; }
 
     // Update unconfirmed circular buffer
     feeStats->ClearCurrent(nBlockHeight);
     shortStats->ClearCurrent(nBlockHeight);
     longStats->ClearCurrent(nBlockHeight);
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_clearcurrent += n - pe_prev; pe_prev = n; }
 
     // Decay all exponential averages
+    auto ma_prev = pe_prev;
     feeStats->UpdateMovingAverages();
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ma_fee += n - ma_prev; ma_prev = n; }
     shortStats->UpdateMovingAverages();
-    longStats->UpdateMovingAverages();
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ma_short += n - ma_prev; ma_prev = n; }
+    longStats->UpdateMovingAverages(/*tile=*/true);
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_ma_long += n - ma_prev; }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_movingavg += n - pe_prev; pe_prev = n; }
 
     unsigned int countedTxs = 0;
     // Update averages with data points from current block
@@ -655,6 +693,7 @@ void CBlockPolicyEstimator::processBlock(unsigned int nBlockHeight,
         if (processBlockTx(nBlockHeight, entry))
             countedTxs++;
     }
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_txloop += n - pe_prev; pe_prev = n; }
 
     if (firstRecordedHeight == 0 && countedTxs > 0) {
         firstRecordedHeight = nBestSeenHeight;
@@ -668,6 +707,7 @@ void CBlockPolicyEstimator::processBlock(unsigned int nBlockHeight,
 
     trackedTxs = 0;
     untrackedTxs = 0;
+    { auto n = ibd_now(); if (IBD_TIMING && g_sync_active) g_pe_tail += n - pe_prev; pe_prev = n; }
 }
 
 CFeeRate CBlockPolicyEstimator::estimateFee(int confTarget) const
