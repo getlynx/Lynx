@@ -1,8 +1,13 @@
 # Lynx Data Storage Network (LDSN) Compiler
 
 This directory contains `compile.sh` — a self-contained build script that compiles the
-Lynx Core daemon, CLI, and transaction tool from source for any chain defined in the
-repository, and packages each build as a dated `.zip` archive.
+daemon, CLI, and transaction tool from source for **any coin on the Lynx Data Storage
+Network**. Build a single chain, several at once, or every coin on the network in one
+run; each one is packaged as its own dated `.zip` archive.
+
+There is no fixed list of supported coins here. The compiler reads the available chains
+straight out of the source at run time, so whatever the network supports on the day you
+run it is what the menu offers.
 
 It is a **compile-only** tool. It produces archives; it does not install a daemon, write
 a config, create a systemd service, or start anything. To actually *run* a chain, use the
