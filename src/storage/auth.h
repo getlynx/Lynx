@@ -24,6 +24,7 @@ void remove_auth_member(uint160 pubkeyhash);
 void remove_blockuuid_member(std::string uuid, std::string manager);
 void remove_blocktenant_member(std::string tenant, std::string manager);
 void build_auth_list(const Consensus::Params& params);
+void rebuild_auth_list(ChainstateManager& chainman, const Consensus::Params& params);
 void build_blockuuid_list(const Consensus::Params& params);
 void build_blocktenant_list(const Consensus::Params& params);
 bool is_auth_member(uint160 pubkeyhash);

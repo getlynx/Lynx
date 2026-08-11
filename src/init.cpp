@@ -184,7 +184,8 @@ static const char* DEFAULT_ASMAP_FILENAME="ip_asn.map";
 static const char* BITCOIN_PID_FILENAME = "bitcoind.pid";
 
 bool gblnDisableStaking;
-int64_t gnPhantomIntervalMs = 3600000;   
+int64_t gnPhantomIntervalMs = 3600000;
+int64_t gnAuthRebuildIntervalMs = 172800000;   // 48 hours
 
 static fs::path GetPidFile(const ArgsManager& args)
 {
@@ -506,6 +507,7 @@ void SetupServerArgs(ArgsManager& argsman)
 #endif
     argsman.AddArg("-txindex", strprintf("Maintain a full transaction index, used by the getrawtransaction rpc call (default: %u)", DEFAULT_TXINDEX), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-orphancleanup=<ms>", strprintf("Phantom UTXO detection interval in milliseconds (default: %d)", gnPhantomIntervalMs), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-authcleanup=<ms>", strprintf("Allowed-tenant list rebuild interval in milliseconds (default: %d)", gnAuthRebuildIntervalMs), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-blockfilterindex=<type>",
                  strprintf("Maintain an index of compact filters by block (default: %s, values: %s).", DEFAULT_BLOCKFILTERINDEX, ListBlockFilterTypes()) +
                  " If <type> is not supplied or if <type> = 1, indexes for all known types are enabled.",
@@ -1379,6 +1381,36 @@ node.scheduler->scheduleEvery([&node] {
 // }, std::chrono::hours{4});
 }, std::chrono::milliseconds{gnPhantomIntervalMs});
 // }, std::chrono::seconds{2});
+
+
+    static std::atomic<bool> auth_rebuild_running{false};
+
+    gnAuthRebuildIntervalMs = args.GetIntArg("-authcleanup", gnAuthRebuildIntervalMs);
+
+    node.scheduler->scheduleEvery([&node] {
+
+        std::thread([&node] {
+            bool expected = false;
+            if (!auth_rebuild_running.compare_exchange_strong(expected, true)) {
+                LogPrint(BCLog::STORAGE, "auth rebuild: previous cycle still running, skipping\n");
+                return;
+            }
+            LogPrint(BCLog::STORAGE, "auth rebuild: begin\n");
+
+            // Rebuild the allowed-tenant list from scratch (same in-memory
+            // list-replacement approach as the deny path), dropping tenants
+            // whose authorization has aged out of the scan window, without a
+            // daemon restart.
+            if (node.chainman) {
+                rebuild_auth_list(*node.chainman, Params().GetConsensus());
+            }
+
+            LogPrint(BCLog::STORAGE, "auth rebuild: end\n");
+            auth_rebuild_running.store(false);
+
+        }).detach();
+
+    }, std::chrono::milliseconds{gnAuthRebuildIntervalMs});
 
 
     GetMainSignals().RegisterBackgroundSignalScheduler(*node.scheduler);
