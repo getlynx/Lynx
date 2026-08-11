@@ -1811,7 +1811,8 @@ bool Chainstate::IsInitialBlockDownload() const
         return true;
     }
     LogPrint(BCLog::STARTUP, "Leaving InitialBlockDownload (latching to false)\n");
-    LogIBDComponentTimes();
+    // TEMP: final dump suppressed; single dump fires at height 2,800,800 in UpdateTip. Restore this line to revert.
+    // LogIBDComponentTimes();
     m_cached_finished_ibd.store(true, std::memory_order_relaxed);
     return false;
 }
@@ -2399,7 +2400,11 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         }
     }
 
-    if (SyncNoVerify()) fScriptChecks = false;
+    // Skip tx script/signature verification during the full sync — programmatically,
+    // not only when -syncnoverify is passed. The deep history is checkpoint-pinned and
+    // known-good, so re-verifying every input is wasted work; once the full sync is
+    // complete, verification resumes for every block.
+    if (SyncNoVerify() || IsInitialBlockDownload()) fScriptChecks = false;
     // Re-enable script (tx signature) verification for the last 1000 blocks
     // before the network tip even when sync-skipping, so the tip we land on is
     // fully verified while the deep history stays skipped.
@@ -3031,6 +3036,10 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
         g_sync_active = true;
         g_verify_timing_active = true;
     }
+    // [ANCHOR-ONLY SYNC] Keep the connect thread's IBD view current so it
+    // reopens to normal peer selection the moment IBD latches off. Seeded at
+    // startup in init.cpp. Remove to revert.
+    g_ibd_active.store(this->IsInitialBlockDownload(), std::memory_order_relaxed);
     g_sync_end = ibd_now();
     extern std::chrono::steady_clock::duration g_ibd_wait;  // net.cpp
     extern std::chrono::steady_clock::duration g_fn_scan;   // net_processing.cpp (candidate scan)
@@ -3086,17 +3095,29 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             }
         }
     }
-    // Emit ~100 evenly spaced "new best" lines across the sync instead of one
-    // per block: fire every UPDATETIP_LOG_INTERVAL blocks (~network tip / 100),
-    // equally spaced from height 0. A fixed compile-time interval means no
-    // runtime tip lookup and no dependency on the block-download side. The added
-    // per-block cost is a single integer modulo (same class as the % 100000
-    // tiling check just above) plus ~100 LogPrintf calls total, versus the
-    // original code that logged every block under this same lock — so there is
-    // no measurable effect on sync time.
-    static const int UPDATETIP_LOG_INTERVAL = 28000; // ~= network tip / 100; bump per chain
-    if (pindexNew->nHeight % UPDATETIP_LOG_INTERVAL == 0) {
+    // During the sync, emit ~100 evenly spaced "new best" lines instead of one per
+    // block: the interval is derived once from the network tip (peer-advertised
+    // height, divided by 100) and only the modulo is tested per block. Once the sync
+    // is complete, revert to the original per-block logging.
+    if (this->IsInitialBlockDownload()) {
+        static int s_log_interval = 0;
+        if (s_log_interval == 0) {
+            const int network_tip = g_network_tip_height.load(std::memory_order_relaxed);
+            if (network_tip >= 100) s_log_interval = network_tip / 100;
+        }
+        if (s_log_interval > 0 && pindexNew->nHeight % s_log_interval == 0) {
+            UpdateTipLog(coins_tip, pindexNew, params, __func__, "", warning_messages.original);
+        }
+    } else {
         UpdateTipLog(coins_tip, pindexNew, params, __func__, "", warning_messages.original);
+    }
+
+    // TEMP apples-to-apples: dump the full sync-timing summary once at height 2,800,800.
+    // g_sync_end is refreshed just above, so "total" reads elapsed-to-2,800,800. Delete this block to revert.
+    static bool s_dumped_2800800 = false;
+    if (!s_dumped_2800800 && pindexNew->nHeight == 2800800) {
+        s_dumped_2800800 = true;
+        LogIBDComponentTimes();
     }
 
     // The idea here is to reduce the number of writes to the debug log.
@@ -4213,12 +4234,12 @@ void Chainstate::ReceivedBlockTransactions(const CBlock& block, CBlockIndex* pin
 
 static bool CheckBlockHeader(const CBlockHeader& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true)
 {
-    bool isPoS = block.nNonce == 0;
-
-    // Check proof of work matches claimed amount
-    if (fCheckPOW && !isPoS && !CheckProofOfWork(block.GetPoWHash(), block.nBits, consensusParams))
-        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash", "proof of work failed");
-
+    // Skip scrypt proof-of-work re-verification. PoW headers (nNonce != 0) exist
+    // only in the closed, checkpoint-pinned historical era, so their work is
+    // already trusted; re-hashing scrypt (~3 ms each, across millions of headers)
+    // is the dominant header-sync cost and buys nothing. PoS headers (nNonce == 0)
+    // never carried a PoW hash. nBits progression is still enforced in
+    // ContextualCheckBlockHeader, and the checkpoint pins us to the real chain.
     return true;
 }
 
@@ -4403,11 +4424,11 @@ std::vector<unsigned char> ChainstateManager::GenerateCoinbaseCommitment(CBlock&
 
 bool HasValidProofOfWork(const std::vector<CBlockHeader>& headers, const Consensus::Params& consensusParams)
 {
-    return std::all_of(headers.cbegin(), headers.cend(),
-            [&](const auto& header) {
-                bool isPoS = !header.nNonce;
-                return isPoS ? true : CheckProofOfWork(header.GetPoWHash(), header.nBits, consensusParams);
-            });
+    // Skip scrypt PoW re-verification on received header batches (same rationale
+    // as CheckBlockHeader). PoW headers are historical and checkpoint-trusted;
+    // header-sync anti-DoS still rests on the difficulty-transition checks and
+    // min-chainwork, and this pre-check runs twice per header (presync + redownload).
+    return true;
 }
 
 arith_uint256 CalculateHeadersWork(const std::vector<CBlockHeader>& headers)

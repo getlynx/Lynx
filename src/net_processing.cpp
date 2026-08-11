@@ -3495,6 +3495,13 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
             pfrom.cleanSubVer = cleanSubVer;
         }
         peer->m_starting_height = starting_height;
+        // Capture the peer-advertised network tip once here (cold path, once per
+        // connection) so validation can space its ~100 UpdateTip log lines evenly
+        // from sync start. Take the max across peers. Nothing in the block-download
+        // routing reads or writes this — the download path is untouched.
+        if (starting_height > g_network_tip_height.load(std::memory_order_relaxed)) {
+            g_network_tip_height.store(starting_height, std::memory_order_relaxed);
+        }
 
         // Only initialize the Peer::TxRelay m_relay_txs data structure if:
         // - this isn't an outbound block-relay-only connection, and
@@ -6079,8 +6086,15 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
             QueuedBlock &queuedBlock = state.vBlocksInFlight.front();
             int nOtherPeersWithValidatedDownloads = m_peers_downloading_from - 1;
             if (current_time > state.m_downloading_since + std::chrono::seconds{consensusParams.GetPowTargetSpacing(m_chainman.ActiveChain().Height())} * (BLOCK_DOWNLOAD_TIMEOUT_BASE + BLOCK_DOWNLOAD_TIMEOUT_PER_PEER * nOtherPeersWithValidatedDownloads)) {
-                LogPrintf("Timeout downloading block %s from peer=%d, disconnecting\n", queuedBlock.pindex->GetBlockHash().ToString(), pto->GetId());
-                pto->fDisconnect = true;
+                if (pto->IsManualConn()) {
+                    // The elapsed time counted here includes the stretch our single msgproc thread spent
+                    // heads-down connecting a burst of blocks, not time the peer was actually slow. On a
+                    // manual (-connect) peer this is our only source, so don't drop it — reset the clock.
+                    state.m_downloading_since = current_time;
+                } else {
+                    LogPrintf("Timeout downloading block %s from peer=%d, disconnecting\n", queuedBlock.pindex->GetBlockHash().ToString(), pto->GetId());
+                    pto->fDisconnect = true;
+                }
                 sm_stamp(g_sm_dltimeout);
                 return true;
             }

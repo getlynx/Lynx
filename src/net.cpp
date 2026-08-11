@@ -1775,6 +1775,18 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect)
             }
         }
 
+        // [ANCHOR-ONLY SYNC] During initial block download, do not dial any
+        // auto-outbound peers (full-relay, block-relay, anchors.dat, feelers).
+        // The 5 manual anchors are opened separately by ConnectToStaticLynxNodes
+        // above and are unaffected, so the sync draws only from peers whose
+        // staking state we control. The guard falls away when IBD latches off
+        // (g_ibd_active is seeded at startup in init.cpp and kept current in
+        // Chainstate::UpdateTip), at which point this loop resumes filling the
+        // normal auto-outbound slots. Remove this block to revert.
+        if (g_ibd_active.load(std::memory_order_relaxed)) {
+            continue;
+        }
+
         ConnectionType conn_type = ConnectionType::OUTBOUND_FULL_RELAY;
         auto now = GetTime<std::chrono::microseconds>();
         bool anchor = false;

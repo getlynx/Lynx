@@ -277,6 +277,21 @@ void build_auth_list(const Consensus::Params& params)
     authTime = params.initAuthTime;
 }
 
+// Scheduled rebuild of the allowed-tenant list. Mirrors the startup build path
+// (build_auth_list seed + scan_blocks_for_authdata replay) but clears the live
+// in-memory list first, so tenants whose authorization has aged out of the
+// scan_blocks_for_authdata window are dropped. Same in-memory list-replacement
+// approach as the deny path (remove_auth_member), no daemon restart.
+void rebuild_auth_list(ChainstateManager& chainman, const Consensus::Params& params)
+{
+    {
+        LOCK(authListLock);
+        authList.clear();
+    }
+    build_auth_list(params);
+    scan_blocks_for_authdata(chainman);
+}
+
 void build_blockuuid_list(const Consensus::Params& params)
 {
     LOCK(blockuuidListLock);
