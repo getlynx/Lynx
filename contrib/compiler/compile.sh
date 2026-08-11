@@ -231,8 +231,8 @@ done
 # Harvest the chain names from the spec table in CMainParams(), where every chain is
 # defined as a run of spec.<field>["<chain>"] = ... assignments. Matching ANY spec field
 # (rather than one chosen key) keeps this working if a single field is ever renamed;
-# the indexed forms — spec.pchMessageStart["alioth"][0], spec.checkpointHash[...] — match
-# too, and spec.psztimestamp[CURRENT_CHAIN] has no quotes so it is correctly skipped.
+# the indexed forms — spec.pchMessageStart["alioth"][0] — match too, and
+# spec.psztimestamp[CURRENT_CHAIN] has no quotes so it is correctly skipped.
 # sort -u dedupes the many hits per chain and orders the menu alphabetically in one pass,
 # so a new chain slots into place no matter where it was appended in the C++ file.
 mapfile -t CHAIN_KEYS < <(grep -oP 'spec\.[A-Za-z_]\w*\["\K[^"]+(?="\])' "$CHAINPARAMS_FILE" | LC_ALL=C sort -u)

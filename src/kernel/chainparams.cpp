@@ -68,13 +68,15 @@ struct ChainSpec {
     std::map<std::string, std::string> genesishash;
     // std::string genesismerkleroot;
     std::map<std::string, std::string> genesismerkleroot;
-    // int checkpointHeight[4];
-    std::map<std::string, int[4]> checkpointHeight;
-    // std::string checkpointHash[4];
-    std::map<std::string, std::string[4]> checkpointHash;};
-
-    // std::map<std::string, std::vector<int>> checkpointHeight;
-    // std::map<std::string, std::vector<std::string>> checkpointHash;
+    // Exactly one checkpoint per chain. Only the last checkpoint carries any weight:
+    // GetLastCheckpoint() scans in reverse for the first entry present in the block
+    // index, and that is the sole height below which forks are rejected. Intermediate
+    // checkpoints only ratcheted protection up during IBD, which these chains never
+    // relied on, so the ladder was dead weight.
+    // int checkpointHeight;
+    std::map<std::string, int> checkpointHeight;
+    // std::string checkpointHash;
+    std::map<std::string, std::string> checkpointHash;};
 
 
 ChainSpec spec;
@@ -316,16 +318,8 @@ public:
         spec.uuidlastblock["alioth"] = 1700;
         spec.initauthuser["alioth"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["alioth"] = 1757546169;
-
-        spec.checkpointHeight["alioth"][0] = 0;
-        spec.checkpointHeight["alioth"][1] = -1;
-        spec.checkpointHeight["alioth"][2] = -1;
-        spec.checkpointHeight["alioth"][3] = -1;
-        
-        spec.checkpointHash["alioth"][0] = genesis.GetHash().ToString();
-        spec.checkpointHash["alioth"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["alioth"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["alioth"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHeight["alioth"] = 10500;
+        spec.checkpointHash["alioth"] = "0x74f2f2840068536ec9aec7a97abb4abc71bdedc4fd04e80bb750addea114ac61";
 
         spec.psztimestamp["borrelly"] = "Memory becomes unreliable without external verification.";
         spec.nonce["borrelly"] = 2257023;
@@ -342,16 +336,8 @@ public:
         spec.uuidlastblock["borrelly"] = 1700;
         spec.initauthuser["borrelly"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["borrelly"] = 1757546169;
-
-        spec.checkpointHeight["borrelly"][0] = 0;
-        spec.checkpointHeight["borrelly"][1] = -1;
-        spec.checkpointHeight["borrelly"][2] = -1;
-        spec.checkpointHeight["borrelly"][3] = -1;
-        
-        spec.checkpointHash["borrelly"][0] = genesis.GetHash().ToString();
-        spec.checkpointHash["borrelly"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["borrelly"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["borrelly"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHeight["borrelly"] = 10500;
+        spec.checkpointHash["borrelly"] = "0xa75562856a068540a0f9480e5540ca935e963bbdde8af837cf3e821e2044f453";
 
         spec.psztimestamp["cassiopeia"] = "The platform shapes thought through design.";
         spec.nonce["cassiopeia"] = 962749;
@@ -368,16 +354,8 @@ public:
         spec.uuidlastblock["cassiopeia"] = 1700;
         spec.initauthuser["cassiopeia"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["cassiopeia"] = 1757546169;
-
-        spec.checkpointHeight["cassiopeia"][0] = 0;
-        spec.checkpointHeight["cassiopeia"][1] = -1;
-        spec.checkpointHeight["cassiopeia"][2] = -1;
-        spec.checkpointHeight["cassiopeia"][3] = -1;
-        
-        spec.checkpointHash["cassiopeia"][0] = genesis.GetHash().ToString();
-        spec.checkpointHash["cassiopeia"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["cassiopeia"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["cassiopeia"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHeight["cassiopeia"] = 6750;
+        spec.checkpointHash["cassiopeia"] = "0x2ad7da8b9e87b286bbe8ffbf2e3b560625ecca35f9436d74a34115f3470d6b56";
 
         spec.psztimestamp["delphinus"] = "Truth becomes what the fact-checkers approve.";
         spec.nonce["delphinus"] = 413425;
@@ -394,16 +372,8 @@ public:
         spec.uuidlastblock["delphinus"] = 1700;
         spec.initauthuser["delphinus"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["delphinus"] = 1757546169;
-
-        spec.checkpointHeight["delphinus"][0] = 0;
-        spec.checkpointHeight["delphinus"][1] = -1;
-        spec.checkpointHeight["delphinus"][2] = -1;
-        spec.checkpointHeight["delphinus"][3] = -1;
-        
-        spec.checkpointHash["delphinus"][0] = genesis.GetHash().ToString();
-        spec.checkpointHash["delphinus"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["delphinus"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["delphinus"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHeight["delphinus"] = 10200;
+        spec.checkpointHash["delphinus"] = "0x37735afcd430501b8570de4bd00428240dcd985ed67c5006fd4c07b351990b7c";
 
         spec.psztimestamp["enceladus"] = "Every interaction feeds machine learning.";
         spec.nonce["enceladus"] = 637913;
@@ -420,16 +390,8 @@ public:
         spec.uuidlastblock["enceladus"] = 1700;
         spec.initauthuser["enceladus"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["enceladus"] = 1757546169;
-
-        spec.checkpointHeight["enceladus"][0] = 0;
-        spec.checkpointHeight["enceladus"][1] = -1;
-        spec.checkpointHeight["enceladus"][2] = -1;
-        spec.checkpointHeight["enceladus"][3] = -1;
-        
-        spec.checkpointHash["enceladus"][0] = genesis.GetHash().ToString();
-        spec.checkpointHash["enceladus"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["enceladus"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["enceladus"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHeight["enceladus"] = 10175;
+        spec.checkpointHash["enceladus"] = "0x47e8bac1e2fdec00cb6edd3349910b46257c2c36d88caef34b8782c2093a20fc";
 
         spec.psztimestamp["fenrir"] = "Conformity spreads through social proof.";
         spec.nonce["fenrir"] = 170269;
@@ -446,16 +408,8 @@ public:
         spec.uuidlastblock["fenrir"] = 1700;
         spec.initauthuser["fenrir"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["fenrir"] = 1757546169;
-
-        spec.checkpointHeight["fenrir"][0] = 0;
-        spec.checkpointHeight["fenrir"][1] = -1;
-        spec.checkpointHeight["fenrir"][2] = -1;
-        spec.checkpointHeight["fenrir"][3] = -1;
-        
-        spec.checkpointHash["fenrir"][0] = genesis.GetHash().ToString();
-        spec.checkpointHash["fenrir"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["fenrir"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["fenrir"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHeight["fenrir"] = 10100;
+        spec.checkpointHash["fenrir"] = "0x7b8bfd71e74fdad2cbb827c5303511e3ace04dd697fb5d2277b10144faed0909";
 
         spec.psztimestamp["galatea"] = "Power manifests through permitted pathways.";
         spec.nonce["galatea"] = 556774;
@@ -472,16 +426,8 @@ public:
         spec.uuidlastblock["galatea"] = 1700;
         spec.initauthuser["galatea"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["galatea"] = 1757546169;
-
-        spec.checkpointHeight["galatea"][0] = 0;
-        spec.checkpointHeight["galatea"][1] = -1;
-        spec.checkpointHeight["galatea"][2] = -1;
-        spec.checkpointHeight["galatea"][3] = -1;
-        
-        spec.checkpointHash["galatea"][0] = genesis.GetHash().ToString();
-        spec.checkpointHash["galatea"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["galatea"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["galatea"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHeight["galatea"] = 9800;
+        spec.checkpointHash["galatea"] = "0x75ccd5fac5fed32d39284d9e3e2964df2fce943359430f0db5f2caeb84e272e8";
 
         spec.psztimestamp["halley"] = "Dissent becomes indistinguishable from noise.";
         spec.nonce["halley"] = 991604;
@@ -498,16 +444,8 @@ public:
         spec.uuidlastblock["halley"] = 1700;
         spec.initauthuser["halley"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["halley"] = 1757546169;
-
-        spec.checkpointHeight["halley"][0] = 0;
-        spec.checkpointHeight["halley"][1] = -1;
-        spec.checkpointHeight["halley"][2] = -1;
-        spec.checkpointHeight["halley"][3] = -1;
-        
-        spec.checkpointHash["halley"][0] = genesis.GetHash().ToString();
-        spec.checkpointHash["halley"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["halley"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["halley"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHeight["halley"] = 6775;
+        spec.checkpointHash["halley"] = "0x182a8c4632ff0f1a4629960cf5cc889519c230dd0ec2484bb323f1603ece74af";
 
         spec.psztimestamp["indus"] = "The crawler maps all possible connections.";
         spec.nonce["indus"] = 74649;
@@ -524,16 +462,8 @@ public:
         spec.uuidlastblock["indus"] = 1700;
         spec.initauthuser["indus"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         spec.timestamp["indus"] = 1757546169;
-
-        spec.checkpointHeight["indus"][0] = 0;
-        spec.checkpointHeight["indus"][1] = -1;
-        spec.checkpointHeight["indus"][2] = -1;
-        spec.checkpointHeight["indus"][3] = -1;
-        
-        spec.checkpointHash["indus"][0] = genesis.GetHash().ToString();
-        spec.checkpointHash["indus"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["indus"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["indus"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        spec.checkpointHeight["indus"] = 6775;
+        spec.checkpointHash["indus"] = "0x9e04be9327e3952c5a20cc744f51e5a885f624b407750b263eefad94d8afade8";
 
         spec.psztimestamp["infiniloop"] = "CNN: California to extend stay-at-home orders as hospitals hit breaking point due to COVID";
         spec.nonce["infiniloop"] = 703813;
@@ -550,23 +480,8 @@ public:
         spec.uuidlastblock["infiniloop"] = 3084941;
         spec.initauthuser["infiniloop"] = "58721d870b5e33d55009431cd5e8c6f0b375e033";
         spec.timestamp["infiniloop"] = 1609281149;
-
-        spec.checkpointHeight["infiniloop"][0] = 0;
-        spec.checkpointHeight["infiniloop"][1] = 2801000;
-        spec.checkpointHeight["infiniloop"][2] = -1;
-        spec.checkpointHeight["infiniloop"][3] = -1;
-        
-        spec.checkpointHash["infiniloop"][0] = genesis.GetHash().ToString();
-        spec.checkpointHash["infiniloop"][1] = "0x0c1f410f94c12e134ec6fbb7fc5cfc2c51686a2baa344ed6134fe930ca0d5070";
-        spec.checkpointHash["infiniloop"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["infiniloop"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-
-        // spec.checkpointHeight["infiniloop"].push_back(0);
-        // spec.checkpointHeight["infiniloop"].push_back(2801000);
-
-        // spec.checkpointHash["infiniloop"].push_back(genesis.GetHash().ToString());
-        // spec.checkpointHash["infiniloop"].push_back("0x0c1f410f94c12e134ec6fbb7fc5cfc2c51686a2baa344ed6134fe930ca0d5070");
-
+        spec.checkpointHeight["infiniloop"] = 2808765;
+        spec.checkpointHash["infiniloop"] = "0xa437ef7f4666568ad9642a4b71f969b6a4215f5f80d28e9e9f1a01e3d27dcf75";
 
         spec.psztimestamp["lynx"] = "ICanHazKitteh at epoch 1387779684. Meow. Now pet me.";
         spec.nonce["lynx"] = 2714385;
@@ -583,16 +498,11 @@ public:
         spec.uuidlastblock["lynx"] = 3084941;
         spec.initauthuser["lynx"] = "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d";
         spec.timestamp["lynx"] = 1387779684;
+        spec.checkpointHeight["lynx"] = 3251660;
+        spec.checkpointHash["lynx"] = "0x0869637aeb85c4fcd680a117a2a67e76360fbdd2780b99951bb85762db5ef5ec";
 
-        spec.checkpointHeight["lynx"][0] = 0;
-        spec.checkpointHeight["lynx"][1] = -1;
-        spec.checkpointHeight["lynx"][2] = -1;
-        spec.checkpointHeight["lynx"][3] = -1;
-        
-        spec.checkpointHash["lynx"][0] = genesis.GetHash().ToString();
-        spec.checkpointHash["lynx"][1] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["lynx"][2] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        spec.checkpointHash["lynx"][3] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+
 
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.posLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -749,28 +659,20 @@ public:
         m_is_test_chain = false;
         m_is_mockable_chain = false;
 
-        // checkpointData.mapCheckpoints[spec.checkpointHeight[CURRENT_CHAIN][0]] = uint256S( spec.checkpointHash[CURRENT_CHAIN][0]);        
+        // Inserted unconditionally: every chain must contribute its one checkpoint, or
+        // mapCheckpoints ends up empty and CCheckpointData::GetHeight() dereferences
+        // rbegin() on an empty map — which init.cpp calls on every startup to build the
+        // -checkpoints help string.
+        checkpointData.mapCheckpoints[spec.checkpointHeight[CURRENT_CHAIN]] = uint256S(spec.checkpointHash[CURRENT_CHAIN]);
 
-        for (int j=0; j<4; j++) {
-            if (spec.checkpointHeight[CURRENT_CHAIN][j] >= 0) {
-                checkpointData.mapCheckpoints[spec.checkpointHeight[CURRENT_CHAIN][j]] = uint256S (spec.checkpointHash[CURRENT_CHAIN][j]);
-            }
+        // A new chain has no history to pin, so it checkpoints genesis as a placeholder
+        // until it earns a real height. Unlike spec.genesishash (asserted above), that
+        // literal is otherwise unguarded: mistype it and the node still starts, but
+        // GetLastCheckpoint() looks up a block that does not exist and quietly resolves
+        // to nothing. Catch it here instead. Only fires on the placeholder case.
+        if (spec.checkpointHeight[CURRENT_CHAIN] == 0) {
+            assert(uint256S(spec.checkpointHash[CURRENT_CHAIN]) == consensus.hashGenesisBlock);
         }
-
-        // for (size_t j = 0; j < spec.checkpointHeight[CURRENT_CHAIN].size(); j++) {
-            // checkpointData.mapCheckpoints[spec.checkpointHeight[CURRENT_CHAIN][j]] = uint256S(spec.checkpointHash[CURRENT_CHAIN][j]);
-        // }
-
-        
-        /*
-
-        checkpointData = {
-            {
-                {     0, genesis.GetHash()},
-            }   
-        };
-
-        */
 
         m_assumeutxo_data = MapAssumeutxo{
          // TODO to be specified in a future patch.
