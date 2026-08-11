@@ -24,6 +24,7 @@
 #include <hash.h>
 #include <httprpc.h>
 #include <httpserver.h>
+#include <ibd_timing.h>
 #include <index/blockfilterindex.h>
 #include <index/coinstatsindex.h>
 #include <index/txindex.h>
@@ -1779,6 +1780,13 @@ node.scheduler->scheduleEvery([&node] {
     }
 
     ChainstateManager& chainman = *Assert(node.chainman);
+
+    // [ANCHOR-ONLY SYNC] Seed the connect thread's IBD view now that the chain
+    // is loaded and before the connect thread starts (connman->Start, below). A
+    // node that comes up already synced seeds false and is never restricted; a
+    // node that needs to sync seeds true and draws blocks only from the 5 manual
+    // anchors until IBD latches off. Remove to revert.
+    g_ibd_active.store(chainman.ActiveChainstate().IsInitialBlockDownload(), std::memory_order_relaxed);
 
     assert(!node.peerman);
     node.peerman = PeerManager::make(*node.connman, *node.addrman, node.banman.get(),
