@@ -815,11 +815,17 @@ if TARGET_WINDOWS
 lynx_cli_SOURCES += bitcoin-cli-res.rc
 endif
 
+# LIBBITCOIN_CONSENSUS is needed because the -version banner calls
+# CurrentCoinSymbol(), which lives in kernel/chainparams.cpp; pulling that object
+# in drags its genesis/merkle deps (BlockMerkleRoot, GetPoWHash, UintToArith256,
+# g_infiniloopTransitionHeight) along with it. The other CLI binaries (tx, util,
+# wallet) already link it.
 lynx_cli_LDADD = \
   $(LIBBITCOIN_CLI) \
   $(LIBUNIVALUE) \
   $(LIBBITCOIN_COMMON) \
   $(LIBBITCOIN_UTIL) \
+  $(LIBBITCOIN_CONSENSUS) \
   $(LIBBITCOIN_CRYPTO)
 
 lynx_cli_LDADD += $(CRYPTO_LIBS) $(EVENT_LIBS)

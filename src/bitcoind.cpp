@@ -128,7 +128,7 @@ static bool AppInit(NodeContext& node, int argc, char* argv[])
 
     // Process help and version before taking care about datadir
     if (HelpRequested(args) || args.IsArgSet("-version")) {
-        std::string strUsage = PACKAGE_NAME " version " + FormatFullVersion() + "\n";
+        std::string strUsage = CurrentChainDisplayName() + " (" + CurrentCoinSymbol() + ") - " PACKAGE_NAME " version " + FormatFullVersion() + "\n";
 
         if (args.IsArgSet("-version")) {
             strUsage += FormatParagraph(LicenseInfo());
@@ -187,7 +187,10 @@ static bool AppInit(NodeContext& node, int argc, char* argv[])
 
         if (args.GetBoolArg("-daemon", DEFAULT_DAEMON) || args.GetBoolArg("-daemonwait", DEFAULT_DAEMONWAIT)) {
 #if HAVE_DECL_FORK
-            tfm::format(std::cout, PACKAGE_NAME " starting\n");
+            // Same identity line as -version, so the daemon announces which chain
+            // and ticker it is rather than just the codebase it was built from.
+            tfm::format(std::cout, "%s (%s) - %s version %s starting\n",
+                        CurrentChainDisplayName(), CurrentCoinSymbol(), PACKAGE_NAME, FormatFullVersion());
 
             // Daemonize
             switch (fork_daemon(1, 0, daemon_ep)) { // don't chdir (1), do close FDs (0)

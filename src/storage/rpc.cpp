@@ -203,7 +203,7 @@ static RPCHelpMan store()
                           {RPCResult::Type::STR, "identifier", "Universally unique asset identifier"},
                           {RPCResult::Type::STR, "tenant", "Hashed public tenant key"},
                           {RPCResult::Type::NUM, "filesize", "filesize (B)"},
-                          {RPCResult::Type::STR, "storagefee", "Storage transaction fee in " + CURRENCY_UNIT},
+                          {RPCResult::Type::STR, "storagefee", "Storage transaction fee in " + CurrencyUnit()},
                           {RPCResult::Type::STR, "storagetime", "Storage date and time"},
                           {RPCResult::Type::NUM, "currentblock", "Current block"},
                           {RPCResult::Type::STR, "stakingstatus", "enabled | disabled"},

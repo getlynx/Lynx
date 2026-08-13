@@ -25,14 +25,34 @@
 #endif
 */
 
-constexpr char C0 = (CURRENT_CHAIN[0] >= 'a' && CURRENT_CHAIN[0] <= 'z') ? CURRENT_CHAIN[0]-'a'+'A' : CURRENT_CHAIN[0];
-constexpr char C1 = (CURRENT_CHAIN[1] >= 'a' && CURRENT_CHAIN[1] <= 'z') ? CURRENT_CHAIN[1]-'a'+'A' : CURRENT_CHAIN[1];
-constexpr char C2 = (CURRENT_CHAIN[2] >= 'a' && CURRENT_CHAIN[2] <= 'z') ? CURRENT_CHAIN[2]-'a'+'A' : CURRENT_CHAIN[2];
-constexpr char C3 = (CURRENT_CHAIN[3] >= 'a' && CURRENT_CHAIN[3] <= 'z') ? CURRENT_CHAIN[3]-'a'+'A' : CURRENT_CHAIN[3];
+// Defined in kernel/chainparams.cpp, and declared here rather than including
+// kernel/chainparams.h -- that header would drag the whole chain-params surface
+// into every translation unit that only wants the currency label.
+const std::string& CurrentCoinSymbol();
 
-const std::string CURRENCY_UNIT = (std::string_view(CURRENT_CHAIN) == "infiniloop")
-                                    ? "InfiniLooP"
-                                    : std::string{C0, C1, C2, C3};
+/**
+ * Ticker used to label amounts and fee rates: "ALIO" on alioth, "IL8P" on a
+ * chain whose ticker is not simply its first four letters. Read from the
+ * spec.coinSymbol table in chainparams rather than derived from the chain name,
+ * which got the ticker wrong whenever the two differ (alnitak is ANIK, not ALNI)
+ * and produced a string with an embedded NUL for chain names under 4 characters.
+ *
+ * infiniloop keeps "InfiniLooP" as its unit, which is what that live chain has
+ * always displayed -- its ticker is IL8P, but the unit label is deliberately the
+ * chain name. Any other chain wanting that treatment gets a branch here.
+ *
+ * A function rather than a namespace-scope string on purpose: the initializer
+ * reaches into the global ChainSpec in chainparams.cpp, so running it during
+ * static init would be a static initialization order fiasco waiting to happen.
+ * The local static defers it to first use, which is always after main() starts.
+ */
+inline const std::string& CurrencyUnit()
+{
+    static const std::string unit = (std::string_view(CURRENT_CHAIN) == "infiniloop")
+                                        ? std::string{"InfiniLooP"}
+                                        : CurrentCoinSymbol();
+    return unit;
+}
 
 const std::string CURRENCY_ATOM = "sat"; // One indivisible minimum value unit
 

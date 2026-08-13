@@ -52,6 +52,11 @@ struct ChainSpec {
     std::map<std::string, int>  secretPrefix;
     // std::string coinSymbol;
     std::map<std::string, std::string>  coinSymbol;
+    // Display spelling of the chain name, for chains whose name is not simply the
+    // lowercase chain id with its first letter capitalized. Only irregular chains
+    // need an entry -- CurrentChainDisplayName() capitalizes the chain id for the
+    // rest, so "alioth" needs no row to render as "Alioth".
+    std::map<std::string, std::string>  displayName;
     // int lasttimestamp;
     std::map<std::string, int>  lasttimestamp;
     // int uuidlastblock;
@@ -155,8 +160,279 @@ ChainSpec LoadChainSpec(const std::string& specFile, const std::string& chainNam
     return current;
 }
 
+// Populate `spec` with the hardcoded per-chain values below. Called from the
+// CMainParams ctor, which reads spec.* for CURRENT_CHAIN, and from
+// CurrentCoinSymbol(), which needs the ticker in binaries that never construct
+// chain params at all (lynx-cli -version). Idempotent: repeated calls just
+// reassign the same values.
+// The `spec` parameter deliberately shadows the global of the same name, so the
+// assignments below read exactly as they did when they lived in the CMainParams
+// ctor. CMainParams passes the global; HardcodedSpecs() passes a local, because
+// the global must not be touched before its own constructor has run.
+static void LoadHardcodedChainSpecs(ChainSpec& spec)
+{
+    spec.coinSymbol["alioth"]               = "ALIO";
+    spec.psztimestamp["alioth"]             = "Conformity wears the mask of patriotism.";
+    spec.nonce["alioth"]                    = 2951643;
+    spec.genesishash["alioth"]              = "0xfa9f9bd23d7ed9984c1fe756caeaa3af9e63887f4b1fe4807f3915af74c61a7b";
+    spec.genesismerkleroot["alioth"]        = "0xa3757e41c96b21f473e891486c7e1afe35fea214dfc4e43540ef5a71884918cf";
+    spec.nDefaultPort["alioth"]             = 55801;
+    spec.pubkeyPrefix["alioth"]             = 215;
+    spec.scriptPrefix["alioth"]             = 239;
+    spec.secretPrefix["alioth"]             = 214;
+    spec.pchMessageStart["alioth"][0]       = 0xdd;
+    spec.pchMessageStart["alioth"][1]       = 0xf4;
+    spec.pchMessageStart["alioth"][2]       = 0xc1;
+    spec.pchMessageStart["alioth"][3]       = 0xdb;
+    spec.uuidlastblock["alioth"]            = 1700;
+    spec.initauthuser["alioth"]             = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    spec.timestamp["alioth"]                = 1757546169;
+    spec.checkpointHeight["alioth"]         = 10500;
+    spec.checkpointHash["alioth"]           = "0x74f2f2840068536ec9aec7a97abb4abc71bdedc4fd04e80bb750addea114ac61";
 
+    spec.coinSymbol["borrelly"]             = "BORR";
+    spec.psztimestamp["borrelly"]           = "Memory becomes unreliable without external verification.";
+    spec.nonce["borrelly"]                  = 2257023;
+    spec.genesishash["borrelly"]            = "0xc936175d9ea6f49a595f7cd75ce065c5bb08ed5abc0e5d8b42b04735d916e4a7";
+    spec.genesismerkleroot["borrelly"]      = "0x9b9d2ba1a92f6b99301fa4e580a0b9d59220d1b70ef504740d2aa97f6a22e509";
+    spec.nDefaultPort["borrelly"]           = 58400;
+    spec.pubkeyPrefix["borrelly"]           = 189;
+    spec.scriptPrefix["borrelly"]           = 87;
+    spec.secretPrefix["borrelly"]           = 117;
+    spec.pchMessageStart["borrelly"][0]     = 0xd3;
+    spec.pchMessageStart["borrelly"][1]     = 0xae;
+    spec.pchMessageStart["borrelly"][2]     = 0x84;
+    spec.pchMessageStart["borrelly"][3]     = 0xcc;
+    spec.uuidlastblock["borrelly"]          = 1700;
+    spec.initauthuser["borrelly"]           = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    spec.timestamp["borrelly"]              = 1757546169;
+    spec.checkpointHeight["borrelly"]       = 10500;
+    spec.checkpointHash["borrelly"]         = "0xa75562856a068540a0f9480e5540ca935e963bbdde8af837cf3e821e2044f453";
 
+    spec.coinSymbol["cassiopeia"]           = "CASS";
+    spec.psztimestamp["cassiopeia"]         = "The platform shapes thought through design.";
+    spec.nonce["cassiopeia"]                = 962749;
+    spec.genesishash["cassiopeia"]          = "0xd288cc1734cefc4a36a13c5de8d663356dcc6b1ca7a6d1f0fd3b6a6a34b0d0c3";
+    spec.genesismerkleroot["cassiopeia"]    = "0x6d185b08de212b5a2b0b3bab3efc4178751f3507bb270fe0aa7a7f2990c3cb50";
+    spec.nDefaultPort["cassiopeia"]         = 53053;
+    spec.pubkeyPrefix["cassiopeia"]         = 252;
+    spec.scriptPrefix["cassiopeia"]         = 193;
+    spec.secretPrefix["cassiopeia"]         = 136;
+    spec.pchMessageStart["cassiopeia"][0]   = 0xb2;
+    spec.pchMessageStart["cassiopeia"][1]   = 0x82;
+    spec.pchMessageStart["cassiopeia"][2]   = 0xe4;
+    spec.pchMessageStart["cassiopeia"][3]   = 0xc4;
+    spec.uuidlastblock["cassiopeia"]        = 1700;
+    spec.initauthuser["cassiopeia"]         = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    spec.timestamp["cassiopeia"]            = 1757546169;
+    spec.checkpointHeight["cassiopeia"]     = 6750;
+    spec.checkpointHash["cassiopeia"]       = "0x2ad7da8b9e87b286bbe8ffbf2e3b560625ecca35f9436d74a34115f3470d6b56";
+
+    spec.coinSymbol["delphinus"]            = "DELP";
+    spec.psztimestamp["delphinus"]          = "Truth becomes what the fact-checkers approve.";
+    spec.nonce["delphinus"]                 = 413425;
+    spec.genesishash["delphinus"]           = "0x2d749f17c25d34c4cd443dc44a0e895e99bce4d59a6d38404c2ab4bc3a244237";
+    spec.genesismerkleroot["delphinus"]     = "0x6e0a0884c287f779601517c18224109711f5a5f753e73daa1aa9117a0ec97721";
+    spec.nDefaultPort["delphinus"]          = 57690;
+    spec.pubkeyPrefix["delphinus"]          = 163;
+    spec.scriptPrefix["delphinus"]          = 137;
+    spec.secretPrefix["delphinus"]          = 149;
+    spec.pchMessageStart["delphinus"][0]    = 0xc9;
+    spec.pchMessageStart["delphinus"][1]    = 0x99;
+    spec.pchMessageStart["delphinus"][2]    = 0xf9;
+    spec.pchMessageStart["delphinus"][3]    = 0xe6;
+    spec.uuidlastblock["delphinus"]         = 1700;
+    spec.initauthuser["delphinus"]          = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    spec.timestamp["delphinus"]             = 1757546169;
+    spec.checkpointHeight["delphinus"]      = 10200;
+    spec.checkpointHash["delphinus"]        = "0x37735afcd430501b8570de4bd00428240dcd985ed67c5006fd4c07b351990b7c";
+
+    spec.coinSymbol["enceladus"]            = "ENCE";
+    spec.psztimestamp["enceladus"]          = "Every interaction feeds machine learning.";
+    spec.nonce["enceladus"]                 = 637913;
+    spec.genesishash["enceladus"]           = "0x68274c0a8bcb86634a341a8a98294c4883e70953a07f7db6c9982eb1b1a66efe";
+    spec.genesismerkleroot["enceladus"]     = "0x76aea56ac1430737e0593c4f7f6fa733a8e4d620f0beee0511a2346af33adbdf";
+    spec.nDefaultPort["enceladus"]          = 58610;
+    spec.pubkeyPrefix["enceladus"]          = 85;
+    spec.scriptPrefix["enceladus"]          = 118;
+    spec.secretPrefix["enceladus"]          = 141;
+    spec.pchMessageStart["enceladus"][0]    = 0x9a;
+    spec.pchMessageStart["enceladus"][1]    = 0x87;
+    spec.pchMessageStart["enceladus"][2]    = 0xb7;
+    spec.pchMessageStart["enceladus"][3]    = 0xc8;
+    spec.uuidlastblock["enceladus"]         = 1700;
+    spec.initauthuser["enceladus"]          = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    spec.timestamp["enceladus"]             = 1757546169;
+    spec.checkpointHeight["enceladus"]      = 10175;
+    spec.checkpointHash["enceladus"]        = "0x47e8bac1e2fdec00cb6edd3349910b46257c2c36d88caef34b8782c2093a20fc";
+
+    spec.coinSymbol["fenrir"]               = "FENR";
+    spec.psztimestamp["fenrir"]             = "Conformity spreads through social proof.";
+    spec.nonce["fenrir"]                    = 170269;
+    spec.genesishash["fenrir"]              = "0x43204086224f60f8ab041f5fc6b3c6b72b01323fb9408fc7c49412d916188c7d";
+    spec.genesismerkleroot["fenrir"]        = "0xb9f9c5cd75b0d1f261b0d3683dfc8ed79a696d5c7ecfa814d7fb2cdc28071e12";
+    spec.nDefaultPort["fenrir"]             = 54825;
+    spec.pubkeyPrefix["fenrir"]             = 5;
+    spec.scriptPrefix["fenrir"]             = 239;
+    spec.secretPrefix["fenrir"]             = 208;
+    spec.pchMessageStart["fenrir"][0]       = 0xef;
+    spec.pchMessageStart["fenrir"][1]       = 0xda;
+    spec.pchMessageStart["fenrir"][2]       = 0xcf;
+    spec.pchMessageStart["fenrir"][3]       = 0xe1;
+    spec.uuidlastblock["fenrir"]            = 1700;
+    spec.initauthuser["fenrir"]             = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    spec.timestamp["fenrir"]                = 1757546169;
+    spec.checkpointHeight["fenrir"]         = 10100;
+    spec.checkpointHash["fenrir"]           = "0x7b8bfd71e74fdad2cbb827c5303511e3ace04dd697fb5d2277b10144faed0909";
+
+    spec.coinSymbol["galatea"]              = "GALA";
+    spec.psztimestamp["galatea"]            = "Power manifests through permitted pathways.";
+    spec.nonce["galatea"]                   = 556774;
+    spec.genesishash["galatea"]             = "0x0ea1f114252089752aa0016f27d7e8faee61a8e7586700b2a87c7b368eb7468d";
+    spec.genesismerkleroot["galatea"]       = "0x5eabdc8ff70c6507462e4f089ded44892fd5351ab3035f981953666be8b80f86";
+    spec.nDefaultPort["galatea"]            = 55785;
+    spec.pubkeyPrefix["galatea"]            = 74;
+    spec.scriptPrefix["galatea"]            = 51;
+    spec.secretPrefix["galatea"]            = 151;
+    spec.pchMessageStart["galatea"][0]      = 0xbb;
+    spec.pchMessageStart["galatea"][1]      = 0xe7;
+    spec.pchMessageStart["galatea"][2]      = 0x89;
+    spec.pchMessageStart["galatea"][3]      = 0xaa;
+    spec.uuidlastblock["galatea"]           = 1700;
+    spec.initauthuser["galatea"]            = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    spec.timestamp["galatea"]               = 1757546169;
+    spec.checkpointHeight["galatea"]        = 9800;
+    spec.checkpointHash["galatea"]          = "0x75ccd5fac5fed32d39284d9e3e2964df2fce943359430f0db5f2caeb84e272e8";
+
+    spec.coinSymbol["halley"]               = "HALL";
+    spec.psztimestamp["halley"]             = "Dissent becomes indistinguishable from noise.";
+    spec.nonce["halley"]                    = 991604;
+    spec.genesishash["halley"]              = "0x77fe25810bdd8930db8e69fd85b7912a984a6a362ad8b2e528f3bd765c02a778";
+    spec.genesismerkleroot["halley"]        = "0x3fa8eb9960cfb7a94fcd70309ecf1d595028418958c1a9499e5e243d0f57df04";
+    spec.nDefaultPort["halley"]             = 53836;
+    spec.pubkeyPrefix["halley"]             = 54;
+    spec.scriptPrefix["halley"]             = 63;
+    spec.secretPrefix["halley"]             = 120;
+    spec.pchMessageStart["halley"][0]       = 0xd0;
+    spec.pchMessageStart["halley"][1]       = 0x85;
+    spec.pchMessageStart["halley"][2]       = 0xc0;
+    spec.pchMessageStart["halley"][3]       = 0xfe;
+    spec.uuidlastblock["halley"]            = 1700;
+    spec.initauthuser["halley"]             = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    spec.timestamp["halley"]                = 1757546169;
+    spec.checkpointHeight["halley"]         = 6775;
+    spec.checkpointHash["halley"]           = "0x182a8c4632ff0f1a4629960cf5cc889519c230dd0ec2484bb323f1603ece74af";
+
+    spec.coinSymbol["indus"]                = "INDU";
+    spec.psztimestamp["indus"]              = "The crawler maps all possible connections.";
+    spec.nonce["indus"]                     = 74649;
+    spec.genesishash["indus"]               = "0x18d80573782f9dfc69e2230a876f86e587f081ef3eb1ab81ca66a20d6625f00a";
+    spec.genesismerkleroot["indus"]         = "0x97f255138b3a7d9f9ac3b770d4d5b92a24e7c49a7624b18b1c866d0d15fb35c0";
+    spec.nDefaultPort["indus"]              = 54700;
+    spec.pubkeyPrefix["indus"]              = 12;
+    spec.scriptPrefix["indus"]              = 11;
+    spec.secretPrefix["indus"]              = 126;
+    spec.pchMessageStart["indus"][0]        = 0xed;
+    spec.pchMessageStart["indus"][1]        = 0xfd;
+    spec.pchMessageStart["indus"][2]        = 0xad;
+    spec.pchMessageStart["indus"][3]        = 0xeb;
+    spec.uuidlastblock["indus"]             = 1700;
+    spec.initauthuser["indus"]              = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    spec.timestamp["indus"]                 = 1757546169;
+    spec.checkpointHeight["indus"]          = 6775;
+    spec.checkpointHash["indus"]            = "0x9e04be9327e3952c5a20cc744f51e5a885f624b407750b263eefad94d8afade8";
+
+    spec.coinSymbol["infiniloop"]           = "IL8P";
+    spec.displayName["infiniloop"]          = "InfiniLooP";
+    spec.psztimestamp["infiniloop"]         = "CNN: California to extend stay-at-home orders as hospitals hit breaking point due to COVID";
+    spec.nonce["infiniloop"]                = 703813;
+    spec.genesishash["infiniloop"]          = "0x000001ed1ed7503c6ef472314d8138b7440ebd0c5c8b539481705032bbed295a";
+    spec.genesismerkleroot["infiniloop"]    = "0xab44c95608c9971475915ed3d31326569dee3b30b610d1bd1e423aab32015c74";
+    spec.nDefaultPort["infiniloop"]         = 9449;
+    spec.pubkeyPrefix["infiniloop"]         = 33;
+    spec.scriptPrefix["infiniloop"]         = 85;
+    spec.secretPrefix["infiniloop"]         = 153;
+    spec.pchMessageStart["infiniloop"][0]   = 0x71;
+    spec.pchMessageStart["infiniloop"][1]   = 0x33;
+    spec.pchMessageStart["infiniloop"][2]   = 0x21;
+    spec.pchMessageStart["infiniloop"][3]   = 0x00;
+    spec.uuidlastblock["infiniloop"]        = 3084941;
+    spec.initauthuser["infiniloop"]         = "58721d870b5e33d55009431cd5e8c6f0b375e033";
+    spec.timestamp["infiniloop"]            = 1609281149;
+    spec.checkpointHeight["infiniloop"]     = 2808765;
+    spec.checkpointHash["infiniloop"]       = "0xa437ef7f4666568ad9642a4b71f969b6a4215f5f80d28e9e9f1a01e3d27dcf75";
+
+    spec.coinSymbol["lynx"]                 = "LYNX";
+    spec.psztimestamp["lynx"]               = "ICanHazKitteh at epoch 1387779684. Meow. Now pet me.";
+    spec.nonce["lynx"]                      = 2714385;
+    spec.genesishash["lynx"]                = "0x984b30fc9bb5e5ff424ad7f4ec1930538a7b14a2d93e58ad7976c23154ea4a76";
+    spec.genesismerkleroot["lynx"]          = "0xc2adb964220f170f6c4fe9002f0db19a6f9c9608f6f765ba0629ac3897028de5";
+    spec.nDefaultPort["lynx"]               = 22566;
+    spec.pubkeyPrefix["lynx"]               = 45;
+    spec.scriptPrefix["lynx"]               = 22;
+    spec.secretPrefix["lynx"]               = 173;
+    spec.pchMessageStart["lynx"][0]         = 0xfa;
+    spec.pchMessageStart["lynx"][1]         = 0xcf;
+    spec.pchMessageStart["lynx"][2]         = 0xb3;
+    spec.pchMessageStart["lynx"][3]         = 0xdc;
+    spec.uuidlastblock["lynx"]              = 3084941;
+    spec.initauthuser["lynx"]               = "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d";
+    spec.timestamp["lynx"]                  = 1387779684;
+    spec.checkpointHeight["lynx"]           = 3251660;
+    spec.checkpointHash["lynx"]             = "0x0869637aeb85c4fcd680a117a2a67e76360fbdd2780b99951bb85762db5ef5ec";
+}
+
+// Ticker for the chain this binary was built for -- "ALIO" when CURRENT_CHAIN is
+// alioth. Reads the same spec.coinSymbol table the node uses, so the two cannot
+// drift, and does not require SelectParams() to have run.
+// A privately populated ChainSpec for the accessors below.
+//
+// They must NOT read the global `spec`. Namespace-scope RPC help objects such as
+// getblock_vin in rpc/blockchain.cpp are initialized during static init, and they
+// reach these accessors through CurrencyUnit() in policy/feerate.h. Cross-TU
+// static initialization order is unspecified, so the global's std::maps may not be
+// constructed yet -- writing to them there is UB, and it segfaulted in
+// _Rb_tree_decrement before main().
+//
+// A function-local static has no such ordering problem: it is constructed on first
+// use, whenever that happens to be. The global `spec` is left exactly as it was for
+// the chain params constructors, which run long after startup.
+static const ChainSpec& HardcodedSpecs()
+{
+    static const ChainSpec specs = [] {
+        ChainSpec s;
+        LoadHardcodedChainSpecs(s);
+        return s;
+    }();
+    return specs;
+}
+
+const std::string& CurrentCoinSymbol()
+{
+    static const std::string symbol = [] {
+        const ChainSpec& specs = HardcodedSpecs();
+        auto it = specs.coinSymbol.find(CURRENT_CHAIN);
+        return it != specs.coinSymbol.end() ? it->second : std::string{};
+    }();
+    return symbol;
+}
+
+// Display spelling of the chain this binary was built for: "InfiniLooP" rather
+// than the "Infiniloop" you get from capitalizing the chain id. Only chains with
+// an irregular spelling carry a spec.displayName row; everything else falls back
+// to the capitalized id, so adding a normal chain needs no entry at all.
+const std::string& CurrentChainDisplayName()
+{
+    static const std::string name = [] {
+        const ChainSpec& specs = HardcodedSpecs();
+        auto it = specs.displayName.find(CURRENT_CHAIN);
+        if (it != specs.displayName.end() && !it->second.empty()) return it->second;
+        std::string fallback{CURRENT_CHAIN};
+        if (!fallback.empty()) fallback[0] = std::toupper(static_cast<unsigned char>(fallback[0]));
+        return fallback;
+    }();
+    return name;
+}
 
 static void CalculateGenesis(CBlock& block, uint256 powLimit)
 {
@@ -303,203 +579,7 @@ public:
         consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 1 * 60 * 60;
 
-        spec.psztimestamp["alioth"] = "Conformity wears the mask of patriotism.";
-        spec.nonce["alioth"] = 2951643;
-        spec.genesishash["alioth"] = "0xfa9f9bd23d7ed9984c1fe756caeaa3af9e63887f4b1fe4807f3915af74c61a7b";
-        spec.genesismerkleroot["alioth"] = "0xa3757e41c96b21f473e891486c7e1afe35fea214dfc4e43540ef5a71884918cf";
-        spec.nDefaultPort["alioth"] = 55801;
-        spec.pubkeyPrefix["alioth"] = 215;
-        spec.scriptPrefix["alioth"] = 239;
-        spec.secretPrefix["alioth"] = 214;
-        spec.pchMessageStart["alioth"][0] = 0xdd;
-        spec.pchMessageStart["alioth"][1] = 0xf4;
-        spec.pchMessageStart["alioth"][2] = 0xc1;
-        spec.pchMessageStart["alioth"][3] = 0xdb;
-        spec.uuidlastblock["alioth"] = 1700;
-        spec.initauthuser["alioth"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        spec.timestamp["alioth"] = 1757546169;
-        spec.checkpointHeight["alioth"] = 10500;
-        spec.checkpointHash["alioth"] = "0x74f2f2840068536ec9aec7a97abb4abc71bdedc4fd04e80bb750addea114ac61";
-
-        spec.psztimestamp["borrelly"] = "Memory becomes unreliable without external verification.";
-        spec.nonce["borrelly"] = 2257023;
-        spec.genesishash["borrelly"] = "0xc936175d9ea6f49a595f7cd75ce065c5bb08ed5abc0e5d8b42b04735d916e4a7";
-        spec.genesismerkleroot["borrelly"] = "0x9b9d2ba1a92f6b99301fa4e580a0b9d59220d1b70ef504740d2aa97f6a22e509";
-        spec.nDefaultPort["borrelly"] = 58400;
-        spec.pubkeyPrefix["borrelly"] = 189;
-        spec.scriptPrefix["borrelly"] = 87;
-        spec.secretPrefix["borrelly"] = 117;
-        spec.pchMessageStart["borrelly"][0] = 0xd3;
-        spec.pchMessageStart["borrelly"][1] = 0xae;
-        spec.pchMessageStart["borrelly"][2] = 0x84;
-        spec.pchMessageStart["borrelly"][3] = 0xcc;
-        spec.uuidlastblock["borrelly"] = 1700;
-        spec.initauthuser["borrelly"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        spec.timestamp["borrelly"] = 1757546169;
-        spec.checkpointHeight["borrelly"] = 10500;
-        spec.checkpointHash["borrelly"] = "0xa75562856a068540a0f9480e5540ca935e963bbdde8af837cf3e821e2044f453";
-
-        spec.psztimestamp["cassiopeia"] = "The platform shapes thought through design.";
-        spec.nonce["cassiopeia"] = 962749;
-        spec.genesishash["cassiopeia"] = "0xd288cc1734cefc4a36a13c5de8d663356dcc6b1ca7a6d1f0fd3b6a6a34b0d0c3";
-        spec.genesismerkleroot["cassiopeia"] = "0x6d185b08de212b5a2b0b3bab3efc4178751f3507bb270fe0aa7a7f2990c3cb50";
-        spec.nDefaultPort["cassiopeia"] = 53053;
-        spec.pubkeyPrefix["cassiopeia"] = 252;
-        spec.scriptPrefix["cassiopeia"] = 193;
-        spec.secretPrefix["cassiopeia"] = 136;
-        spec.pchMessageStart["cassiopeia"][0] = 0xb2;
-        spec.pchMessageStart["cassiopeia"][1] = 0x82;
-        spec.pchMessageStart["cassiopeia"][2] = 0xe4;
-        spec.pchMessageStart["cassiopeia"][3] = 0xc4;
-        spec.uuidlastblock["cassiopeia"] = 1700;
-        spec.initauthuser["cassiopeia"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        spec.timestamp["cassiopeia"] = 1757546169;
-        spec.checkpointHeight["cassiopeia"] = 6750;
-        spec.checkpointHash["cassiopeia"] = "0x2ad7da8b9e87b286bbe8ffbf2e3b560625ecca35f9436d74a34115f3470d6b56";
-
-        spec.psztimestamp["delphinus"] = "Truth becomes what the fact-checkers approve.";
-        spec.nonce["delphinus"] = 413425;
-        spec.genesishash["delphinus"] = "0x2d749f17c25d34c4cd443dc44a0e895e99bce4d59a6d38404c2ab4bc3a244237";
-        spec.genesismerkleroot["delphinus"] = "0x6e0a0884c287f779601517c18224109711f5a5f753e73daa1aa9117a0ec97721";
-        spec.nDefaultPort["delphinus"] = 57690;
-        spec.pubkeyPrefix["delphinus"] = 163;
-        spec.scriptPrefix["delphinus"] = 137;
-        spec.secretPrefix["delphinus"] = 149;
-        spec.pchMessageStart["delphinus"][0] = 0xc9;
-        spec.pchMessageStart["delphinus"][1] = 0x99;
-        spec.pchMessageStart["delphinus"][2] = 0xf9;
-        spec.pchMessageStart["delphinus"][3] = 0xe6;
-        spec.uuidlastblock["delphinus"] = 1700;
-        spec.initauthuser["delphinus"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        spec.timestamp["delphinus"] = 1757546169;
-        spec.checkpointHeight["delphinus"] = 10200;
-        spec.checkpointHash["delphinus"] = "0x37735afcd430501b8570de4bd00428240dcd985ed67c5006fd4c07b351990b7c";
-
-        spec.psztimestamp["enceladus"] = "Every interaction feeds machine learning.";
-        spec.nonce["enceladus"] = 637913;
-        spec.genesishash["enceladus"] = "0x68274c0a8bcb86634a341a8a98294c4883e70953a07f7db6c9982eb1b1a66efe";
-        spec.genesismerkleroot["enceladus"] = "0x76aea56ac1430737e0593c4f7f6fa733a8e4d620f0beee0511a2346af33adbdf";
-        spec.nDefaultPort["enceladus"] = 58610;
-        spec.pubkeyPrefix["enceladus"] = 85;
-        spec.scriptPrefix["enceladus"] = 118;
-        spec.secretPrefix["enceladus"] = 141;
-        spec.pchMessageStart["enceladus"][0] = 0x9a;
-        spec.pchMessageStart["enceladus"][1] = 0x87;
-        spec.pchMessageStart["enceladus"][2] = 0xb7;
-        spec.pchMessageStart["enceladus"][3] = 0xc8;
-        spec.uuidlastblock["enceladus"] = 1700;
-        spec.initauthuser["enceladus"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        spec.timestamp["enceladus"] = 1757546169;
-        spec.checkpointHeight["enceladus"] = 10175;
-        spec.checkpointHash["enceladus"] = "0x47e8bac1e2fdec00cb6edd3349910b46257c2c36d88caef34b8782c2093a20fc";
-
-        spec.psztimestamp["fenrir"] = "Conformity spreads through social proof.";
-        spec.nonce["fenrir"] = 170269;
-        spec.genesishash["fenrir"] = "0x43204086224f60f8ab041f5fc6b3c6b72b01323fb9408fc7c49412d916188c7d";
-        spec.genesismerkleroot["fenrir"] = "0xb9f9c5cd75b0d1f261b0d3683dfc8ed79a696d5c7ecfa814d7fb2cdc28071e12";
-        spec.nDefaultPort["fenrir"] = 54825;
-        spec.pubkeyPrefix["fenrir"] = 5;
-        spec.scriptPrefix["fenrir"] = 239;
-        spec.secretPrefix["fenrir"] = 208;
-        spec.pchMessageStart["fenrir"][0] = 0xef;
-        spec.pchMessageStart["fenrir"][1] = 0xda;
-        spec.pchMessageStart["fenrir"][2] = 0xcf;
-        spec.pchMessageStart["fenrir"][3] = 0xe1;
-        spec.uuidlastblock["fenrir"] = 1700;
-        spec.initauthuser["fenrir"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        spec.timestamp["fenrir"] = 1757546169;
-        spec.checkpointHeight["fenrir"] = 10100;
-        spec.checkpointHash["fenrir"] = "0x7b8bfd71e74fdad2cbb827c5303511e3ace04dd697fb5d2277b10144faed0909";
-
-        spec.psztimestamp["galatea"] = "Power manifests through permitted pathways.";
-        spec.nonce["galatea"] = 556774;
-        spec.genesishash["galatea"] = "0x0ea1f114252089752aa0016f27d7e8faee61a8e7586700b2a87c7b368eb7468d";
-        spec.genesismerkleroot["galatea"] = "0x5eabdc8ff70c6507462e4f089ded44892fd5351ab3035f981953666be8b80f86";
-        spec.nDefaultPort["galatea"] = 55785;
-        spec.pubkeyPrefix["galatea"] = 74;
-        spec.scriptPrefix["galatea"] = 51;
-        spec.secretPrefix["galatea"] = 151;
-        spec.pchMessageStart["galatea"][0] = 0xbb;
-        spec.pchMessageStart["galatea"][1] = 0xe7;
-        spec.pchMessageStart["galatea"][2] = 0x89;
-        spec.pchMessageStart["galatea"][3] = 0xaa;
-        spec.uuidlastblock["galatea"] = 1700;
-        spec.initauthuser["galatea"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        spec.timestamp["galatea"] = 1757546169;
-        spec.checkpointHeight["galatea"] = 9800;
-        spec.checkpointHash["galatea"] = "0x75ccd5fac5fed32d39284d9e3e2964df2fce943359430f0db5f2caeb84e272e8";
-
-        spec.psztimestamp["halley"] = "Dissent becomes indistinguishable from noise.";
-        spec.nonce["halley"] = 991604;
-        spec.genesishash["halley"] = "0x77fe25810bdd8930db8e69fd85b7912a984a6a362ad8b2e528f3bd765c02a778";
-        spec.genesismerkleroot["halley"] = "0x3fa8eb9960cfb7a94fcd70309ecf1d595028418958c1a9499e5e243d0f57df04";
-        spec.nDefaultPort["halley"] = 53836;
-        spec.pubkeyPrefix["halley"] = 54;
-        spec.scriptPrefix["halley"] = 63;
-        spec.secretPrefix["halley"] = 120;
-        spec.pchMessageStart["halley"][0] = 0xd0;
-        spec.pchMessageStart["halley"][1] = 0x85;
-        spec.pchMessageStart["halley"][2] = 0xc0;
-        spec.pchMessageStart["halley"][3] = 0xfe;
-        spec.uuidlastblock["halley"] = 1700;
-        spec.initauthuser["halley"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        spec.timestamp["halley"] = 1757546169;
-        spec.checkpointHeight["halley"] = 6775;
-        spec.checkpointHash["halley"] = "0x182a8c4632ff0f1a4629960cf5cc889519c230dd0ec2484bb323f1603ece74af";
-
-        spec.psztimestamp["indus"] = "The crawler maps all possible connections.";
-        spec.nonce["indus"] = 74649;
-        spec.genesishash["indus"] = "0x18d80573782f9dfc69e2230a876f86e587f081ef3eb1ab81ca66a20d6625f00a";
-        spec.genesismerkleroot["indus"] = "0x97f255138b3a7d9f9ac3b770d4d5b92a24e7c49a7624b18b1c866d0d15fb35c0";
-        spec.nDefaultPort["indus"] = 54700;
-        spec.pubkeyPrefix["indus"] = 12;
-        spec.scriptPrefix["indus"] = 11;
-        spec.secretPrefix["indus"] = 126;
-        spec.pchMessageStart["indus"][0] = 0xed;
-        spec.pchMessageStart["indus"][1] = 0xfd;
-        spec.pchMessageStart["indus"][2] = 0xad;
-        spec.pchMessageStart["indus"][3] = 0xeb;
-        spec.uuidlastblock["indus"] = 1700;
-        spec.initauthuser["indus"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        spec.timestamp["indus"] = 1757546169;
-        spec.checkpointHeight["indus"] = 6775;
-        spec.checkpointHash["indus"] = "0x9e04be9327e3952c5a20cc744f51e5a885f624b407750b263eefad94d8afade8";
-
-        spec.psztimestamp["infiniloop"] = "CNN: California to extend stay-at-home orders as hospitals hit breaking point due to COVID";
-        spec.nonce["infiniloop"] = 703813;
-        spec.genesishash["infiniloop"] = "0x000001ed1ed7503c6ef472314d8138b7440ebd0c5c8b539481705032bbed295a";
-        spec.genesismerkleroot["infiniloop"] = "0xab44c95608c9971475915ed3d31326569dee3b30b610d1bd1e423aab32015c74";
-        spec.nDefaultPort["infiniloop"] = 9449;
-        spec.pubkeyPrefix["infiniloop"] = 33;
-        spec.scriptPrefix["infiniloop"] = 85;
-        spec.secretPrefix["infiniloop"] = 153;
-        spec.pchMessageStart["infiniloop"][0] = 0x71;
-        spec.pchMessageStart["infiniloop"][1] = 0x33;
-        spec.pchMessageStart["infiniloop"][2] = 0x21;
-        spec.pchMessageStart["infiniloop"][3] = 0x00;
-        spec.uuidlastblock["infiniloop"] = 3084941;
-        spec.initauthuser["infiniloop"] = "58721d870b5e33d55009431cd5e8c6f0b375e033";
-        spec.timestamp["infiniloop"] = 1609281149;
-        spec.checkpointHeight["infiniloop"] = 2808765;
-        spec.checkpointHash["infiniloop"] = "0xa437ef7f4666568ad9642a4b71f969b6a4215f5f80d28e9e9f1a01e3d27dcf75";
-
-        spec.psztimestamp["lynx"] = "ICanHazKitteh at epoch 1387779684. Meow. Now pet me.";
-        spec.nonce["lynx"] = 2714385;
-        spec.genesishash["lynx"] = "0x984b30fc9bb5e5ff424ad7f4ec1930538a7b14a2d93e58ad7976c23154ea4a76";
-        spec.genesismerkleroot["lynx"] = "0xc2adb964220f170f6c4fe9002f0db19a6f9c9608f6f765ba0629ac3897028de5";
-        spec.nDefaultPort["lynx"] = 22566;
-        spec.pubkeyPrefix["lynx"] = 45;
-        spec.scriptPrefix["lynx"] = 22;
-        spec.secretPrefix["lynx"] = 173;
-        spec.pchMessageStart["lynx"][0] = 0xfa;
-        spec.pchMessageStart["lynx"][1] = 0xcf;
-        spec.pchMessageStart["lynx"][2] = 0xb3;
-        spec.pchMessageStart["lynx"][3] = 0xdc;
-        spec.uuidlastblock["lynx"] = 3084941;
-        spec.initauthuser["lynx"] = "1c04e67bf21dc44abe42e84a5ef3bce31b77aa6d";
-        spec.timestamp["lynx"] = 1387779684;
-        spec.checkpointHeight["lynx"] = 3251660;
-        spec.checkpointHash["lynx"] = "0x0869637aeb85c4fcd680a117a2a67e76360fbdd2780b99951bb85762db5ef5ec";
+        LoadHardcodedChainSpecs(spec);
 
 
 

@@ -7,6 +7,7 @@
 #endif
 
 #include <chainparamsbase.h>
+#include <kernel/chainparams.h>
 #include <clientversion.h>
 #include <coins.h>
 #include <compat/compat.h>
@@ -101,7 +102,7 @@ static int AppInitRawTx(int argc, char* argv[])
 
     if (argc < 2 || HelpRequested(gArgs) || gArgs.IsArgSet("-version")) {
         // First part of help message is specific to this utility
-        std::string strUsage = PACKAGE_NAME " lynx-tx utility version " + FormatFullVersion() + "\n";
+        std::string strUsage = CurrentChainDisplayName() + " (" + CurrentCoinSymbol() + ") - " PACKAGE_NAME " lynx-tx utility version " + FormatFullVersion() + "\n";
 
         if (gArgs.IsArgSet("-version")) {
             strUsage += FormatParagraph(LicenseInfo());

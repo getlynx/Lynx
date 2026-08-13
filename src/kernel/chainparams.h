@@ -188,4 +188,20 @@ protected:
     ChainTxData chainTxData;
 };
 
+/**
+ * Ticker for the chain this binary was built for, e.g. "ALIO" when CURRENT_CHAIN
+ * is alioth. Sourced from the same spec.coinSymbol table the node reads, and
+ * usable before (or entirely without) SelectParams() -- the -version banners run
+ * ahead of chain selection, and lynx-cli never selects params at all.
+ */
+const std::string& CurrentCoinSymbol();
+
+/**
+ * Display spelling of the chain this binary was built for, e.g. "InfiniLooP"
+ * where capitalizing CURRENT_CHAIN would give "Infiniloop". Chains with a regular
+ * spelling need no spec.displayName entry; they fall back to the capitalized id.
+ * Feeds the -version banners and, via init.cpp, the P2P subversion string.
+ */
+const std::string& CurrentChainDisplayName();
+
 #endif // BITCOIN_KERNEL_CHAINPARAMS_H

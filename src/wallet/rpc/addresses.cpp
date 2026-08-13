@@ -166,7 +166,7 @@ RPCHelpMan listaddressgroupings()
                             {RPCResult::Type::ARR_FIXED, "", "",
                             {
                                 {RPCResult::Type::STR, "address", "The address"},
-                                {RPCResult::Type::STR_AMOUNT, "amount", "The amount in " + CURRENCY_UNIT},
+                                {RPCResult::Type::STR_AMOUNT, "amount", "The amount in " + CurrencyUnit()},
                                 {RPCResult::Type::STR, "label", /*optional=*/true, "The label"},
                             }},
                         }},

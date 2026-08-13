@@ -391,7 +391,7 @@ RPCHelpMan sendtoaddress()
         HELP_REQUIRING_PASSPHRASE,
                 {
                     {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "The coin address to send to."},
-                    {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The amount in " + CURRENCY_UNIT + " to send. eg 0.1"},
+                    {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The amount in " + CurrencyUnit() + " to send. eg 0.1"},
                     {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A comment used to store what the transaction is for.\n"
                                          "This is not part of the transaction, just kept in your wallet."},
                     {"comment_to", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A comment to store the name of the person or organization\n"
@@ -505,26 +505,26 @@ RPCHelpMan sendtoaddress()
 RPCHelpMan burn()
 {
     return RPCHelpMan{"burn",
-        "\nBurn the specified amount of " + CURRENCY_UNIT + " by committing it to a provably unspendable OP_RETURN output." +
+        "\nBurn the specified amount of " + CurrencyUnit() + " by committing it to a provably unspendable OP_RETURN output." +
         HELP_REQUIRING_PASSPHRASE,
         {
-            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The amount in " + CURRENCY_UNIT + " to burn. eg 100"},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The amount in " + CurrencyUnit() + " to burn. eg 100"},
             {"dry_run", RPCArg::Type::BOOL, RPCArg::Default{true}, "If true (the default), build and sign the transaction but do not broadcast it. Set false to actually destroy the coins."},
             {"tag", RPCArg::Type::STR, RPCArg::Default{std::string("\x00", 1)}, "ASCII text to embed in the OP_RETURN output. Useful as a burn marker for later on-chain identification."},
         },
         RPCResult{
             RPCResult::Type::OBJ, "", "",
             {
-                {RPCResult::Type::STR_AMOUNT, "amount", "The amount requested to burn in " + CURRENCY_UNIT + "."},
+                {RPCResult::Type::STR_AMOUNT, "amount", "The amount requested to burn in " + CurrencyUnit() + "."},
                 {RPCResult::Type::BOOL, "dry_run", "True if the transaction was built and signed but not broadcast."},
                 {RPCResult::Type::STR, "tag", "The tag embedded in the OP_RETURN output."},
                 {RPCResult::Type::STR_HEX, "txid", "The transaction id of the burn."},
                 {RPCResult::Type::STR_HEX, "hex", "The signed transaction hex."},
                 {RPCResult::Type::STR, "fee_reason", "The transaction fee reason."},
                 {RPCResult::Type::NUM, "burn_vout", "The index of the OP_RETURN output carrying the burn."},
-                {RPCResult::Type::STR_AMOUNT, "burn_amount", "The amount burned in " + CURRENCY_UNIT + "."},
-                {RPCResult::Type::STR_AMOUNT, "change_amount", "The change returned to the wallet in " + CURRENCY_UNIT + "."},
-                {RPCResult::Type::STR_AMOUNT, "fee", "The transaction fee paid in " + CURRENCY_UNIT + "."},
+                {RPCResult::Type::STR_AMOUNT, "burn_amount", "The amount burned in " + CurrencyUnit() + "."},
+                {RPCResult::Type::STR_AMOUNT, "change_amount", "The change returned to the wallet in " + CurrencyUnit() + "."},
+                {RPCResult::Type::STR_AMOUNT, "fee", "The transaction fee paid in " + CurrencyUnit() + "."},
             },
         },
         RPCExamples{
@@ -625,7 +625,7 @@ RPCHelpMan sendmany()
                      }},
                     {"amounts", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO, "The addresses and amounts",
                         {
-                            {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The coin address is the key, the numeric amount (can be string) in " + CURRENCY_UNIT + " is the value"},
+                            {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The coin address is the key, the numeric amount (can be string) in " + CurrencyUnit() + " is the value"},
                         },
                     },
                     {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED, "Ignored dummy value"},
@@ -728,10 +728,10 @@ RPCHelpMan sendmany()
 RPCHelpMan settxfee()
 {
     return RPCHelpMan{"settxfee",
-                "\nSet the transaction fee rate in " + CURRENCY_UNIT + "/kvB for this wallet. Overrides the global -paytxfee command line parameter.\n"
+                "\nSet the transaction fee rate in " + CurrencyUnit() + "/kvB for this wallet. Overrides the global -paytxfee command line parameter.\n"
                 "Can be deactivated by passing 0 as the fee. In that case automatic fee selection will be used by default.\n",
                 {
-                    {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The transaction fee rate in " + CURRENCY_UNIT + "/kvB"},
+                    {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The transaction fee rate in " + CurrencyUnit() + "/kvB"},
                 },
                 RPCResult{
                     RPCResult::Type::BOOL, "", "Returns true if successful"
@@ -898,7 +898,7 @@ void FundTransaction(CWallet& wallet, CMutableTransaction& tx, CAmount& fee_out,
 
         if (options.exists("feeRate")) {
             if (options.exists("fee_rate")) {
-                throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot specify both fee_rate (" + CURRENCY_ATOM + "/vB) and feeRate (" + CURRENCY_UNIT + "/kvB)");
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot specify both fee_rate (" + CURRENCY_ATOM + "/vB) and feeRate (" + CurrencyUnit() + "/kvB)");
             }
             if (options.exists("conf_target")) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot specify both conf_target and feeRate. Please provide either a confirmation target in blocks for automatic fee estimation, or an explicit fee rate.");
@@ -1093,7 +1093,7 @@ RPCHelpMan fundrawtransaction()
                                                           "e.g. with 'importpubkey' or 'importmulti' with the 'pubkeys' or 'desc' field."},
                             {"lockUnspents", RPCArg::Type::BOOL, RPCArg::Default{false}, "Lock selected unspent outputs"},
                             {"fee_rate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"}, "Specify a fee rate in " + CURRENCY_ATOM + "/vB."},
-                            {"feeRate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"}, "Specify a fee rate in " + CURRENCY_UNIT + "/kvB."},
+                            {"feeRate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"}, "Specify a fee rate in " + CurrencyUnit() + "/kvB."},
                             {"subtractFeeFromOutputs", RPCArg::Type::ARR, RPCArg::Default{UniValue::VARR}, "The integers.\n"
                                                           "The fee will be equally deducted from the amount of each specified output.\n"
                                                           "Those recipients will receive less coins than you enter in their corresponding amount field.\n"
@@ -1135,7 +1135,7 @@ RPCHelpMan fundrawtransaction()
                     RPCResult::Type::OBJ, "", "",
                     {
                         {RPCResult::Type::STR_HEX, "hex", "The resulting raw transaction (hex-encoded string)"},
-                        {RPCResult::Type::STR_AMOUNT, "fee", "Fee in " + CURRENCY_UNIT + " the resulting transaction pays"},
+                        {RPCResult::Type::STR_AMOUNT, "fee", "Fee in " + CurrencyUnit() + " the resulting transaction pays"},
                         {RPCResult::Type::NUM, "changepos", "The position of the added change output, or -1"},
                     }
                                 },
@@ -1283,7 +1283,7 @@ static std::vector<RPCArg> OutputsDoc()
         {"", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::OMITTED, "",
             {
                 {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "A key-value pair. The key (string) is the coin address,\n"
-                         "the value (float or string) is the amount in " + CURRENCY_UNIT + ""},
+                         "the value (float or string) is the amount in " + CurrencyUnit() + ""},
             },
         },
         {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
@@ -1312,7 +1312,7 @@ static RPCHelpMan bumpfee_helper(std::string method_name)
         "Alternatively, the user can specify a fee rate in " + CURRENCY_ATOM + "/vB for the new transaction.\n"
         "At a minimum, the new fee rate must be high enough to pay an additional new relay fee (incrementalfee\n"
         "returned by getnetworkinfo) to enter the node's mempool.\n"
-        "* WARNING: before version 0.21, fee_rate was in " + CURRENCY_UNIT + "/kvB. As of 0.21, fee_rate is in " + CURRENCY_ATOM + "/vB. *\n",
+        "* WARNING: before version 0.21, fee_rate was in " + CurrencyUnit() + "/kvB. As of 0.21, fee_rate is in " + CURRENCY_ATOM + "/vB. *\n",
         {
             {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The txid to be bumped"},
             {"options", RPCArg::Type::OBJ_NAMED_PARAMS, RPCArg::Optional::OMITTED, "",
@@ -1321,7 +1321,7 @@ static RPCHelpMan bumpfee_helper(std::string method_name)
                     {"fee_rate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"},
                              "\nSpecify a fee rate in " + CURRENCY_ATOM + "/vB instead of relying on the built-in fee estimator.\n"
                              "Must be at least " + incremental_fee + " higher than the current transaction fee rate.\n"
-                             "WARNING: before version 0.21, fee_rate was in " + CURRENCY_UNIT + "/kvB. As of 0.21, fee_rate is in " + CURRENCY_ATOM + "/vB.\n"},
+                             "WARNING: before version 0.21, fee_rate was in " + CurrencyUnit() + "/kvB. As of 0.21, fee_rate is in " + CURRENCY_ATOM + "/vB.\n"},
                     {"replaceable", RPCArg::Type::BOOL, RPCArg::Default{true}, "Whether the new transaction should still be\n"
                              "marked bip-125 replaceable. If true, the sequence numbers in the transaction will\n"
                              "be left unchanged from the original. If false, any input sequence numbers in the\n"
@@ -1626,7 +1626,7 @@ RPCHelpMan sendall()
                     {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "A coin address which receives an equal share of the unspecified amount."},
                     {"", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::OMITTED, "",
                         {
-                            {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "A key-value pair. The key (string) is the coin address, the value (float or string) is the amount in " + CURRENCY_UNIT + ""},
+                            {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "A key-value pair. The key (string) is the coin address, the value (float or string) is the amount in " + CurrencyUnit() + ""},
                         },
                     },
                 },
@@ -1685,7 +1685,7 @@ RPCHelpMan sendall()
         + HelpExampleCli("sendall", "'[\"" + EXAMPLE_ADDRESS[0] + "\", \"" + EXAMPLE_ADDRESS[1] + "\"]' null \"unset\" null '{\"fee_rate\": 1.5}'\n") +
         "Leave dust UTXOs in wallet, spend only UTXOs with positive effective value with a fee rate of 10 " + CURRENCY_ATOM + "/vB using the options argument\n"
         + HelpExampleCli("sendall", "'[\"" + EXAMPLE_ADDRESS[0] + "\"]' null \"unset\" null '{\"fee_rate\": 10, \"send_max\": true}'\n") +
-        "Spend all UTXOs with a fee rate of 1.3 " + CURRENCY_ATOM + "/vB using named arguments and sending a 0.25 " + CURRENCY_UNIT + " to another recipient\n"
+        "Spend all UTXOs with a fee rate of 1.3 " + CURRENCY_ATOM + "/vB using named arguments and sending a 0.25 " + CurrencyUnit() + " to another recipient\n"
         + HelpExampleCli("-named sendall", "recipients='[{\"" + EXAMPLE_ADDRESS[1] + "\": 0.25}, \""+ EXAMPLE_ADDRESS[0] + "\"]' fee_rate=1.3\n")
         },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
@@ -2001,7 +2001,7 @@ RPCHelpMan walletcreatefundedpsbt()
                             {"includeWatching", RPCArg::Type::BOOL, RPCArg::DefaultHint{"true for watch-only wallets, otherwise false"}, "Also select inputs which are watch only"},
                             {"lockUnspents", RPCArg::Type::BOOL, RPCArg::Default{false}, "Lock selected unspent outputs"},
                             {"fee_rate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"}, "Specify a fee rate in " + CURRENCY_ATOM + "/vB."},
-                            {"feeRate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"}, "Specify a fee rate in " + CURRENCY_UNIT + "/kvB."},
+                            {"feeRate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"}, "Specify a fee rate in " + CurrencyUnit() + "/kvB."},
                             {"subtractFeeFromOutputs", RPCArg::Type::ARR, RPCArg::Default{UniValue::VARR}, "The outputs to subtract the fee from.\n"
                                                           "The fee will be equally deducted from the amount of each specified output.\n"
                                                           "Those recipients will receive less coins than you enter in their corresponding amount field.\n"
@@ -2019,7 +2019,7 @@ RPCHelpMan walletcreatefundedpsbt()
                     RPCResult::Type::OBJ, "", "",
                     {
                         {RPCResult::Type::STR, "psbt", "The resulting raw transaction (base64-encoded string)"},
-                        {RPCResult::Type::STR_AMOUNT, "fee", "Fee in " + CURRENCY_UNIT + " the resulting transaction pays"},
+                        {RPCResult::Type::STR_AMOUNT, "fee", "Fee in " + CurrencyUnit() + " the resulting transaction pays"},
                         {RPCResult::Type::NUM, "changepos", "The position of the added change output, or -1"},
                     }
                                 },

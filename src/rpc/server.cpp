@@ -5,6 +5,8 @@
 
 #include <rpc/server.h>
 
+#include <clientversion.h>
+#include <kernel/chainparams.h>
 #include <rpc/util.h>
 #include <shutdown.h>
 #include <sync.h>
@@ -203,7 +205,12 @@ static RPCHelpMan help()
 
 static RPCHelpMan stop()
 {
-    static const std::string RESULT{PACKAGE_NAME " stopping"};
+    // Mirrors the -version banner and the "starting" line in bitcoind.cpp, so the
+    // shutdown reply names the chain and ticker rather than just the codebase.
+    // Function-local, so it is built on first use rather than during static init.
+    static const std::string RESULT{strprintf("%s (%s) - %s version %s stopping",
+                                              CurrentChainDisplayName(), CurrentCoinSymbol(),
+                                              PACKAGE_NAME, FormatFullVersion())};
     return RPCHelpMan{"stop",
     // Also accept the hidden 'wait' integer argument (milliseconds)
     // For instance, 'stop 1000' makes the call wait 1 second before returning

@@ -9,6 +9,7 @@
 
 #include <chainparamsbase.h>
 #include <clientversion.h>
+#include <kernel/chainparams.h>
 #include <common/url.h>
 #include <compat/compat.h>
 #include <compat/stdin.h>
@@ -148,7 +149,7 @@ static int AppInitRPC(int argc, char* argv[])
         return EXIT_FAILURE;
     }
     if (argc < 2 || HelpRequested(gArgs) || gArgs.IsArgSet("-version")) {
-        std::string strUsage = PACKAGE_NAME " RPC client version " + FormatFullVersion() + "\n";
+        std::string strUsage = CurrentChainDisplayName() + " (" + CurrentCoinSymbol() + ") - " PACKAGE_NAME " RPC client version " + FormatFullVersion() + "\n";
 
         if (gArgs.IsArgSet("-version")) {
             strUsage += FormatParagraph(LicenseInfo());
@@ -1051,7 +1052,7 @@ static void ParseGetInfoResult(UniValue& result)
     }
     result_string += strprintf("Proxies: %s\n", formatted_proxies.empty() ? "n/a" : Join(formatted_proxies, ", "));
 
-    result_string += strprintf("Min tx relay fee rate (%s/kvB): %s\n\n", CURRENCY_UNIT, result["relayfee"].getValStr());
+    result_string += strprintf("Min tx relay fee rate (%s/kvB): %s\n\n", CurrencyUnit(), result["relayfee"].getValStr());
 
     if (!result["has_wallet"].isNull()) {
         const std::string walletname = result["walletname"].getValStr();
@@ -1061,7 +1062,7 @@ static void ParseGetInfoResult(UniValue& result)
         if (!result["unlocked_until"].isNull()) {
             result_string += strprintf("Unlocked until: %s\n", result["unlocked_until"].getValStr());
         }
-        result_string += strprintf("Transaction fee rate (-paytxfee) (%s/kvB): %s\n\n", CURRENCY_UNIT, result["paytxfee"].getValStr());
+        result_string += strprintf("Transaction fee rate (-paytxfee) (%s/kvB): %s\n\n", CurrencyUnit(), result["paytxfee"].getValStr());
     }
     if (!result["balance"].isNull()) {
         result_string += strprintf("%sBalance:%s %s\n\n", CYAN, RESET, result["balance"].getValStr());

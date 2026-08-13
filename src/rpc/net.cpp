@@ -589,6 +589,7 @@ static RPCHelpMan getnetworkinfo()
                     {
                         {RPCResult::Type::NUM, "version", "the server version"},
                         {RPCResult::Type::STR, "subversion", "the server subversion string"},
+                        {RPCResult::Type::STR, "coinsymbol", "the ticker of the chain this server was built for, e.g. ALIO"},
                         {RPCResult::Type::NUM, "protocolversion", "the protocol version"},
                         {RPCResult::Type::STR_HEX, "localservices", "the services we offer to the network"},
                         {RPCResult::Type::ARR, "localservicesnames", "the services we offer to the network, in human-readable form",
@@ -612,8 +613,8 @@ static RPCHelpMan getnetworkinfo()
                                 {RPCResult::Type::BOOL, "proxy_randomize_credentials", "Whether randomized credentials are used"},
                             }},
                         }},
-                        {RPCResult::Type::NUM, "relayfee", "minimum relay fee rate for transactions in " + CURRENCY_UNIT + "/kvB"},
-                        {RPCResult::Type::NUM, "incrementalfee", "minimum fee rate increment for mempool limiting or replacement in " + CURRENCY_UNIT + "/kvB"},
+                        {RPCResult::Type::NUM, "relayfee", "minimum relay fee rate for transactions in " + CurrencyUnit() + "/kvB"},
+                        {RPCResult::Type::NUM, "incrementalfee", "minimum fee rate increment for mempool limiting or replacement in " + CurrencyUnit() + "/kvB"},
                         {RPCResult::Type::ARR, "localaddresses", "list of local addresses",
                         {
                             {RPCResult::Type::OBJ, "", "",
@@ -636,6 +637,7 @@ static RPCHelpMan getnetworkinfo()
     UniValue obj(UniValue::VOBJ);
     obj.pushKV("version",       CLIENT_VERSION);
     obj.pushKV("subversion",    strSubVersion);
+    obj.pushKV("coinsymbol",    CurrentCoinSymbol());
     obj.pushKV("protocolversion",PROTOCOL_VERSION);
     NodeContext& node = EnsureAnyNodeContext(request.context);
     if (node.connman) {
