@@ -2415,7 +2415,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         const uint256 av = m_chainman.AssumedValidBlock();
         auto it = m_blockman.m_block_index.find(av);
         bool found = !av.IsNull() && it != m_blockman.m_block_index.end();
-        LogPrintf("assumevalid h=%d fScriptChecks=%d av_null=%d found=%d anc_av=%d anc_hdr=%d minwork=%d eqtime=%d\n",
+        LogPrint(BCLog::STARTUP, "assumevalid h=%d fScriptChecks=%d av_null=%d found=%d anc_av=%d anc_hdr=%d minwork=%d eqtime=%d\n",
             pindex->nHeight, fScriptChecks, av.IsNull(), found,
             found && it->second.GetAncestor(pindex->nHeight) == pindex,
             m_chainman.m_best_header && m_chainman.m_best_header->GetAncestor(pindex->nHeight) == pindex,
