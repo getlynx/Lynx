@@ -112,7 +112,7 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 #   3. DAEMON MAINTENANCE:
 #      - Ensures daemon is running
 #      - Monitors blockchain synchronization status
-#      - Automatically restarts daemon during sync
+#      - Leaves the daemon undisturbed while it syncs
 #      - Disables timer once sync is complete
 #
 #   4. ENHANCED FEATURES:
@@ -195,7 +195,7 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 # OPERATION MODES:
 #   - INITIAL SETUP: Creates all necessary files and services
 #   - MAINTENANCE: Runs every 12 minutes via systemd timer
-#   - SYNC MONITORING: Checks blockchain sync status and manages daemon
+#   - SYNC MONITORING: Checks sync status; disables the timer once synced
 #   - UPDATE: Updates daemon to latest release (use 'update' argument)
 #   - REBUILD: Updates services, timers, and aliases (use 'rebuild' argument)
 #   - CHAIN FILTER: Specify --chain=<name> to download binaries for a specific
@@ -2619,10 +2619,12 @@ isBlockchainSyncComplete() {
         exit 0
     fi
 
-    # If still syncing, restart service
+    # If still syncing, leave the daemon alone. Older builds needed a periodic
+    # restart to get unstuck; the current sync is stable and self-recovering, so
+    # a 12-minute restart only discards in-flight progress — on slower disks it
+    # can keep the sync from ever finishing.
     if [ -n "$SYNC_STATUS" ] && [ "$SYNC_STATUS" != "null" ]; then
-        log "Blockchain still syncing (initialblockdownload: $SYNC_STATUS). Restarting ${effective_chain} daemon. This is expected behaviour."
-        systemctl restart $service_name
+        log "Blockchain still syncing (initialblockdownload: $SYNC_STATUS). Leaving ${effective_chain} daemon running."
     else
         log "Daemon not ready or RPC call failed. Will try again next time."
     fi
@@ -2692,7 +2694,7 @@ if [[ "$update_mode" == "update" ]]; then
     fi
 
     # Check sync status — if synced, disable the timer and exit.
-    # If still syncing, continue with update to restart the daemon.
+    # If still syncing, exit early and leave the daemon running undisturbed.
     isBlockchainSyncComplete
 
     # Detect OS details early so they're available for all functions
