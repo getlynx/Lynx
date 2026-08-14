@@ -7,6 +7,7 @@
 #endif
 
 #include <clientversion.h>
+#include <kernel/chainparams.h>
 #include <logging.h>
 #include <node/interface_ui.h>
 #include <tinyformat.h>
@@ -147,14 +148,11 @@ void LogPackageVersion()
 #else
     version_string += " (release build)";
 #endif
-    std::string packagename = std::string(CURRENT_CHAIN) + " Core";
-    packagename[0] = (packagename[0] >= 'a' && packagename[0] <= 'z') ? packagename[0]-'a'+'A' : packagename[0];
-
-    // LogPrintf(PACKAGE_NAME " version %s\n", version_string);
-    LogPrintf("%s version %s\n", packagename, version_string);
+    // Same identity line as the -version banner in bitcoind.cpp: display name,
+    // ticker, then version.
+    LogPrintf("%s (%s) version %s\n", CurrentChainDisplayName(), CurrentCoinSymbol(), version_string);
     LogPrintf("\n");
-    LogPrintf("%s is part of the Lynx Data Storage Network,\n", packagename);
-    LogPrintf("built from the Lynx Core codebase.\n");
+    LogPrintf("%s is built from the Lynx Core codebase and part of the Lynx Data Storage Network.\n", CurrentChainDisplayName());
     LogPrintf("\n");
     LogPrintf("The Lynx Data Storage Network (LDSN) is a decentralized, eco-friendly global\n");
     LogPrintf("platform for permanent data storage. Files are written whole onto the\n");
