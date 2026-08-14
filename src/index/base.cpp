@@ -227,16 +227,19 @@ void BaseIndex::ThreadSync()
 
 bool BaseIndex::Commit()
 {
-    // Don't commit anything if we haven't indexed any block yet
-    // (this could happen if init is interrupted).
-    bool ok = m_best_block_index != nullptr;
+    // Nothing to commit if no block has been indexed yet: init interrupted
+    // before the first block, or the first locator write of a fresh sync,
+    // whose one-behind index is the genesis block's null parent. A no-op, not
+    // a failure -- return without logging an error.
+    if (m_best_block_index == nullptr) {
+        return true;
+    }
+    bool ok = true;
+    CDBBatch batch(GetDB());
+    ok = CustomCommit(batch);
     if (ok) {
-        CDBBatch batch(GetDB());
-        ok = CustomCommit(batch);
-        if (ok) {
-            GetDB().WriteBestBlock(batch, GetLocator(*m_chain, m_best_block_index.load()->GetBlockHash()));
-            ok = GetDB().WriteBatch(batch);
-        }
+        GetDB().WriteBestBlock(batch, GetLocator(*m_chain, m_best_block_index.load()->GetBlockHash()));
+        ok = GetDB().WriteBatch(batch);
     }
     if (!ok) {
         return error("%s: Failed to commit latest %s state", __func__, GetName());
