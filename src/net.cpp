@@ -2261,7 +2261,7 @@ bool CConnman::BindListenPort(const CService& addrBind, bilingual_str& strError,
             strError = strprintf(_("Unable to bind to %s on this computer. %s is probably already running."), addrBind.ToStringAddrPort(), PACKAGE_NAME);
         else
             strError = strprintf(_("Unable to bind to %s on this computer (bind returned error %s)"), addrBind.ToStringAddrPort(), NetworkErrorString(nErr));
-        LogPrintLevel(BCLog::NET, BCLog::Level::Error, "%s\n", strError.original);
+        LogPrintLevel(BCLog::NET, BCLog::Level::Debug, "%s\n", strError.original);
         return false;
     }
     LogPrint(BCLog::STARTUP, "Bound to %s\n", addrBind.ToStringAddrPort());
