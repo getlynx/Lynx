@@ -17,6 +17,12 @@ enum class ChainType {
 
 std::string ChainTypeToString(ChainType chain);
 
+// Globally expose operator<< to tinyformat
+inline std::ostream& operator<<(std::ostream& os, const ChainType& chain) {
+    os << ChainTypeToString(chain);
+    return os;
+}
+
 std::optional<ChainType> ChainTypeFromString(std::string_view chain);
 
 #endif // BITCOIN_UTIL_CHAINTYPE_H
