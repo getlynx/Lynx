@@ -1810,6 +1810,10 @@ bool Chainstate::IsInitialBlockDownload() const
     if (m_chain.Tip()->Time() < Now<NodeSeconds>() - m_chainman.m_options.max_tip_age) {
         return true;
     }
+    LogPrintf("[ANCHOR-DIAG] LATCH FALSE at tip h=%d time=%d (%s) now=%d maxage=%ds minwork=%s tipwork=%s\n",
+        m_chain.Tip()->nHeight, m_chain.Tip()->GetBlockTime(), FormatISO8601DateTime(m_chain.Tip()->GetBlockTime()),
+        (int64_t)GetTime(), (int64_t)m_chainman.m_options.max_tip_age.count(),
+        m_chainman.MinimumChainWork().GetHex(), m_chain.Tip()->nChainWork.GetHex());
     LogPrint(BCLog::STARTUP, "Leaving InitialBlockDownload (latching to false)\n");
     // TEMP: final dump suppressed; single dump fires at height 2,800,800 in UpdateTip. Restore this line to revert.
     // LogIBDComponentTimes();
@@ -3039,7 +3043,27 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
     // [ANCHOR-ONLY SYNC] Keep the connect thread's IBD view current so it
     // reopens to normal peer selection the moment IBD latches off. Seeded at
     // startup in init.cpp. Remove to revert.
-    g_ibd_active.store(this->IsInitialBlockDownload(), std::memory_order_relaxed);
+    {
+        const bool ibd_now = this->IsInitialBlockDownload();
+        // [ANCHOR-DIAG] Log the exact height/time at which the IBD latch changes
+        // state, since that latch is what gates anchor-only sourcing.
+        static int s_last_ibd = -1;
+        const int ibd_int = ibd_now ? 1 : 0;
+        if (ibd_int != s_last_ibd) {
+            s_last_ibd = ibd_int;
+            const int64_t now = GetTime();
+            const int64_t maxage = (int64_t)m_chainman.m_options.max_tip_age.count();
+            LogPrintf("[ANCHOR-DIAG] IsInitialBlockDownload -> %s | tip height=%d tipTime=%d (%s) now=%d cutoff=now-maxtipage=%d | bestHeader=%d | minwork=%s tipwork=%s | cachedFinishedIBD=%d\n",
+                ibd_now ? "TRUE (in-sync, anchors-only)" : "FALSE (sync-over, outbound reopens)",
+                pindexNew->nHeight,
+                pindexNew->GetBlockTime(), FormatISO8601DateTime(pindexNew->GetBlockTime()),
+                now, now - maxage,
+                m_chainman.m_best_header ? m_chainman.m_best_header->nHeight : -1,
+                m_chainman.MinimumChainWork().GetHex(), pindexNew->nChainWork.GetHex(),
+                (int)m_cached_finished_ibd.load());
+        }
+        g_ibd_active.store(ibd_now, std::memory_order_relaxed);
+    }
     g_sync_end = ibd_now();
     extern std::chrono::steady_clock::duration g_ibd_wait;  // net.cpp
     extern std::chrono::steady_clock::duration g_fn_scan;   // net_processing.cpp (candidate scan)
@@ -4717,6 +4741,7 @@ bool ChainstateManager::ProcessNewBlockHeaders(const std::vector<CBlockHeader>& 
             const int64_t blocks_left{(GetTime() - last_accepted.GetBlockTime()) / GetConsensus().PowTargetSpacingV3};
             const double progress{100.0 * last_accepted.nHeight / (last_accepted.nHeight + blocks_left)};
             LogPrint(BCLog::STARTUP, "Synchronizing blockheaders, height: %d (~%.2f%%)\n", last_accepted.nHeight, progress);
+            // LogPrintf("Synchronizing blockheaders, height: %d (~%.2f%%)\n", last_accepted.nHeight, progress);
         }
     }
     return true;

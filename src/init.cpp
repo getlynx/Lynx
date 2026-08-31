@@ -1822,7 +1822,9 @@ node.scheduler->scheduleEvery([&node] {
     // node that comes up already synced seeds false and is never restricted; a
     // node that needs to sync seeds true and draws blocks only from the 5 manual
     // anchors until IBD latches off. Remove to revert.
-    g_ibd_active.store(chainman.ActiveChainstate().IsInitialBlockDownload(), std::memory_order_relaxed);
+    const bool anchor_seed_ibd = chainman.ActiveChainstate().IsInitialBlockDownload();
+    LogPrintf("[ANCHOR-DIAG] seed g_ibd_active=%d (1=disallow non-anchor outbound, 0=allow)\n", (int)anchor_seed_ibd);
+    g_ibd_active.store(anchor_seed_ibd, std::memory_order_relaxed);
 
     assert(!node.peerman);
     node.peerman = PeerManager::make(*node.connman, *node.addrman, node.banman.get(),
