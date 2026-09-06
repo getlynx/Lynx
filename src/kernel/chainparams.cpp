@@ -247,6 +247,24 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.checkpointHeight["delphinus"]      = 10200;
     spec.checkpointHash["delphinus"]        = "0x37735afcd430501b8570de4bd00428240dcd985ed67c5006fd4c07b351990b7c";
 
+    spec.coinSymbol["digitalcoin"]         = "DGC";
+    spec.displayName["digitalcoin"]        = "Digitalcoin";
+    spec.psztimestamp["digitalcoin"]       = "Digitalcoin, A Currency for a Digital Age";
+    spec.nonce["digitalcoin"]              = 672176;
+    spec.genesishash["digitalcoin"]        = "0x5e039e1ca1dbf128973bf6cff98169e40a1b194c3b91463ab74956f413b2f9c8";
+    spec.genesismerkleroot["digitalcoin"]  = "0xecb2c595fff9f2364152c32027737007c5a4c60ec960cf93754b0211bc2a1501";
+    spec.nDefaultPort["digitalcoin"]       = 7999;
+    spec.pubkeyPrefix["digitalcoin"]       = 30;
+    spec.scriptPrefix["digitalcoin"]       = 5;
+    spec.secretPrefix["digitalcoin"]       = 128;
+    spec.pchMessageStart["digitalcoin"][0] = 0xfb;
+    spec.pchMessageStart["digitalcoin"][1] = 0xc0;
+    spec.pchMessageStart["digitalcoin"][2] = 0xb6;
+    spec.pchMessageStart["digitalcoin"][3] = 0xdb;
+    spec.timestamp["digitalcoin"]          = 1367867384;
+    spec.checkpointHeight["digitalcoin"]   = 0;
+    spec.checkpointHash["digitalcoin"]     = "0x5e039e1ca1dbf128973bf6cff98169e40a1b194c3b91463ab74956f413b2f9c8";
+
     spec.coinSymbol["enceladus"]            = "ENCE";
     spec.psztimestamp["enceladus"]          = "Every interaction feeds machine learning.";
     spec.nonce["enceladus"]                 = 637913;
@@ -603,6 +621,13 @@ public:
             // not the leftover spec value (3084941) which sits above the infiniloop tip. Set
             // here, after infiniloopTransitionHeight, so the order is correct.
             consensus.nUUIDBlockStart = consensus.infiniloopTransitionHeight;
+        } else if (std::string(CURRENT_CHAIN) == "digitalcoin") {
+            // digitalcoin is proof-of-work from genesis up to our cutover, so every
+            // legacy block must classify as PoW. Its real last-PoW block IS the
+            // assimilation/transition block (to be determined at cutover). Placeholder
+            // sits above the live tip (~9-10M) so the whole legacy chain syncs as PoW;
+            // set to the true cutover height when it is chosen.
+            consensus.lastPoWBlock = 100000000;
         } else {
             consensus.lastPoWBlock = 1500;
             consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -704,6 +729,34 @@ public:
             genesis.nVersion = 1;
             genesis.nTime    = spec.timestamp[CURRENT_CHAIN];
             genesis.nBits    = 0x1e0fffff;
+            genesis.nNonce   = spec.nonce[CURRENT_CHAIN];
+            genesis.hashPrevBlock.SetNull();
+            genesis.vtx.push_back(MakeTransactionRef(std::move(txNew)));
+            genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
+        } else if (std::string(CURRENT_CHAIN) == "digitalcoin") {
+            // digitalcoin targets Digitalcoin (DGC), a scrypt/multi-algo PoW chain.
+            // Reproduce Digitalcoin's exact genesis coinbase bytes:
+            //   vin[0].scriptSig = CScript() << 486604799 << 4 << pszTimestamp,
+            //   vout[0] = 50*COIN to the genesis pubkey + OP_CHECKSIG, nLockTime=0.
+            // Block identity is SHA-256d of the header (not the scrypt PoW hash) —
+            // genesishash 0x5e03... has no leading-zero bytes, so it is not the PoW
+            // hash — therefore GetHash() needs NO override here. nBits = 0x1e0ffff0.
+            const char* psz = spec.psztimestamp[CURRENT_CHAIN].c_str();
+            CMutableTransaction txNew;
+            txNew.nVersion = 1;
+            txNew.vin.resize(1);
+            txNew.vin[0].scriptSig = CScript() << 486604799 << CScriptNum(4)
+                << std::vector<unsigned char>((const unsigned char*)psz, (const unsigned char*)psz + strlen(psz));
+            txNew.vout.resize(1);
+            txNew.vout[0].nValue = 50 * COIN;
+            txNew.vout[0].scriptPubKey = CScript()
+                << ParseHex("04a5814813115273a109cff99907ba4a05d951873dae7acb6c973d0c9e7c88911a3dbc9aa600deac241b91707e7b4ffb30ad91c8e56e695a1ddf318592988afe0a")
+                << OP_CHECKSIG;
+            txNew.nLockTime = 0;
+            genesis = CBlock();
+            genesis.nVersion = 1;
+            genesis.nTime    = spec.timestamp[CURRENT_CHAIN];
+            genesis.nBits    = 0x1e0ffff0;
             genesis.nNonce   = spec.nonce[CURRENT_CHAIN];
             genesis.hashPrevBlock.SetNull();
             genesis.vtx.push_back(MakeTransactionRef(std::move(txNew)));
@@ -892,7 +945,7 @@ public:
             // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
             genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
             consensus.hashGenesisBlock = genesis.GetHash();
-            if (std::string(CURRENT_CHAIN) != "infiniloop") {
+            if (std::string(CURRENT_CHAIN) != "infiniloop" && std::string(CURRENT_CHAIN) != "digitalcoin") {
                 // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
                 // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
                 assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
@@ -1053,7 +1106,7 @@ public:
             // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
             genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
             consensus.hashGenesisBlock = genesis.GetHash();
-            if (std::string(CURRENT_CHAIN) != "infiniloop") {
+            if (std::string(CURRENT_CHAIN) != "infiniloop" && std::string(CURRENT_CHAIN) != "digitalcoin") {
                 // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
                 // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
                 assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
@@ -1177,7 +1230,7 @@ public:
             // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
             genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
             consensus.hashGenesisBlock = genesis.GetHash();
-            if (std::string(CURRENT_CHAIN) != "infiniloop") {
+            if (std::string(CURRENT_CHAIN) != "infiniloop" && std::string(CURRENT_CHAIN) != "digitalcoin") {
                 // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
                 // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
                 assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));

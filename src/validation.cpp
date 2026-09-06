@@ -2733,7 +2733,7 @@ LogPrint (BCLog::STORAGE, "is_opreturn_an_authdata from validation.cpp \n");
     if (block.IsProofOfWork()) {
 	CAmount blockReward = nFees + GetBlockSubsidy(pindex->nHeight, params.GetConsensus(), pindex->pprev->GetBlockHash());
 	if (block.vtx[0]->GetValueOut() > blockReward) {
-		if (pindex->nHeight > params.GetConsensus().HardFork2Height) {
+		if (std::string(CURRENT_CHAIN) != "digitalcoin" && pindex->nHeight > params.GetConsensus().HardFork2Height) {
 			LogPrintf("ERROR: ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)\n", block.vtx[0]->GetValueOut(), blockReward);
 			return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-amount");
 		}
@@ -3602,7 +3602,9 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
              Ticks<SecondsDouble>(time_flush),
              Ticks<MillisecondsDouble>(time_flush) / num_blocks_total);
     // Write the chain state to disk, if necessary.
-    if (!FlushStateToDisk(state, FlushStateMode::IF_NEEDED)) {
+    // At the tip (post-IBD), flush after every connect so the on-disk chainstate stays
+    // current and any shutdown finishes fast; during IBD keep the batched IF_NEEDED.
+    if (!FlushStateToDisk(state, IsInitialBlockDownload() ? FlushStateMode::IF_NEEDED : FlushStateMode::ALWAYS)) {
         return false;
     }
     const auto time_5{SteadyClock::now()};
@@ -4483,7 +4485,7 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
     // Check proof of work
     const Consensus::Params& consensusParams = chainman.GetConsensus();
     bool checkTarget = nHeight >= consensusParams.HardFork3Height + 5; // few blocks extra to clear the window
-    if (!consensusParams.IsLegacyInfiniloopBlock(nHeight) && checkTarget && (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams)))
+    if (std::string(CURRENT_CHAIN) != "digitalcoin" && !consensusParams.IsLegacyInfiniloopBlock(nHeight) && checkTarget && (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams)))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", "incorrect proof of work");
 
     // Check against checkpoints
@@ -4538,8 +4540,10 @@ static bool ContextualCheckBlock(const CBlock& block, BlockValidationState& stat
         }
     }
 
-    // Enforce rule that the coinbase starts with serialized block height
-    if (DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_HEIGHTINCB))
+    // Enforce rule that the coinbase starts with serialized block height.
+    // legacy digitalcoin predates BIP34 and does not carry the height in its coinbase,
+    // so blanket-skip this on digitalcoin during legacy sync; re-introduce at cutover.
+    if (std::string(CURRENT_CHAIN) != "digitalcoin" && DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_HEIGHTINCB))
     {
         CScript expect = CScript() << nHeight;
         if (block.vtx[0]->vin[0].scriptSig.size() < expect.size() ||
@@ -4740,8 +4744,8 @@ bool ChainstateManager::ProcessNewBlockHeaders(const std::vector<CBlockHeader>& 
             const CBlockIndex& last_accepted{**ppindex};
             const int64_t blocks_left{(GetTime() - last_accepted.GetBlockTime()) / GetConsensus().PowTargetSpacingV3};
             const double progress{100.0 * last_accepted.nHeight / (last_accepted.nHeight + blocks_left)};
-            LogPrint(BCLog::STARTUP, "Synchronizing blockheaders, height: %d (~%.2f%%)\n", last_accepted.nHeight, progress);
-            // LogPrintf("Synchronizing blockheaders, height: %d (~%.2f%%)\n", last_accepted.nHeight, progress);
+            // LogPrint(BCLog::STARTUP, "Synchronizing blockheaders, height: %d (~%.2f%%)\n", last_accepted.nHeight, progress);
+            LogPrintf("Synchronizing blockheaders, height: %d (~%.2f%%)\n", last_accepted.nHeight, progress);
         }
     }
     return true;
