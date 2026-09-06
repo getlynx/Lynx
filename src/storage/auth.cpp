@@ -2133,16 +2133,19 @@ bool generate_blockuuid_transaction(WalletContext& wallet_context, CMutableTrans
     auto vpwallets = GetWallets(wallet_context);
     size_t nWallets = vpwallets.size();
     if (nWallets < 1) {
+        LogPrint (BCLog::POS, "%s: attempt to create blockuuid transaction with no wallet. \n", __func__);
         return false;
     }
 
     CAmount setValue;
     std::set<std::pair<const CWalletTx*, unsigned int>> setCoins;
     if (!select_coins_for_opreturn(vpwallets.front().get(), setCoins, setValue)) {
+        LogPrint (BCLog::POS, "%s: attempt to create blockuuid transaction. error in select_coins_for_opreturn.. \n", __func__);
         return false;
     }
 
     if (setCoins.size() == 0) {
+        LogPrint (BCLog::POS, "%s: attempt to create blockuuid transaction with no suitable inputs. \n", __func__);
         return false;
     }
  
@@ -2181,6 +2184,7 @@ bool generate_blockuuid_transaction(WalletContext& wallet_context, CMutableTrans
         //! sign tx once to get complete size
         LOCK(vpwallets[0]->cs_wallet);
         if (!vpwallets[0]->SignTransaction(tx)) {
+            LogPrint (BCLog::POS, "%s: attempt to create blockuuid transaction. error in SignTransaction. \n", __func__);
             return false;
         }
 
@@ -2199,6 +2203,7 @@ bool generate_blockuuid_transaction(WalletContext& wallet_context, CMutableTrans
 
         //! sign tx again with correct fee in place
         if (!vpwallets[0]->SignTransaction(tx)) {
+            LogPrint (BCLog::POS, "%s: attempt to create blockuuid transaction. error in SignTransaction. \n", __func__);
             return false;
         }
 
