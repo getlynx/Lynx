@@ -248,8 +248,9 @@ bool Consensus::CheckTxInputs(const CTransaction& tx, TxValidationState& state, 
         const Coin& coin = inputs.AccessCoin(prevout);
         assert(!coin.IsSpent());
 
-        // If prev is coinbase, check that it's matured
-        if ((coin.IsCoinBase() || coin.IsCoinStake()) && nSpendHeight - coin.nHeight < COINBASE_MATURITY) {
+        // If prev is coinbase, check that it's matured. legacy digitalcoin matures coinbase at 5, lynx at 30.
+        const int coinbase_maturity = (std::string(CURRENT_CHAIN) == "digitalcoin") ? 5 : COINBASE_MATURITY;
+        if ((coin.IsCoinBase() || coin.IsCoinStake()) && nSpendHeight - coin.nHeight < coinbase_maturity) {
             return state.Invalid(TxValidationResult::TX_PREMATURE_SPEND, "bad-txns-premature-spend-of-coinbase",
                 strprintf("tried to spend coinbase at depth %d", nSpendHeight - coin.nHeight));
         }

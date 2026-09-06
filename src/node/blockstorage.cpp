@@ -892,7 +892,10 @@ fprintf(f, "  merkle   = %s\n", block.hashMerkleRoot.ToString().c_str());
 fclose(f);
 */
 
-    if (!isPoS && !CheckProofOfWork(block.GetPoWHash(), block.nBits, GetConsensus())) {
+    // legacy digitalcoin is multi-algo PoW (scrypt/sha256d/x11 per block); lynx's single
+    // GetPoWHash can't match its real per-block hash, so blanket-skip this read-time PoW
+    // check on digitalcoin during legacy sync; re-introduce at cutover.
+    if (std::string(CURRENT_CHAIN) != "digitalcoin" && !isPoS && !CheckProofOfWork(block.GetPoWHash(), block.nBits, GetConsensus())) {
         return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
     }
 

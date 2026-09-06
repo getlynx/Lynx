@@ -1528,15 +1528,19 @@ void PeerManagerImpl::PushNodeVersion(CNode& pnode, const Peer& peer)
     uint64_t your_services{addr.nServices};
 
     const bool tx_relay{!RejectIncomingTxs(pnode)};
-    m_connman.PushMessage(&pnode, CNetMsgMaker(INIT_PROTO_VERSION).Make(NetMsgType::VERSION, PROTOCOL_VERSION, my_services, nTime,
+    // digitalcoin's live network sets MIN_PEER_PROTO_VERSION=70208 and RSTs any peer
+    // advertising below it. Our base PROTOCOL_VERSION is infiniloop's 70006, so advertise
+    // digitalcoin's minimum on that chain only; every other chain keeps PROTOCOL_VERSION.
+    const int advertised_version = (std::string(CURRENT_CHAIN) == "digitalcoin") ? 70208 : PROTOCOL_VERSION;
+    m_connman.PushMessage(&pnode, CNetMsgMaker(INIT_PROTO_VERSION).Make(NetMsgType::VERSION, advertised_version, my_services, nTime,
             your_services, addr_you, // Together the pre-version-31402 serialization of CAddress "addrYou" (without nTime)
             my_services, CService(), // Together the pre-version-31402 serialization of CAddress "addrMe" (without nTime)
             nonce, strSubVersion, nNodeStartingHeight, tx_relay));
 
     if (fLogIPs) {
-        LogPrint(BCLog::NET, "send version message: version %d, blocks=%d, them=%s, txrelay=%d, peer=%d\n", PROTOCOL_VERSION, nNodeStartingHeight, addr_you.ToStringAddrPort(), tx_relay, nodeid);
+        LogPrint(BCLog::NET, "send version message: version %d, blocks=%d, them=%s, txrelay=%d, peer=%d\n", advertised_version, nNodeStartingHeight, addr_you.ToStringAddrPort(), tx_relay, nodeid);
     } else {
-        LogPrint(BCLog::NET, "send version message: version %d, blocks=%d, txrelay=%d, peer=%d\n", PROTOCOL_VERSION, nNodeStartingHeight, tx_relay, nodeid);
+        LogPrint(BCLog::NET, "send version message: version %d, blocks=%d, txrelay=%d, peer=%d\n", advertised_version, nNodeStartingHeight, tx_relay, nodeid);
     }
 }
 
