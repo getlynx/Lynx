@@ -837,6 +837,10 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
     if (std::string(CURRENT_CHAIN) == "infiniloop" && g_currentValidatingBlockHeight <= g_infiniloopTransitionHeight) {
         txNew.nVersion = 1;
         txNew.nTime = (uint32_t)GetTime();
+    } else if (std::string(CURRENT_CHAIN) == "digitalcoin") {
+        // digitalcoin rejects nVersion>=2 as premature-version2-tx (CSV never activated on
+        // its chain), so stamp version 1. It has no tx nTime field, so nothing else to set.
+        txNew.nVersion = 1;
     }
 
     CoinSelectionParams coin_selection_params{rng_fast}; // Parameters for coin selection, init with dummy
