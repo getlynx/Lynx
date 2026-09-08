@@ -1250,6 +1250,69 @@ bool check_mempool_for_metadata(const CTxMemPool& mempool, int type)
     return false;
 }
 
+// Does the transaction carry a blockuuid/unblockuuid payload for this uuid
+bool does_tx_have_matching_blockuuid(const CTransaction& tx, const std::string& uuid)
+{
+    if (uuid.length() < 8) {
+        return false;
+    }
+
+    for (unsigned int vout = 0; vout < tx.vout.size(); vout++) {
+
+        const CScript opreturn_out = tx.vout[vout].scriptPubKey;
+        if (!opreturn_out.IsOpReturn()) {
+            continue;
+        }
+
+        int type;
+        int intOffset;
+        std::string opdata, chunk;
+        opdata = HexStr(opreturn_out);
+
+        // Return offset rather than strip non-payload data
+        if (!strip_opreturndata_from_chunk (opdata, chunk, intOffset)) {
+            continue;
+        }
+
+        // Validate magic
+        is_valid_chunk (opdata, type, intOffset);
+        if (type != 3) {
+            continue;
+        }
+
+        // Snag uuid
+        std::string tx_uuid;
+        get_uuid_from_blockuuid (opdata, tx_uuid, intOffset);
+
+        if (tx_uuid.length() < 8) {
+            continue;
+        }
+
+        // Leftmost eight hex digits, as at fetch time
+        if (tx_uuid.substr(0,8) == uuid.substr(0,8)) {
+            LogPrint (BCLog::STORAGE, "%s - matching uuid %s\n", __func__, tx_uuid);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool check_mempool_for_blockuuid(const CTxMemPool& mempool, const std::string& uuid)
+{
+    LOCK(mempool.cs);
+
+    CTxMemPool::txiter it = mempool.mapTx.begin();
+    while (it != mempool.mapTx.end()) {
+        if (does_tx_have_matching_blockuuid(it->GetTx(), uuid)) {
+            return true;
+        }
+        ++it;
+    }
+
+    return false;
+}
+
 // Scan blocks for allow and deny transactions
 bool scan_blocks_for_authdata(ChainstateManager& chainman)
 {
