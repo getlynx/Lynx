@@ -627,7 +627,7 @@ public:
             // assimilation/transition block (to be determined at cutover). Placeholder
             // sits above the live tip (~9-10M) so the whole legacy chain syncs as PoW;
             // set to the true cutover height when it is chosen.
-            consensus.lastPoWBlock = 100000000;
+            consensus.lastPoWBlock = 8635015;
         } else {
             consensus.lastPoWBlock = 1500;
             consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
