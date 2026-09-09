@@ -69,6 +69,8 @@ bool scan_blocks_for_blockuuiddata(ChainstateManager& chainman);
 bool scan_blocks_for_blocktenantdata(ChainstateManager& chainman);
 bool scan_blocks_for_specific_authdata(ChainstateManager& chainman, uint160 hash160);
 bool check_mempool_for_metadata(const CTxMemPool& mempool, int type);
+bool does_tx_have_matching_blockuuid(const CTransaction& tx, const std::string& uuid);
+bool check_mempool_for_blockuuid(const CTxMemPool& mempool, const std::string& uuid);
 bool generate_auth_payload(std::string& payload, int& type, uint32_t& time, std::string& hash);
 bool generate_blockuuid_payload(std::string& payload, int& type, uint32_t& time, std::string& uuid);
 bool generate_blocktenant_payload(std::string& payload, int& type, uint32_t& time, std::string& tenant);

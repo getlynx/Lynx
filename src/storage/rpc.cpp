@@ -2470,11 +2470,6 @@ static RPCHelpMan blockuuid()
     // Blocked UUIDs are not fetched.
     //
 
-    const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
-    if (check_mempool_for_metadata(mempool, 2)) {
-        return std::string("block-unblock-uuid-tx-in-mempool");
-    }
-
     // Entry
     UniValue entry(UniValue::VOBJ);
 
@@ -2523,7 +2518,19 @@ static RPCHelpMan blockuuid()
         }
 
     }
-    
+
+    // If a blockuuid or unblockuuid tx for this uuid is already in the mempool
+    const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
+    if (check_mempool_for_blockuuid(mempool, strUUID)) {
+
+        entry.pushKV("result", "failure");
+        entry.pushKV("message", "block-unblock-uuid-tx-in-mempool");
+        entry.pushKV("uuid", strUUID);
+        results.push_back(entry);
+        return results;
+
+    }
+
     int intBlockUUIDType;
     uint32_t u32Time;
     CMutableTransaction mtxTransaction;
