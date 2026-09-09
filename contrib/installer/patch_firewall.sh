@@ -54,6 +54,9 @@ CHAIN_UPPER=$(echo "$CHAIN_LOWER" | tr '[:lower:]' '[:upper:]')
 PARENT="SPARK"
 SUBCHAIN="SPARK_${CHAIN_UPPER}"
 LOCKFILE="/var/lock/spark-iptables"
+# When this unit file exists and is non-empty, Nginx is serving Capacitor and
+# port 443 must be open to all IPs.
+CAPACITOR_UNIT="/etc/systemd/system/capacitor.service"
 
 # All iptables mutations happen inside a flock to prevent concurrent runs from
 # interleaving (e.g. two chains' timers firing at the same moment).
@@ -78,6 +81,48 @@ LOCKFILE="/var/lock/spark-iptables"
     iptables -C "$PARENT" -p tcp --dport "$ssh_port" -j ACCEPT 2>/dev/null || \
         iptables -I "$PARENT" 3 -p tcp --dport "$ssh_port" -j ACCEPT
 
+    # HTTPS (Nginx) - only when the Capacitor unit file exists and is non-empty.
+    # Removal is handled by the prune in step 2b, not here.
+    if [ -s "$CAPACITOR_UNIT" ]; then
+        if ! iptables -C "$PARENT" -p tcp --dport 443 -j ACCEPT 2>/dev/null; then
+            iptables -I "$PARENT" 4 -p tcp --dport 443 -j ACCEPT
+            logger -t patch_firewall "$CHAIN_NAME: Capacitor detected ($CAPACITOR_UNIT). Opened port 443 to all IPs."
+        fi
+    fi
+
+    # --- 2b. Prune stale shared rules from SPARK ---
+    # SPARK holds only: lo, ESTABLISHED/RELATED, SSH, optional 443, the jumps to
+    # each SPARK_<CHAIN>, and the terminal DROP. Per-chain P2P ports live in the
+    # sub-chains, never here. So any *other* tcp --dport ACCEPT in SPARK is stale
+    # drift - an old SSH port after the operator changed it, or 443 left behind
+    # when Capacitor was uninstalled - and must be removed. Without this, the
+    # idempotent "add if missing" rules above accumulate forever.
+    allowed_dports=" $ssh_port "
+    if [ -s "$CAPACITOR_UNIT" ]; then
+        allowed_dports="${allowed_dports}443 "
+    fi
+
+    # Deleting by replayed rule spec (not by line number) keeps the captured list
+    # valid as we mutate the chain.
+    shared_specs=$(iptables -S "$PARENT" 2>/dev/null | grep -- '--dport' | grep -- '-j ACCEPT' || true)
+    while read -r spec; do
+        if [ -z "$spec" ]; then
+            continue
+        fi
+        stale_port=$(printf '%s' "$spec" | sed -n 's/.*--dport \([0-9][0-9]*\).*/\1/p')
+        if [ -z "$stale_port" ]; then
+            continue
+        fi
+        case "$allowed_dports" in
+            *" $stale_port "*) continue ;;
+        esac
+        spec_args="${spec#-A $PARENT }"
+        # Word splitting on $spec_args is intentional - it is an iptables rule spec.
+        # shellcheck disable=SC2086
+        iptables -D "$PARENT" $spec_args 2>/dev/null || true
+        logger -t patch_firewall "$CHAIN_NAME: Pruned stale SPARK rule for port $stale_port."
+    done <<< "$shared_specs"
+
     # --- 3. Create this chain's sub-chain if it doesn't exist ---
     iptables -N "$SUBCHAIN" 2>/dev/null || true
 
@@ -98,6 +143,27 @@ LOCKFILE="/var/lock/spark-iptables"
             iptables -A "$PARENT" -j "$SUBCHAIN"
         fi
     fi
+
+    # --- 6b. Remove sub-chains for chains that are no longer installed ---
+    # A SPARK_<CHAIN> is only ever created by this script, and this script only
+    # ever runs from {chain}-patch-firewall.service. If that unit file is gone,
+    # the chain was uninstalled and its P2P port must not stay open. We never
+    # touch our own sub-chain.
+    orphan_subs=$(iptables -S 2>/dev/null | sed -n 's/^-N \(SPARK_[A-Z0-9]\{1,\}\)$/\1/p' || true)
+    while read -r sub; do
+        if [ -z "$sub" ] || [ "$sub" = "$SUBCHAIN" ]; then
+            continue
+        fi
+        sub_lower=$(printf '%s' "${sub#SPARK_}" | tr '[:upper:]' '[:lower:]')
+        if [ -f "/etc/systemd/system/${sub_lower}-patch-firewall.service" ]; then
+            continue
+        fi
+        # Drop every jump to it first, or -X will refuse on a referenced chain
+        while iptables -D "$PARENT" -j "$sub" 2>/dev/null; do :; done
+        iptables -F "$sub" 2>/dev/null || true
+        iptables -X "$sub" 2>/dev/null || true
+        logger -t patch_firewall "$CHAIN_NAME: Removed orphaned sub-chain $sub (no ${sub_lower}-patch-firewall.service)."
+    done <<< "$orphan_subs"
 
     # --- 7. Ensure terminal DROP is last rule in SPARK ---
     # Remove any existing DROP(s) and re-append as last
