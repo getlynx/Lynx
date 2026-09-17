@@ -3105,6 +3105,18 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
 
     bilingual_str warning_messages;
     if (!this->IsInitialBlockDownload()) {
+        // One-shot RAM footprint report, fired on the first block connected once the
+        // node is caught up (settled tip). Block records = every CBlockIndex held in
+        // m_block_index; coins = the unspent coins currently held in memory.
+        static bool s_ram_footprint_reported = false;
+        if (!s_ram_footprint_reported) {
+            s_ram_footprint_reported = true;
+            const size_t n_index = m_chainman.m_blockman.m_block_index.size();
+            const double block_records_mib = (double)n_index * (double)sizeof(CBlockIndex) / (1024.0 * 1024.0);
+            const double coins_mib = (double)CoinsTip().DynamicMemoryUsage() / (1024.0 * 1024.0);
+            LogPrintf("[RAM] block records: %d entries x %u bytes = %.1f MiB (struct only, excludes map overhead) | unspent coins in memory: %.1f MiB\n",
+                (int)n_index, (unsigned)sizeof(CBlockIndex), block_records_mib, coins_mib);
+        }
         const CBlockIndex* pindex = pindexNew;
         for (int bit = 0; bit < VERSIONBITS_NUM_BITS; bit++) {
             WarningBitsConditionChecker checker(m_chainman, bit);
@@ -4485,7 +4497,7 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
     // Check proof of work
     const Consensus::Params& consensusParams = chainman.GetConsensus();
     bool checkTarget = nHeight >= consensusParams.HardFork3Height + 5; // few blocks extra to clear the window
-    if (std::string(CURRENT_CHAIN) != "digitalcoin" && !consensusParams.IsLegacyInfiniloopBlock(nHeight) && checkTarget && (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams)))
+    if ((std::string(CURRENT_CHAIN) != "digitalcoin" || nHeight > consensusParams.lastPoWBlock) && !consensusParams.IsLegacyInfiniloopBlock(nHeight) && checkTarget && (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams)))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", "incorrect proof of work");
 
     // Check against checkpoints
@@ -4542,8 +4554,8 @@ static bool ContextualCheckBlock(const CBlock& block, BlockValidationState& stat
 
     // Enforce rule that the coinbase starts with serialized block height.
     // legacy digitalcoin predates BIP34 and does not carry the height in its coinbase,
-    // so blanket-skip this on digitalcoin during legacy sync; re-introduce at cutover.
-    if (std::string(CURRENT_CHAIN) != "digitalcoin" && DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_HEIGHTINCB))
+    // so skip it for the legacy PoW range (at/below lastPoWBlock); enforce above the transition.
+    if ((std::string(CURRENT_CHAIN) != "digitalcoin" || nHeight > chainman.GetConsensus().lastPoWBlock) && DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_HEIGHTINCB))
     {
         CScript expect = CScript() << nHeight;
         if (block.vtx[0]->vin[0].scriptSig.size() < expect.size() ||

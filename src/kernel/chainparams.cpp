@@ -262,6 +262,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.pchMessageStart["digitalcoin"][2] = 0xb6;
     spec.pchMessageStart["digitalcoin"][3] = 0xdb;
     spec.timestamp["digitalcoin"]          = 1367867384;
+    spec.uuidlastblock["digitalcoin"]        = 8645471;
+    spec.initauthuser["digitalcoin"]         = "24a4fcb529d6ffc507ed1ebcaa81e299f8ede0b6";
     spec.checkpointHeight["digitalcoin"]   = 0;
     spec.checkpointHash["digitalcoin"]     = "0x5e039e1ca1dbf128973bf6cff98169e40a1b194c3b91463ab74956f413b2f9c8";
 
@@ -627,7 +629,8 @@ public:
             // assimilation/transition block (to be determined at cutover). Placeholder
             // sits above the live tip (~9-10M) so the whole legacy chain syncs as PoW;
             // set to the true cutover height when it is chosen.
-            consensus.lastPoWBlock = 8635015;
+            consensus.lastPoWBlock = 8645471;
+            consensus.nUUIDBlockStart = 8645471;
         } else {
             consensus.lastPoWBlock = 1500;
             consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");

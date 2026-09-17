@@ -476,15 +476,11 @@ bool scan_blocks_for_uuids(ChainstateManager& chainman, std::vector<std::string>
     CBlockIndex* pindex = nullptr;
 
     // Set cutoff
-    // long lngCutoff = Params().GetConsensus().nUUIDBlockStart;
+    long lngCutoff = Params().GetConsensus().nUUIDBlockStart;
 
-    // Set cutoff to beginning of optional encryption
-    long lngCutoff = 3107495;
-
-    if (lngCutoff > tip_height) {
-
-        lngCutoff = 1700;
-
+    // Set cutoff to beginning of optional encryption (lynx-only)
+    if (std::string(CURRENT_CHAIN) == "lynx") {
+        lngCutoff = 3107495;
     }
 
     // Skip POW blocks in reverse
