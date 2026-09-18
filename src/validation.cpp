@@ -1703,7 +1703,7 @@ CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& params, const uint
 
 CAmount GetProofOfStakeReward(int nHeight, const Consensus::Params& params)
 {
-    return 1 * COIN;
+    return 1.75 * COIN;
 }
 
 CoinsViews::CoinsViews(DBParams db_params, CoinsViewOptions options)
@@ -3092,6 +3092,29 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
         return;
     }
 
+    // [RAM] footprint trace, same two structures throughout: block records (every
+    // CBlockIndex in m_block_index) and the unspent coins held in memory. During
+    // the sync it fires every 1M blocks, and every 100K above height 8,000,000.
+    // Once the sync is done it fires on every new block that arrives (the first
+    // such block is the sync-done reading), including blocks this node stakes.
+    {
+        const bool ibd = this->IsInitialBlockDownload();
+        bool do_log = false;
+        if (ibd) {
+            if (pindexNew->nHeight % 1000000 == 0) do_log = true;
+            else if (pindexNew->nHeight > 8000000 && pindexNew->nHeight % 100000 == 0) do_log = true;
+        } else {
+            do_log = true;
+        }
+        if (do_log) {
+            const size_t n_index = m_chainman.m_blockman.m_block_index.size();
+            const double block_records_mib = (double)n_index * (double)sizeof(CBlockIndex) / (1024.0 * 1024.0);
+            const double coins_mib = (double)coins_tip.DynamicMemoryUsage() / (1024.0 * 1024.0);
+            LogPrintf("[RAM] height=%d | block records: %d x %u B = %.1f MiB | unspent coins in memory: %.1f MiB\n",
+                pindexNew->nHeight, (int)n_index, (unsigned)sizeof(CBlockIndex), block_records_mib, coins_mib);
+        }
+    }
+
     // New best block
     if (m_mempool) {
         m_mempool->AddTransactionsUpdated(1);
@@ -3105,18 +3128,6 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
 
     bilingual_str warning_messages;
     if (!this->IsInitialBlockDownload()) {
-        // One-shot RAM footprint report, fired on the first block connected once the
-        // node is caught up (settled tip). Block records = every CBlockIndex held in
-        // m_block_index; coins = the unspent coins currently held in memory.
-        static bool s_ram_footprint_reported = false;
-        if (!s_ram_footprint_reported) {
-            s_ram_footprint_reported = true;
-            const size_t n_index = m_chainman.m_blockman.m_block_index.size();
-            const double block_records_mib = (double)n_index * (double)sizeof(CBlockIndex) / (1024.0 * 1024.0);
-            const double coins_mib = (double)CoinsTip().DynamicMemoryUsage() / (1024.0 * 1024.0);
-            LogPrintf("[RAM] block records: %d entries x %u bytes = %.1f MiB (struct only, excludes map overhead) | unspent coins in memory: %.1f MiB\n",
-                (int)n_index, (unsigned)sizeof(CBlockIndex), block_records_mib, coins_mib);
-        }
         const CBlockIndex* pindex = pindexNew;
         for (int bit = 0; bit < VERSIONBITS_NUM_BITS; bit++) {
             WarningBitsConditionChecker checker(m_chainman, bit);
@@ -3615,8 +3626,19 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
              Ticks<MillisecondsDouble>(time_flush) / num_blocks_total);
     // Write the chain state to disk, if necessary.
     // At the tip (post-IBD), flush after every connect so the on-disk chainstate stays
-    // current and any shutdown finishes fast; during IBD keep the batched IF_NEEDED.
-    if (!FlushStateToDisk(state, IsInitialBlockDownload() ? FlushStateMode::IF_NEEDED : FlushStateMode::ALWAYS)) {
+    // current and any shutdown finishes fast. During IBD keep the batched IF_NEEDED,
+    // EXCEPT force a full flush every 100K blocks: otherwise dirty coins accumulate for
+    // the whole sync and the in-memory coins peak runs up to ~2G. Flushing every 100K
+    // caps that peak at one 100K window's worth, trading a slower sync for lower RAM.
+    FlushStateMode flush_mode;
+    if (!IsInitialBlockDownload()) {
+        flush_mode = FlushStateMode::ALWAYS;
+    } else if (pindexNew->nHeight % 100000 == 0) {
+        flush_mode = FlushStateMode::ALWAYS;
+    } else {
+        flush_mode = FlushStateMode::IF_NEEDED;
+    }
+    if (!FlushStateToDisk(state, flush_mode)) {
         return false;
     }
     const auto time_5{SteadyClock::now()};
