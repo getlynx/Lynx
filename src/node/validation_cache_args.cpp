@@ -30,5 +30,8 @@ void ApplyArgsManOptions(const ArgsManager& argsman, ValidationCacheSizes& cache
             .script_execution_cache_bytes = clamped_size_each,
         };
     }
+    // Force the script execution cache to its 2-element minimum regardless of the
+    // default or any -maxsigcachesize, to drop it from the resident footprint.
+    cache_sizes.script_execution_cache_bytes = 0;
 }
 } // namespace node

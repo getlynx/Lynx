@@ -24,6 +24,14 @@
 #include <hash.h>
 #include <kernel/chainparams.h>
 #include <kernel/mempool_entry.h>
+#include <memusage.h>
+#include <index/txindex.h>
+#include <index/coinstatsindex.h>
+#include <index/blockfilterindex.h>
+#include <cstdio>
+#if defined(__GLIBC__)
+#include <malloc.h>
+#endif
 #include <logging.h>
 #include <logging/timer.h>
 #include <node/blockstorage.h>
@@ -1703,7 +1711,7 @@ CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& params, const uint
 
 CAmount GetProofOfStakeReward(int nHeight, const Consensus::Params& params)
 {
-    return 1.75 * COIN;
+    return params.nBlockReward;
 }
 
 CoinsViews::CoinsViews(DBParams db_params, CoinsViewOptions options)
@@ -1923,6 +1931,7 @@ bool CScriptCheck::operator()() {
 
 static CuckooCache::cache<uint256, SignatureCacheHasher> g_scriptExecutionCache;
 static CSHA256 g_scriptExecutionCacheHasher;
+static size_t g_scriptExecutionCacheBytes = 0;
 
 bool InitScriptExecutionCache(size_t max_size_bytes)
 {
@@ -1938,6 +1947,7 @@ bool InitScriptExecutionCache(size_t max_size_bytes)
     if (!setup_results) return false;
 
     const auto [num_elems, approx_size_bytes] = *setup_results;
+    g_scriptExecutionCacheBytes = approx_size_bytes;
     LogPrint(BCLog::STARTUP, "Using %zu MiB out of %zu MiB requested for script execution cache, able to store %zu elements\n",
               approx_size_bytes >> 20, max_size_bytes >> 20, num_elems);
     return true;
@@ -3112,6 +3122,58 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             const double coins_mib = (double)coins_tip.DynamicMemoryUsage() / (1024.0 * 1024.0);
             LogPrintf("[RAM] height=%d | block records: %d x %u B = %.1f MiB | unspent coins in memory: %.1f MiB\n",
                 pindexNew->nHeight, (int)n_index, (unsigned)sizeof(CBlockIndex), block_records_mib, coins_mib);
+            // Accounting for the steady-state footprint beyond block records + coins.
+            // The map measurement includes each CBlockIndex (already counted as block
+            // records above), so subtract the struct bytes to leave only the extra
+            // lookup bookkeeping the map keeps around the records.
+            const size_t map_full = memusage::DynamicUsage(m_chainman.m_blockman.m_block_index);
+            const double block_lookup_mib = (double)(map_full - n_index * sizeof(CBlockIndex)) / (1024.0 * 1024.0);
+            const double coinsdb_mib = (double)this->CoinsDB().DynamicMemoryUsage() / (1024.0 * 1024.0);
+            const double blocktreedb_mib = (double)m_chainman.m_blockman.m_block_tree_db->DynamicMemoryUsage() / (1024.0 * 1024.0);
+            const double mempool_mib = m_mempool ? (double)m_mempool->DynamicMemoryUsage() / (1024.0 * 1024.0) : 0.0;
+            LogPrintf("[RAM] height=%d | block record lookup bookkeeping: %.1f MiB | coins leveldb: %.1f MiB | block leveldb: %.1f MiB | mempool: %.1f MiB\n",
+                pindexNew->nHeight, block_lookup_mib, coinsdb_mib, blocktreedb_mib, mempool_mib);
+            // The newly named categories. Six are reachable from here and measured;
+            // signature cache, addrman, net buffers, and wallet live in other link
+            // units with no handle from UpdateTip, so they print n/a.
+            extern std::vector<std::pair<uint160, int>> authList;
+            extern std::vector<std::pair<std::string, std::string>> blockuuidList;
+            extern std::vector<std::pair<std::string, std::string>> blocktenantList;
+            const double txindex_mib = g_txindex ? (double)g_txindex->DynamicMemoryUsage() / (1024.0 * 1024.0) : 0.0;
+            const double coinstats_mib = g_coin_stats_index ? (double)g_coin_stats_index->DynamicMemoryUsage() / (1024.0 * 1024.0) : 0.0;
+            const double scriptcache_mib = (double)g_scriptExecutionCacheBytes / (1024.0 * 1024.0);
+            const double storageauth_mib = (double)(memusage::DynamicUsage(authList)
+                + memusage::DynamicUsage(blockuuidList)
+                + memusage::DynamicUsage(blocktenantList)) / (1024.0 * 1024.0);
+            double malloc_frag_mib = 0.0;
+#if defined(__GLIBC__)
+            malloc_frag_mib = (double)mallinfo2().fordblks / (1024.0 * 1024.0);
+#endif
+            int thread_count = 0;
+            if (std::FILE* tf = std::fopen("/proc/self/status", "r")) {
+                char sline[256];
+                while (std::fgets(sline, sizeof(sline), tf)) { if (std::sscanf(sline, "Threads: %d", &thread_count) == 1) break; }
+                std::fclose(tf);
+            }
+            const double threadstacks_mib = (double)thread_count * 8.0; // 8 MiB reserved stack per thread
+            LogPrintf("[RAM] height=%d | txindex leveldb: %.1f MiB | signature cache: n/a | script exec cache: %.1f MiB | storage/auth index: %.1f MiB | addrman: n/a | net buffers: n/a | wallet: n/a | coinstatsindex: %.1f MiB | malloc fragmentation: %.1f MiB | thread stacks(reserved): %.1f MiB\n",
+                pindexNew->nHeight, txindex_mib, scriptcache_mib, storageauth_mib, coinstats_mib, malloc_frag_mib, threadstacks_mib);
+            // Fourth line: more named categories. active chain vector, block index
+            // aux sets, versionbits/warning caches, and block filter index are
+            // reachable and measured; rolling bloom filters, orphan tx pool, and
+            // checkqueue scratch live in net_processing/transient and print n/a.
+            const double activechain_mib = (double)((size_t)(m_chain.Height() + 1) * sizeof(CBlockIndex*)) / (1024.0 * 1024.0);
+            const size_t auxsets_bytes = memusage::DynamicUsage(setBlockIndexCandidates)
+                + m_chainman.m_blockman.m_blocks_unlinked.size() * (sizeof(std::pair<CBlockIndex* const, CBlockIndex*>) + 3 * sizeof(void*));
+            const double blockindexaux_mib = (double)auxsets_bytes / (1024.0 * 1024.0);
+            size_t warncache_bytes = 0;
+            for (const auto& wc : warningcache) warncache_bytes += memusage::DynamicUsage(wc);
+            const double warncache_mib = (double)warncache_bytes / (1024.0 * 1024.0);
+            size_t filterindex_bytes = 0;
+            ForEachBlockFilterIndex([&](BlockFilterIndex& idx){ filterindex_bytes += idx.DynamicMemoryUsage(); });
+            const double filterindex_mib = (double)filterindex_bytes / (1024.0 * 1024.0);
+            LogPrintf("[RAM] height=%d | active chain vector: %.1f MiB | block index aux sets: %.1f MiB | rolling bloom filters: n/a | orphan tx pool: n/a | versionbits/warning caches: %.1f MiB | block filter index: %.1f MiB | checkqueue scratch: n/a\n",
+                pindexNew->nHeight, activechain_mib, blockindexaux_mib, warncache_mib, filterindex_mib);
         }
     }
 

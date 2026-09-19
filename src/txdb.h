@@ -80,6 +80,9 @@ public:
 
     //! @returns filesystem path to on-disk storage or std::nullopt if in memory.
     std::optional<fs::path> StoragePath() { return m_db->StoragePath(); }
+
+    //! Approximate in-memory (leveldb) usage of the underlying database.
+    size_t DynamicMemoryUsage() const { return m_db->DynamicMemoryUsage(); }
 };
 
 /** Access to the block database (blocks/index/) */

@@ -61,6 +61,8 @@ struct ChainSpec {
     std::map<std::string, int>  lasttimestamp;
     // int uuidlastblock;
     std::map<std::string, int>  uuidlastblock;
+    // double blockreward; proof-of-stake block reward in whole coins
+    std::map<std::string, double>  blockreward;
     // std::string initauthuser;
     std::map<std::string, std::string>  initauthuser;
     // std::string psztimestamp;
@@ -189,6 +191,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["alioth"]                = 1757546169;
     spec.checkpointHeight["alioth"]         = 10500;
     spec.checkpointHash["alioth"]           = "0x74f2f2840068536ec9aec7a97abb4abc71bdedc4fd04e80bb750addea114ac61";
+    spec.blockreward["alioth"]              = 1;
 
     spec.coinSymbol["borrelly"]             = "BORR";
     spec.psztimestamp["borrelly"]           = "Memory becomes unreliable without external verification.";
@@ -208,6 +211,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["borrelly"]              = 1757546169;
     spec.checkpointHeight["borrelly"]       = 10500;
     spec.checkpointHash["borrelly"]         = "0xa75562856a068540a0f9480e5540ca935e963bbdde8af837cf3e821e2044f453";
+    spec.blockreward["borrelly"]            = 1;
 
     spec.coinSymbol["cassiopeia"]           = "CASS";
     spec.psztimestamp["cassiopeia"]         = "The platform shapes thought through design.";
@@ -227,6 +231,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["cassiopeia"]            = 1757546169;
     spec.checkpointHeight["cassiopeia"]     = 6750;
     spec.checkpointHash["cassiopeia"]       = "0x2ad7da8b9e87b286bbe8ffbf2e3b560625ecca35f9436d74a34115f3470d6b56";
+    spec.blockreward["cassiopeia"]          = 1;
 
     spec.coinSymbol["delphinus"]            = "DELP";
     spec.psztimestamp["delphinus"]          = "Truth becomes what the fact-checkers approve.";
@@ -246,6 +251,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["delphinus"]             = 1757546169;
     spec.checkpointHeight["delphinus"]      = 10200;
     spec.checkpointHash["delphinus"]        = "0x37735afcd430501b8570de4bd00428240dcd985ed67c5006fd4c07b351990b7c";
+    spec.blockreward["delphinus"]           = 1;
 
     spec.coinSymbol["digitalcoin"]         = "DGC";
     spec.displayName["digitalcoin"]        = "Digitalcoin";
@@ -266,6 +272,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.initauthuser["digitalcoin"]         = "24a4fcb529d6ffc507ed1ebcaa81e299f8ede0b6";
     spec.checkpointHeight["digitalcoin"]   = 0;
     spec.checkpointHash["digitalcoin"]     = "0x5e039e1ca1dbf128973bf6cff98169e40a1b194c3b91463ab74956f413b2f9c8";
+    spec.blockreward["digitalcoin"]        = 1.75;
 
     spec.coinSymbol["enceladus"]            = "ENCE";
     spec.psztimestamp["enceladus"]          = "Every interaction feeds machine learning.";
@@ -285,6 +292,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["enceladus"]             = 1757546169;
     spec.checkpointHeight["enceladus"]      = 10175;
     spec.checkpointHash["enceladus"]        = "0x47e8bac1e2fdec00cb6edd3349910b46257c2c36d88caef34b8782c2093a20fc";
+    spec.blockreward["enceladus"]           = 1;
 
     spec.coinSymbol["fenrir"]               = "FENR";
     spec.psztimestamp["fenrir"]             = "Conformity spreads through social proof.";
@@ -304,6 +312,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["fenrir"]                = 1757546169;
     spec.checkpointHeight["fenrir"]         = 10100;
     spec.checkpointHash["fenrir"]           = "0x7b8bfd71e74fdad2cbb827c5303511e3ace04dd697fb5d2277b10144faed0909";
+    spec.blockreward["fenrir"]              = 1;
 
     spec.coinSymbol["galatea"]              = "GALA";
     spec.psztimestamp["galatea"]            = "Power manifests through permitted pathways.";
@@ -323,6 +332,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["galatea"]               = 1757546169;
     spec.checkpointHeight["galatea"]        = 9800;
     spec.checkpointHash["galatea"]          = "0x75ccd5fac5fed32d39284d9e3e2964df2fce943359430f0db5f2caeb84e272e8";
+    spec.blockreward["galatea"]             = 1;
 
     spec.coinSymbol["halley"]               = "HALL";
     spec.psztimestamp["halley"]             = "Dissent becomes indistinguishable from noise.";
@@ -342,6 +352,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["halley"]                = 1757546169;
     spec.checkpointHeight["halley"]         = 6775;
     spec.checkpointHash["halley"]           = "0x182a8c4632ff0f1a4629960cf5cc889519c230dd0ec2484bb323f1603ece74af";
+    spec.blockreward["halley"]              = 1;
 
     spec.coinSymbol["indus"]                = "INDU";
     spec.psztimestamp["indus"]              = "The crawler maps all possible connections.";
@@ -361,6 +372,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["indus"]                 = 1757546169;
     spec.checkpointHeight["indus"]          = 6775;
     spec.checkpointHash["indus"]            = "0x9e04be9327e3952c5a20cc744f51e5a885f624b407750b263eefad94d8afade8";
+    spec.blockreward["indus"]               = 1;
 
     spec.coinSymbol["infiniloop"]           = "IL8P";
     spec.displayName["infiniloop"]          = "InfiniLooP";
@@ -381,6 +393,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["infiniloop"]            = 1609281149;
     spec.checkpointHeight["infiniloop"]     = 2808765;
     spec.checkpointHash["infiniloop"]       = "0xa437ef7f4666568ad9642a4b71f969b6a4215f5f80d28e9e9f1a01e3d27dcf75";
+    spec.blockreward["infiniloop"]          = 1;
 
     spec.coinSymbol["lynx"]                 = "LYNX";
     spec.psztimestamp["lynx"]               = "ICanHazKitteh at epoch 1387779684. Meow. Now pet me.";
@@ -400,6 +413,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["lynx"]                  = 1387779684;
     spec.checkpointHeight["lynx"]           = 3251660;
     spec.checkpointHash["lynx"]             = "0x0869637aeb85c4fcd680a117a2a67e76360fbdd2780b99951bb85762db5ef5ec";
+    spec.blockreward["lynx"]                = 1;
 }
 
 // Ticker for the chain this binary was built for -- "ALIO" when CURRENT_CHAIN is
@@ -609,6 +623,7 @@ public:
 
         consensus.initAuthUser = uint160S(spec.initauthuser[CURRENT_CHAIN]);
         consensus.nUUIDBlockStart = spec.uuidlastblock[CURRENT_CHAIN] ;
+        consensus.nBlockReward = spec.blockreward[CURRENT_CHAIN] * COIN;
 
         consensus.fPowNoRetargeting = false;
 
