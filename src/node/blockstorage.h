@@ -16,7 +16,10 @@
 #include <util/fs.h>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -48,11 +51,43 @@ static constexpr size_t BLOCK_SERIALIZATION_HEADER_SIZE = CMessageHeader::MESSAG
 
 extern std::atomic_bool fReindex;
 
+// Bump allocator over one large file-backed mmap, used to hold the block index
+// map nodes. The block index is loaded whole at startup but almost never touched
+// away from the tip; backing it with a memory-mapped file lets the OS keep only
+// the touched pages resident and page the cold history out to disk, instead of
+// pinning every CBlockIndex in RAM. Entries are never erased, so deallocate is a
+// no-op. On non-POSIX platforms Alloc falls back to plain heap allocation.
+class BlockIndexArena
+{
+public:
+    //! Allocate `bytes` from the arena, aligned to `align`. Opens/resets the
+    //! backing file on first use.
+    static void* Alloc(std::size_t bytes, std::size_t align);
+};
+
+template <class T>
+struct MmapAllocator {
+    using value_type = T;
+    // All instances share the one process-wide arena, so the allocator behaves
+    // as stateless: the map treats it exactly like std::allocator.
+    using is_always_equal = std::true_type;
+
+    MmapAllocator() noexcept = default;
+    template <class U>
+    MmapAllocator(const MmapAllocator<U>&) noexcept {}
+
+    T* allocate(std::size_t n) { return static_cast<T*>(BlockIndexArena::Alloc(n * sizeof(T), alignof(T))); }
+    void deallocate(T*, std::size_t) noexcept {}
+
+    template <class U> bool operator==(const MmapAllocator<U>&) const noexcept { return true; }
+    template <class U> bool operator!=(const MmapAllocator<U>&) const noexcept { return false; }
+};
+
 // Because validation code takes pointers to the map's CBlockIndex objects, if
 // we ever switch to another associative container, we need to either use a
 // container that has stable addressing (true of all std associative
 // containers), or make the key a `std::unique_ptr<CBlockIndex>`
-using BlockMap = std::unordered_map<uint256, CBlockIndex, BlockHasher>;
+using BlockMap = std::unordered_map<uint256, CBlockIndex, BlockHasher, std::equal_to<uint256>, MmapAllocator<std::pair<const uint256, CBlockIndex>>>;
 
 struct CBlockIndexWorkComparator {
     bool operator()(const CBlockIndex* pa, const CBlockIndex* pb) const;

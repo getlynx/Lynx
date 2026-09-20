@@ -3126,7 +3126,12 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             // The map measurement includes each CBlockIndex (already counted as block
             // records above), so subtract the struct bytes to leave only the extra
             // lookup bookkeeping the map keeps around the records.
-            const size_t map_full = memusage::DynamicUsage(m_chainman.m_blockman.m_block_index);
+            // Same formula memusage uses for an unordered_map (node MallocUsage x size
+            // + bucket array), inlined because BlockMap's custom allocator makes it a
+            // 5-parameter type that memusage::DynamicUsage doesn't match.
+            const size_t bi_node_size = sizeof(std::pair<const uint256, CBlockIndex>) + sizeof(void*);
+            const size_t map_full = memusage::MallocUsage(bi_node_size) * n_index
+                + memusage::MallocUsage(sizeof(void*) * m_chainman.m_blockman.m_block_index.bucket_count());
             const double block_lookup_mib = (double)(map_full - n_index * sizeof(CBlockIndex)) / (1024.0 * 1024.0);
             const double coinsdb_mib = (double)this->CoinsDB().DynamicMemoryUsage() / (1024.0 * 1024.0);
             const double blocktreedb_mib = (double)m_chainman.m_blockman.m_block_tree_db->DynamicMemoryUsage() / (1024.0 * 1024.0);
