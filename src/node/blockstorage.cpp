@@ -27,6 +27,41 @@
 #include <unistd.h>
 #include <unordered_map>
 
+#ifdef WIN32
+#include <io.h>        // _get_osfhandle
+#include <windows.h>   // ReadFile, OVERLAPPED
+#endif
+
+namespace {
+//! Positional read: read `count` bytes at absolute `offset` without disturbing the file's
+//! shared seek position.
+//!
+//! The cached-fd path in ReadBlockFromDisk depends on exactly that property (see the
+//! comment there): no stdio buffering and no shared seek position, so it stays correct
+//! across threads and across a growing block file.
+//!
+//! POSIX gives us pread() directly. Windows has no pread(), so emulate it with ReadFile()
+//! plus an OVERLAPPED carrying the offset, which on a synchronous handle reads from that
+//! absolute position. The OVERLAPPED form does move the underlying file pointer as a side
+//! effect, but that is unobservable here: each reader thread owns its own FILE*/descriptor
+//! (the thread_local below), so no two threads ever share a handle.
+ssize_t PositionalRead(int fd, void* buf, size_t count, int64_t offset)
+{
+#ifdef WIN32
+    const HANDLE h = reinterpret_cast<HANDLE>(_get_osfhandle(fd));
+    if (h == INVALID_HANDLE_VALUE) return -1;
+    const uint64_t uoff = static_cast<uint64_t>(offset);
+    OVERLAPPED ov{};
+    ov.Offset     = static_cast<DWORD>(uoff & 0xFFFFFFFFu);
+    ov.OffsetHigh = static_cast<DWORD>((uoff >> 32) & 0xFFFFFFFFu);
+    DWORD got = 0;
+    if (!::ReadFile(h, buf, static_cast<DWORD>(count), &got, &ov)) return -1;
+    return static_cast<ssize_t>(got);
+#else
+    return ::pread(fd, buf, count, static_cast<off_t>(offset));
+#endif
+}
+} // namespace
 
 extern bool g_sync_active;
 std::chrono::steady_clock::duration g_wbf_serialize{};
@@ -840,7 +875,7 @@ bool BlockManager::ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, bool
         // The 8-byte meta header ([4]magic [4]size) precedes the block data at pos.nPos, so the
         // serialized block length is the little-endian uint32 at pos.nPos - 4 (cf. ReadRawBlockFromDisk).
         unsigned char szbuf[4];
-        if (::pread(fd, szbuf, sizeof(szbuf), (off_t)pos.nPos - 4) != (ssize_t)sizeof(szbuf)) {
+        if (PositionalRead(fd, szbuf, sizeof(szbuf), (int64_t)pos.nPos - 4) != (ssize_t)sizeof(szbuf)) {
             fclose(t_read_file); t_read_file = nullptr; t_read_file_num = -1;
             return error("ReadBlockFromDisk: pread size failed for %s", pos.ToString());
         }
@@ -850,7 +885,7 @@ bool BlockManager::ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, bool
             return error("ReadBlockFromDisk: bad block size %u for %s", blk_size, pos.ToString());
         }
         std::vector<uint8_t> buf(blk_size);
-        if (::pread(fd, buf.data(), blk_size, (off_t)pos.nPos) != (ssize_t)blk_size) {
+        if (PositionalRead(fd, buf.data(), blk_size, (int64_t)pos.nPos) != (ssize_t)blk_size) {
             fclose(t_read_file); t_read_file = nullptr; t_read_file_num = -1;
             return error("ReadBlockFromDisk: pread block failed for %s", pos.ToString());
         }
