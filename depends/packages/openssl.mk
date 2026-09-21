@@ -4,8 +4,16 @@ $(package)_download_path=https://www.openssl.org/source
 $(package)_file_name=$(package)-$($(package)_version).tar.gz
 $(package)_sha256_hash=40dceb51a4f6a5275bde0e6bf20ef4b91bfc32ed57c0552e2e8e15463372b17a
 
+# WINDRES must be spelled out from $(host_toolchain) rather than taken from $(host_WINDRES).
+# depends/hosts/default.mk only generates host_<TOOL> for the tools in its foreach list
+# (CC CXX AR RANLIB STRIP LIBTOOL NM OBJCOPY OTOOL INSTALL_NAME_TOOL DSYMUTIL) — WINDRES is
+# not among them, so $(host_WINDRES) expanded to the empty string and OpenSSL fell back to
+# a bare "windres", which does not exist on a Linux host. That is fatal, not cosmetic: the
+# mingw32 build compiles apps/openssl.res.o for apps/openssl.exe and dies with
+# "windres: No such file or directory". $(host_toolchain) is "x86_64-w64-mingw32-" when
+# cross-compiling and empty for a native build, where WINDRES is never invoked anyway.
 define $(package)_set_vars
-$(package)_config_env=AR="$($(package)_ar)" RANLIB="$($(package)_ranlib)" CC="$($(package)_cc)" WINDRES="$(host_WINDRES)"
+$(package)_config_env=AR="$($(package)_ar)" RANLIB="$($(package)_ranlib)" CC="$($(package)_cc)" WINDRES="$(host_toolchain)windres"
 $(package)_config_opts=--prefix=$(host_prefix) --openssldir=$(host_prefix)
 $(package)_config_opts+=no-asm
 $(package)_config_opts+=no-threads
