@@ -46,12 +46,11 @@ static const int TOOLTIP_WRAP_THRESHOLD = 80;
 /* Number of frames in spinner animation */
 #define SPINNER_FRAMES 36
 
+/* Organization is shared by every LDSN chain; the application name is per chain
+ * ("Alioth-Qt", see GUIUtil::appName()), so each chain keeps its own QSettings file
+ * under ~/.config/Lynx/. */
 #define QAPP_ORG_NAME "Lynx"
 #define QAPP_ORG_DOMAIN "getlynx.io"
-#define QAPP_APP_NAME_DEFAULT "Lynx-Qt"
-#define QAPP_APP_NAME_TESTNET "Lynx-Qt-testnet"
-#define QAPP_APP_NAME_SIGNET "Lynx-Qt-signet"
-#define QAPP_APP_NAME_REGTEST "Lynx-Qt-regtest"
 
 /* One gigabyte (GB) in bytes */
 static constexpr uint64_t GB_BYTES{1000000000};

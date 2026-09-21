@@ -1,9 +1,10 @@
 # Lynx Data Storage Network (LDSN) Compiler
 
 This directory contains `compile.sh` — a self-contained build script that compiles the
-daemon, CLI, and transaction tool from source for **any coin on the Lynx Data Storage
-Network**. Build a single chain, several at once, or every coin on the network in one
-run; each one is packaged as its own dated `.zip` archive.
+daemon, CLI, transaction tool, and Qt desktop wallet from source for **any coin on the Lynx
+Data Storage Network**. Build a single chain, several at once, or every coin on the network
+in one run; each one is packaged as two dated `.zip` archives, one for the command-line
+binaries and one for the Qt wallet.
 
 There is no fixed list of supported coins here. The compiler reads the available chains
 straight out of the source at run time, so whatever the network supports on the day you
@@ -113,8 +114,9 @@ packages and installs a full build toolchain.
    run regardless of how many chains you queued.
 7. **Builds each chain in turn** — clone or update the source, build `depends`, run
    `autogen.sh` and `configure`, then `make`.
-8. **Packages each chain** — stages the three binaries, strips them, zips them, and deletes
-   the loose binaries so only the archive remains.
+8. **Packages each chain** — stages the four binaries, strips them, zips the command-line
+   trio into a `CLI` archive and the Qt wallet into a `QT` archive, and deletes the loose
+   binaries so only the archives remain.
 9. **Prints a summary** — per-chain success/failure plus a ready-to-paste `scp` command for
    pulling the archives to your local machine.
 
@@ -215,24 +217,33 @@ It escalates to `SIGKILL` if the build has not stopped within 10 seconds.
 
 ## Output
 
-Each chain produces exactly one archive:
+Each chain produces exactly two archives:
 
 ```
 2026-08-06.Lynx.CLI.v27.1.1.Debian.12.AMD.zip
+2026-08-06.Lynx.QT.v27.1.1.Debian.12.AMD.zip
 └─ date    └─ chain └─ version └─ distro └─ ver └─ arch
 ```
 
 Architecture is labelled `AMD` for x86_64 and `ARM` for either ARM target. The version is
 read from `configure.ac` in the cloned source.
 
-Each archive contains three stripped binaries — for example, for Lynx:
+The `CLI` archive contains three stripped binaries — for example, for Lynx:
 
 - `lynxd` — the daemon
 - `lynx-cli` — the RPC client
 - `lynx-tx` — the transaction utility
 
+The `QT` archive contains one stripped binary, the desktop wallet — `lynx-qt` for Lynx. It
+is a full node with a graphical wallet (send, receive, stake); it does not need `lynxd`
+running alongside it. Qt itself is linked in statically, so the only things it needs from
+the desktop are the X11 client libraries every Linux desktop already ships (`libxcb`,
+`libxkbcommon`, `libfontconfig`, `libfreetype`). It is meant for desktops, not headless
+servers; the [Spark installer](../installer/) ignores `QT` archives and only ever installs
+from the `CLI` one.
+
 **Archives land in the directory you ran the script from** (or next to the script, if you
-saved it and ran it directly). The loose binaries are deleted once the archive is sealed,
+saved it and ran it directly). The loose binaries are deleted once the archives are sealed,
 so the `.zip` files are the only artifacts left behind.
 
 > **Note:** nothing is installed onto your `PATH`. Unzip the archive to use the binaries.

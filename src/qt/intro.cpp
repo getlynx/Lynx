@@ -118,16 +118,11 @@ Intro::Intro(QWidget *parent, int64_t blockchain_size_gb, int64_t chain_state_si
     m_chain_state_size_gb(chain_state_size_gb)
 {
     ui->setupUi(this);
-    ui->welcomeLabel->setText(ui->welcomeLabel->text().arg(PACKAGE_NAME));
-    ui->storageLabel->setText(ui->storageLabel->text().arg(PACKAGE_NAME));
+    ui->welcomeLabel->setText(ui->welcomeLabel->text().arg(GUIUtil::productName()));
+    ui->storageLabel->setText(ui->storageLabel->text().arg(GUIUtil::productName()));
 
-    ui->lblExplanation1->setText(ui->lblExplanation1->text()
-        .arg(PACKAGE_NAME)
-        .arg(m_blockchain_size_gb)
-        .arg(2009)
-        .arg(tr("Lynx"))
-    );
-    ui->lblExplanation2->setText(ui->lblExplanation2->text().arg(PACKAGE_NAME));
+    ui->lblExplanation1->setText(ui->lblExplanation1->text().arg(GUIUtil::productName()));
+    ui->lblExplanation2->setText(ui->lblExplanation2->text().arg(GUIUtil::productName()));
 
     startThread();
 }
@@ -204,7 +199,7 @@ bool Intro::showIfNeeded(bool& did_show_intro)
                 }
                 break;
             } catch (const fs::filesystem_error&) {
-                QMessageBox::critical(nullptr, PACKAGE_NAME,
+                QMessageBox::critical(nullptr, GUIUtil::productName(),
                     tr("Error: Specified data directory \"%1\" cannot be created.").arg(dataDir));
                 /* fall through, back to choosing screen */
             }

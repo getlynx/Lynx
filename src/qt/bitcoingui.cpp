@@ -269,14 +269,14 @@ void BitcoinGUI::createActions()
     tabGroup->addAction(overviewAction);
 
     sendCoinsAction = new QAction(platformStyle->SingleColorIcon(":/icons/send"), tr("&Send"), this);
-    sendCoinsAction->setStatusTip(tr("Send coins to a Lynx address"));
+    sendCoinsAction->setStatusTip(tr("Send coins to a %1 address").arg(GUIUtil::chainName()));
     sendCoinsAction->setToolTip(sendCoinsAction->statusTip());
     sendCoinsAction->setCheckable(true);
     sendCoinsAction->setShortcut(QKeySequence(QStringLiteral("Alt+2")));
     tabGroup->addAction(sendCoinsAction);
 
     receiveCoinsAction = new QAction(platformStyle->SingleColorIcon(":/icons/receiving_addresses"), tr("&Receive"), this);
-    receiveCoinsAction->setStatusTip(tr("Request payments (generates QR codes and lynx: URIs)"));
+    receiveCoinsAction->setStatusTip(tr("Request payments (generates QR codes and %1: URIs)").arg(CURRENT_CHAIN));
     receiveCoinsAction->setToolTip(receiveCoinsAction->statusTip());
     receiveCoinsAction->setCheckable(true);
     receiveCoinsAction->setShortcut(QKeySequence(QStringLiteral("Alt+3")));
@@ -306,15 +306,15 @@ void BitcoinGUI::createActions()
     quitAction->setStatusTip(tr("Quit application"));
     quitAction->setShortcut(QKeySequence(tr("Ctrl+Q")));
     quitAction->setMenuRole(QAction::QuitRole);
-    aboutAction = new QAction(tr("&About %1").arg(PACKAGE_NAME), this);
-    aboutAction->setStatusTip(tr("Show information about %1").arg(PACKAGE_NAME));
+    aboutAction = new QAction(tr("&About %1").arg(GUIUtil::productName()), this);
+    aboutAction->setStatusTip(tr("Show information about %1").arg(GUIUtil::productName()));
     aboutAction->setMenuRole(QAction::AboutRole);
     aboutAction->setEnabled(false);
     aboutQtAction = new QAction(tr("About &Qt"), this);
     aboutQtAction->setStatusTip(tr("Show information about Qt"));
     aboutQtAction->setMenuRole(QAction::AboutQtRole);
     optionsAction = new QAction(tr("&Options…"), this);
-    optionsAction->setStatusTip(tr("Modify configuration options for %1").arg(PACKAGE_NAME));
+    optionsAction->setStatusTip(tr("Modify configuration options for %1").arg(GUIUtil::productName()));
     optionsAction->setMenuRole(QAction::PreferencesRole);
     optionsAction->setEnabled(false);
 
@@ -329,13 +329,13 @@ void BitcoinGUI::createActions()
     changePassphraseAction = new QAction(tr("&Change Passphrase…"), this);
     changePassphraseAction->setStatusTip(tr("Change the passphrase used for wallet encryption"));
     signMessageAction = new QAction(tr("Sign &message…"), this);
-    signMessageAction->setStatusTip(tr("Sign messages with your Lynx addresses to prove you own them"));
+    signMessageAction->setStatusTip(tr("Sign messages with your %1 addresses to prove you own them").arg(GUIUtil::chainName()));
     verifyMessageAction = new QAction(tr("&Verify message…"), this);
-    verifyMessageAction->setStatusTip(tr("Verify messages to ensure they were signed with specified Lynx addresses"));
+    verifyMessageAction->setStatusTip(tr("Verify messages to ensure they were signed with specified %1 addresses").arg(GUIUtil::chainName()));
     m_load_psbt_action = new QAction(tr("&Load PSBT from file…"), this);
-    m_load_psbt_action->setStatusTip(tr("Load Partially Signed Lynx Transaction"));
+    m_load_psbt_action->setStatusTip(tr("Load Partially Signed Transaction (PSBT)"));
     m_load_psbt_clipboard_action = new QAction(tr("Load PSBT from &clipboard…"), this);
-    m_load_psbt_clipboard_action->setStatusTip(tr("Load Partially Signed Lynx Transaction from clipboard"));
+    m_load_psbt_clipboard_action->setStatusTip(tr("Load Partially Signed Transaction (PSBT) from clipboard"));
 
     openRPCConsoleAction = new QAction(tr("Node window"), this);
     openRPCConsoleAction->setStatusTip(tr("Open node debugging and diagnostic console"));
@@ -349,7 +349,7 @@ void BitcoinGUI::createActions()
     usedReceivingAddressesAction->setStatusTip(tr("Show the list of used receiving addresses and labels"));
 
     openAction = new QAction(tr("Open &URI…"), this);
-    openAction->setStatusTip(tr("Open a lynx: URI"));
+    openAction->setStatusTip(tr("Open a %1: URI").arg(CURRENT_CHAIN));
 
     m_open_wallet_action = new QAction(tr("Open Wallet"), this);
     m_open_wallet_action->setEnabled(false);
@@ -374,7 +374,7 @@ void BitcoinGUI::createActions()
 
     showHelpMessageAction = new QAction(tr("&Command-line options"), this);
     showHelpMessageAction->setMenuRole(QAction::NoRole);
-    showHelpMessageAction->setStatusTip(tr("Show the %1 help message to get a list with possible Lynx command-line options").arg(PACKAGE_NAME));
+    showHelpMessageAction->setStatusTip(tr("Show the %1 help message to get a list with possible %2 command-line options").arg(GUIUtil::productName(), GUIUtil::chainName()));
 
     m_mask_values_action = new QAction(tr("&Mask values"), this);
     m_mask_values_action->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
@@ -825,7 +825,7 @@ void BitcoinGUI::createTrayIcon()
 #ifndef Q_OS_MACOS
     if (QSystemTrayIcon::isSystemTrayAvailable()) {
         trayIcon = new QSystemTrayIcon(m_network_style->getTrayAndWindowIcon(), this);
-        QString toolTip = tr("%1 client").arg(PACKAGE_NAME) + " " + m_network_style->getTitleAddText();
+        QString toolTip = tr("%1 client").arg(GUIUtil::productName()) + " " + m_network_style->getTitleAddText();
         trayIcon->setToolTip(toolTip);
     }
 #endif
@@ -943,19 +943,22 @@ void BitcoinGUI::showHelpMessageClicked()
 }
 
 #ifdef ENABLE_WALLET
+// Mirrors the setstaking RPC (rpc/mining.cpp): gblnDisableStaking is the daemon's
+// authoritative "user turned staking off" flag, and the stake manager is asked to
+// start or stop. The menu text is not touched here; setStakingStatus() re-reads the
+// real state on its timer, so the label only changes once the manager actually did.
+extern bool gblnDisableStaking;
+
 void BitcoinGUI::toggleStaking()
 {
-    if (!m_is_staking) {
-        m_is_staking = true;
-        stakeman_request_start();
-        toggleStakingAction->setText("Disable staking...");
-        toggleStakingAction->setStatusTip("Disable staking on current wallet");
-    } else {
-        m_is_staking = false;
+    if (fStakerRunning) {
+        gblnDisableStaking = true;
         stakeman_request_stop();
-        toggleStakingAction->setText("Enable staking...");
-        toggleStakingAction->setStatusTip("Enable staking on current wallet");
+    } else {
+        gblnDisableStaking = false;
+        stakeman_request_start();
     }
+    setStakingStatus();
 }
 
 void BitcoinGUI::openClicked()
@@ -1023,7 +1026,7 @@ void BitcoinGUI::updateNetworkState()
 
     if (m_node.getNetworkActive()) {
         //: A substring of the tooltip.
-        tooltip = tr("%n active connection(s) to Lynx network.", "", count);
+        tooltip = tr("%n active connection(s) to the %1 network.", "", count).arg(GUIUtil::chainName());
     } else {
         //: A substring of the tooltip.
         tooltip = tr("Network activity disabled.");
@@ -1214,7 +1217,7 @@ void BitcoinGUI::setNumBlocks(int count, const QDateTime& blockDate, double nVer
 void BitcoinGUI::message(const QString& title, QString message, unsigned int style, bool* ret, const QString& detailed_message)
 {
     // Default title. On macOS, the window title is ignored (as required by the macOS Guidelines).
-    QString strTitle{PACKAGE_NAME};
+    QString strTitle{GUIUtil::productName()};
     // Default to information icon
     int nMBoxIcon = QMessageBox::Information;
     int nNotifyIcon = Notificator::Information;
@@ -1406,6 +1409,15 @@ void BitcoinGUI::setHDStatus(bool privkeyDisabled, int hdEnabled)
 
 void BitcoinGUI::setStakingStatus()
 {
+    // The daemon starts staking on its own (unless -disablestaking), so the menu entry
+    // must follow the stake manager rather than remember what was last clicked.
+    m_is_staking = fStakerRunning;
+    if (toggleStakingAction) {
+        toggleStakingAction->setChecked(m_is_staking);
+        toggleStakingAction->setText(m_is_staking ? tr("Disable staking…") : tr("Enable staking…"));
+        toggleStakingAction->setStatusTip(m_is_staking ? tr("Disable staking on current wallet")
+                                                       : tr("Enable staking on current wallet"));
+    }
     if (fStakerRunning) {
         if (!fTryToSync) {
            labelStakingIcon->show();
@@ -1492,7 +1504,7 @@ void BitcoinGUI::updateProxyIcon()
 
 void BitcoinGUI::updateWindowTitle()
 {
-    QString window_title = PACKAGE_NAME;
+    QString window_title = GUIUtil::productName();
 #ifdef ENABLE_WALLET
     if (walletFrame) {
         WalletModel* const wallet_model = walletFrame->currentWalletModel();

@@ -59,6 +59,17 @@ namespace GUIUtil
     // Use this flags to prevent a "What's This" button in the title bar of the dialog on Windows.
     constexpr auto dialog_flags = Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint;
 
+    /**
+     * Identity of the chain this binary was built for (-DCURRENT_CHAIN), read from the
+     * chainparams spec block so the GUI can never disagree with the daemon.
+     *   chainName()   -> "Alioth", "InfiniLooP", "Lynx"     (window text, unit descriptions)
+     *   productName() -> "Alioth Wallet"                     (title bar, splash, About)
+     *   appName()     -> "Alioth-Qt"                         (QApplication name; scopes QSettings per chain)
+     */
+    QString chainName();
+    QString productName();
+    QString appName();
+
     // Create human-readable string from date
     QString dateTimeStr(const QDateTime &datetime);
     QString dateTimeStr(qint64 nTime);
@@ -77,7 +88,7 @@ namespace GUIUtil
      */
     void AddButtonShortcut(QAbstractButton* button, const QKeySequence& shortcut);
 
-    // Parse "lynx:" URI into recipient object, return true on successful parsing
+    // Parse "<chain>:" URI into recipient object, return true on successful parsing
     bool parseBitcoinURI(const QUrl &uri, SendCoinsRecipient *out);
     bool parseBitcoinURI(QString uri, SendCoinsRecipient *out);
     QString formatBitcoinURI(const SendCoinsRecipient &info);

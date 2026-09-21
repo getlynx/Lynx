@@ -5,6 +5,7 @@
 #include <qt/bitcoinunits.h>
 
 #include <consensus/amount.h>
+#include <kernel/chainparams.h>
 
 #include <QStringList>
 
@@ -28,13 +29,26 @@ QList<BitcoinUnit> BitcoinUnits::availableUnits()
     return unitlist;
 }
 
+// Unit names come from the chainparams spec for the chain this binary was built for:
+// "ALIO" / "mALIO" / "µALIO" / "sat" for alioth, described as "Alioth", "Milli-Alioth",
+// "Micro-Alioth". The smallest unit is "sat" on every chain, matching CURRENCY_ATOM.
+static QString CoinSymbol()
+{
+    return QString::fromStdString(CurrentCoinSymbol());
+}
+
+static QString ChainName()
+{
+    return QString::fromStdString(CurrentChainDisplayName());
+}
+
 QString BitcoinUnits::longName(Unit unit)
 {
     switch (unit) {
-    case Unit::BTC: return QString("LYNX");
-    case Unit::mBTC: return QString("mLYNX");
-    case Unit::uBTC: return QString::fromUtf8("µLYNX (lyts)");
-    case Unit::SAT: return QString("Liv (sat)");
+    case Unit::BTC: return CoinSymbol();
+    case Unit::mBTC: return QStringLiteral("m") + CoinSymbol();
+    case Unit::uBTC: return QString::fromUtf8("µ") + CoinSymbol();
+    case Unit::SAT: return QStringLiteral("sat");
     } // no default case, so the compiler can warn about missing cases
     assert(false);
 }
@@ -44,8 +58,8 @@ QString BitcoinUnits::shortName(Unit unit)
     switch (unit) {
     case Unit::BTC: return longName(unit);
     case Unit::mBTC: return longName(unit);
-    case Unit::uBTC: return QString("lyts");
-    case Unit::SAT: return QString("liv");
+    case Unit::uBTC: return longName(unit);
+    case Unit::SAT: return QStringLiteral("sat");
     } // no default case, so the compiler can warn about missing cases
     assert(false);
 }
@@ -53,10 +67,10 @@ QString BitcoinUnits::shortName(Unit unit)
 QString BitcoinUnits::description(Unit unit)
 {
     switch (unit) {
-    case Unit::BTC: return QString("Lynx");
-    case Unit::mBTC: return QString("Milli-Lynx (1 / 1" THIN_SP_UTF8 "000)");
-    case Unit::uBTC: return QString("Micro-Lynx (lyts) (1 / 1" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
-    case Unit::SAT: return QString("Liv (sat) (1 / 100" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
+    case Unit::BTC: return ChainName();
+    case Unit::mBTC: return QStringLiteral("Milli-") + ChainName() + QString(" (1 / 1" THIN_SP_UTF8 "000)");
+    case Unit::uBTC: return QStringLiteral("Micro-") + ChainName() + QString(" (1 / 1" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
+    case Unit::SAT: return QString("Satoshi (sat) (1 / 100" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
     } // no default case, so the compiler can warn about missing cases
     assert(false);
 }

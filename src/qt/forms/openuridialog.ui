@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Open lynx URI</string>
+   <string>Open payment URI</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -25,9 +25,6 @@
      </item>
      <item>
       <widget class="QValidatedLineEdit" name="uriEdit">
-       <property name="placeholderText">
-        <string notr="true">lynx:</string>
-       </property>
       </widget>
      </item>
      <item>

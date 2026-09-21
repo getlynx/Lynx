@@ -376,11 +376,24 @@ $(QT_QRC_LOCALE_CPP): $(QT_QRC_LOCALE) $(QT_QM)
 	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(RCC) -name bitcoin_locale --format-version 1 $(@D)/temp_$(<F) > $@
 	@rm $(@D)/temp_$(<F)
 
-$(QT_QRC_CPP): $(QT_QRC) $(QT_FORMS_H) $(QT_RES_FONTS) $(QT_RES_ICONS) $(QT_RES_ANIMATION)
+# Per-chain application icon. bitcoin.qrc's "bitcoin" alias (app icon, splash, tray)
+# points at the generated qt/res/icons/chain_icon.png, which is share/branding/$(NAME)/icon.png
+# when that chain has artwork and the stock qt/res/icons/bitcoin.png otherwise. It lives
+# next to the .qrc (rcc resolves paths relative to the .qrc file) and is untracked.
+# Compare-then-copy keeps its mtime stable, so qrc_bitcoin.cpp is regenerated exactly when
+# the icon really changes; the FORCE prerequisite makes 'make NAME=<other>' re-brand the
+# same tree without a clean.
+QT_CHAIN_ICON = $(srcdir)/qt/res/icons/chain_icon.png
+$(QT_CHAIN_ICON): FORCE
+	@src=$(top_srcdir)/share/branding/$(NAME)/icon.png; \
+	test -f $$src || src=$(srcdir)/qt/res/icons/bitcoin.png; \
+	cmp -s $$src $@ 2>/dev/null || { echo "  BRAND    $@ <- $$src"; cp -f $$src $@; }
+
+$(QT_QRC_CPP): $(QT_QRC) $(QT_FORMS_H) $(QT_RES_FONTS) $(QT_RES_ICONS) $(QT_RES_ANIMATION) $(QT_CHAIN_ICON)
 	@test -f $(RCC)
 	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(RCC) -name bitcoin --format-version 1 $< > $@
 
-CLEAN_QT = $(nodist_qt_liblynxqt_a_SOURCES) $(QT_QM) $(QT_FORMS_H) qt/*.gcda qt/*.gcno qt/temp_bitcoin_locale.qrc
+CLEAN_QT = $(nodist_qt_liblynxqt_a_SOURCES) $(QT_QM) $(QT_FORMS_H) qt/*.gcda qt/*.gcno qt/temp_bitcoin_locale.qrc $(QT_CHAIN_ICON)
 
 CLEANFILES += $(CLEAN_QT)
 

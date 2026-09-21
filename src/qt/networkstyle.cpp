@@ -5,22 +5,24 @@
 #include <qt/networkstyle.h>
 
 #include <qt/guiconstants.h>
+#include <qt/guiutil.h>
 
 #include <tinyformat.h>
 #include <util/chaintype.h>
 
 #include <QApplication>
 
+// The application name is GUIUtil::appName() ("Alioth-Qt") plus a per-network suffix.
 static const struct {
     const ChainType networkId;
-    const char *appName;
+    const char *appNameSuffix;
     const int iconColorHueShift;
     const int iconColorSaturationReduction;
 } network_styles[] = {
-    {ChainType::MAIN, QAPP_APP_NAME_DEFAULT, 0, 0},
-    {ChainType::TESTNET, QAPP_APP_NAME_TESTNET, 70, 30},
-    {ChainType::SIGNET, QAPP_APP_NAME_SIGNET, 35, 15},
-    {ChainType::REGTEST, QAPP_APP_NAME_REGTEST, 160, 30},
+    {ChainType::MAIN, "", 0, 0},
+    {ChainType::TESTNET, "-testnet", 70, 30},
+    {ChainType::SIGNET, "-signet", 35, 15},
+    {ChainType::REGTEST, "-regtest", 160, 30},
 };
 
 // titleAddText needs to be const char* for tr()
@@ -83,7 +85,7 @@ const NetworkStyle* NetworkStyle::instantiate(const ChainType networkId)
     for (const auto& network_style : network_styles) {
         if (networkId == network_style.networkId) {
             return new NetworkStyle(
-                    network_style.appName,
+                    GUIUtil::appName() + QLatin1String(network_style.appNameSuffix),
                     network_style.iconColorHueShift,
                     network_style.iconColorSaturationReduction,
                     titleAddText.c_str());

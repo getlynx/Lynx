@@ -32,6 +32,7 @@ lynxd
 lynx-cli
 lynx-util
 lynx-tx
+lynx-qt
 lynx-wallet
 Makefile
 
@@ -40,6 +41,17 @@ Makefile
 src/*d
 src/*-cli
 src/*-tx
+src/*-qt
+src/qt/res/icons/chain_icon.png
+
+# Qt build artifacts (moc/uic/rcc/lrelease output), regenerated on every GUI build.
+src/qt/*.moc
+src/qt/moc_*.cpp
+src/qt/forms/ui_*.h
+src/qt/test/moc_*.cpp
+src/qt/locale/*.qm
+src/qt/qrc_*.cpp
+src/qt/temp_bitcoin_locale.qrc
 src/*-util
 src/*-wallet
 

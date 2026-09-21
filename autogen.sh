@@ -31,10 +31,16 @@ ifndef NAME\nNAME = lynx\nendif\n' Makefile.in
 sed -i '/^endif$/a\
 ifeq ($(NAME),lynx)\n\tCPFLAGS := -n\nelse\n\tCPFLAGS :=\nendif\n' Makefile.in
 
+# The Qt wallet copy is prefixed with automake's @ENABLE_QT_TRUE@, which configure turns
+# into "" for --with-gui=qt5 and "#" for --with-gui=no, so a CLI-only build never trips
+# over a missing (or stale, from an earlier GUI build) src/qt/lynx-qt. It uses -f rather
+# than $(CPFLAGS): src/qt/lynx-qt -> src/lynx-qt is a real copy even for NAME=lynx, and -n
+# would freeze a stale first copy on later rebuilds.
 sed -i '/^all: all-recursive$/a\
 \tcp $(CPFLAGS) src/lynxd src/$(NAME)d\
 \tcp $(CPFLAGS) src/lynx-cli src/$(NAME)-cli\
-\tcp $(CPFLAGS) src/lynx-tx src/$(NAME)-tx' Makefile.in
+\tcp $(CPFLAGS) src/lynx-tx src/$(NAME)-tx\
+@ENABLE_QT_TRUE@\tcp -f src/qt/lynx-qt src/$(NAME)-qt' Makefile.in
 
 sed -i '1i\
 ifndef NAME\nNAME = lynx\nendif\n' src/Makefile.in

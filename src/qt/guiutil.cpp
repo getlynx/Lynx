@@ -13,6 +13,7 @@
 #include <base58.h>
 #include <chainparams.h>
 #include <interfaces/node.h>
+#include <kernel/chainparams.h>
 #include <key_io.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>
@@ -129,8 +130,8 @@ void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent)
     widget->setFont(fixedPitchFont());
     // We don't want translators to use own addresses in translations
     // and this is the only place, where this address is supplied.
-    widget->setPlaceholderText(QObject::tr("Enter a Lynx address (e.g. %1)").arg(
-        QString::fromStdString(DummyAddress(Params()))));
+    widget->setPlaceholderText(QObject::tr("Enter a %1 address (e.g. %2)").arg(
+        chainName(), QString::fromStdString(DummyAddress(Params()))));
     widget->setValidator(new BitcoinAddressEntryValidator(parent));
     widget->setCheckValidator(new BitcoinAddressCheckValidator(parent));
 }
@@ -142,8 +143,8 @@ void AddButtonShortcut(QAbstractButton* button, const QKeySequence& shortcut)
 
 bool parseBitcoinURI(const QUrl &uri, SendCoinsRecipient *out)
 {
-    // return if URI is not valid or is no lynx: URI
-    if(!uri.isValid() || uri.scheme() != QString("lynx"))
+    // return if URI is not valid or is not a <chain>: URI
+    if(!uri.isValid() || uri.scheme() != QString(CURRENT_CHAIN))
         return false;
 
     SendCoinsRecipient rv;
@@ -206,7 +207,7 @@ QString formatBitcoinURI(const SendCoinsRecipient &info)
 {
     bool bech_32 = info.address.startsWith(QString::fromStdString(Params().Bech32HRP() + "1"));
 
-    QString ret = QString("lynx:%1").arg(bech_32 ? info.address.toUpper() : info.address);
+    QString ret = QString(CURRENT_CHAIN ":%1").arg(bech_32 ? info.address.toUpper() : info.address);
     int paramCount = 0;
 
     if (info.amount)
@@ -286,6 +287,21 @@ void LoadFont(const QString& file_name)
 {
     const int id = QFontDatabase::addApplicationFont(file_name);
     assert(id != -1);
+}
+
+QString chainName()
+{
+    return QString::fromStdString(CurrentChainDisplayName());
+}
+
+QString productName()
+{
+    return chainName() + QStringLiteral(" Wallet");
+}
+
+QString appName()
+{
+    return chainName() + QStringLiteral("-Qt");
 }
 
 QString getDefaultDataDirectory()
@@ -588,8 +604,8 @@ fs::path static GetAutostartFilePath()
 {
     ChainType chain = gArgs.GetChainType();
     if (chain == ChainType::MAIN)
-        return GetAutostartDir() / "lynx.desktop";
-    return GetAutostartDir() / fs::u8path(strprintf("lynx-%s.desktop", chain));
+        return GetAutostartDir() / (CURRENT_CHAIN ".desktop");
+    return GetAutostartDir() / fs::u8path(strprintf(CURRENT_CHAIN "-%s.desktop", ChainTypeToString(chain)));
 }
 
 bool GetStartOnSystemStartup()
@@ -631,13 +647,13 @@ bool SetStartOnSystemStartup(bool fAutoStart)
             return false;
 
         ChainType chain = gArgs.GetChainType();
-        // Write a lynx.desktop file to the autostart directory:
+        // Write a <chain>.desktop file to the autostart directory:
         optionFile << "[Desktop Entry]\n";
         optionFile << "Type=Application\n";
         if (chain == ChainType::MAIN)
-            optionFile << "Name=Lynx\n";
+            optionFile << strprintf("Name=%s\n", CurrentChainDisplayName());
         else
-            optionFile << strprintf("Name=Lynx (%s)\n", chain);
+            optionFile << strprintf("Name=%s (%s)\n", CurrentChainDisplayName(), ChainTypeToString(chain));
         optionFile << "Exec=" << pszExePath << strprintf(" -min -chain=%s\n", ChainTypeToString(chain));
         optionFile << "Terminal=false\n";
         optionFile << "Hidden=false\n";

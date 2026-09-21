@@ -19,8 +19,9 @@ set -e
 #   Once selection finishes, the build phase detaches from the terminal and logs to
 #   /var/log/chain-build-<timestamp>.log, so the SSH session can be closed while
 #   long batches run. Check progress later with tail -f on that log.
-#   Each chain produces one dated .zip next to this script (or, when streamed, in the
-#   directory it was launched from). The loose binaries are deleted once zipped, so the
+#   Each chain produces two dated .zip archives next to this script (or, when streamed, in
+#   the directory it was launched from): a CLI archive (daemon, CLI, tx tool) and a QT
+#   archive (the Qt desktop wallet). The loose binaries are deleted once zipped, so the
 #   archives are the only artifacts left behind.
 
 echo "🚀 Starting the Lynx Data Storage Network (LDSN) Compiler..."
@@ -630,14 +631,16 @@ IMPSHIM
         #fi
         # Always run ./configure; the conditional skip below is intentionally left commented out.
         #if [ "$CLEAN" -eq 1 ] || [ ! -f "$PWD/config.log" ]; then
-            echo "🛠️  Running configure for $arch (no GUI/bench/tests, reduced exports)..."
-            # Configure without GUI, benches, or tests to speed up build.
+            echo "🛠️  Running configure for $arch (Qt GUI on, no bench/tests, reduced exports)..."
+            # The Qt wallet is built from the static Qt in depends (built above without NO_QT=1),
+            # so no Qt host packages are needed; libqrencode is auto-detected from depends too.
+            # Benches and tests are left out to speed up the build.
             # --enable-reduce-exports hides internal symbols (-fvisibility=hidden) to trim binary size.
-            CONFIG_SITE=$PWD/depends/$arch/share/config.site ./configure --with-gui=no --enable-bench=no --enable-tests=no --enable-reduce-exports
+            CONFIG_SITE=$PWD/depends/$arch/share/config.site ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports
         #else
             #echo "♻️  Reusing existing configure output (skipping ./configure)."
         #fi
-        echo "🔨 Building core binaries..."
+        echo "🔨 Building core binaries and the Qt wallet..."
 
         # NAME is what src/Makefile.am turns into -DCURRENT_CHAIN, which selects the chain's
         # row out of the spec table in chainparams.cpp and names its .conf file. Every chain
@@ -645,7 +648,7 @@ IMPSHIM
         # an empty spec and trips the genesis assert at startup.
         make NAME="$BIN_BASE" V=1
 
-        # Install the three primary binaries (daemon, CLI, tx tool); they are stripped and
+        # Install the four binaries (daemon, CLI, tx tool, Qt wallet); they are stripped and
         # archived further below.
         local SRC_DIR="$WORKDIR/src"
 
@@ -658,7 +661,9 @@ IMPSHIM
         #    cp -n "$SRC_DIR/lynx-tx" "$SRC_DIR/${BIN_BASE}-tx"
         #fi
 
-        local BINARIES=("$SRC_DIR/${BIN_BASE}d" "$SRC_DIR/${BIN_BASE}-cli" "$SRC_DIR/${BIN_BASE}-tx")
+        # The Qt wallet is a required output: a chain whose GUI failed to build is a failed
+        # chain, not a CLI-only success, so it is checked with the same loop as the rest.
+        local BINARIES=("$SRC_DIR/${BIN_BASE}d" "$SRC_DIR/${BIN_BASE}-cli" "$SRC_DIR/${BIN_BASE}-tx" "$SRC_DIR/${BIN_BASE}-qt")
 
         # Ensure expected binaries exist before installing.
         for bin_path in "${BINARIES[@]}"; do
@@ -668,9 +673,9 @@ IMPSHIM
             fi
         done
 
-        # Stage the three binaries next to the script so they can be stripped without
+        # Stage the four binaries next to the script so they can be stripped without
         # touching the build tree's copies (which keep their symbols for debugging). They
-        # are deleted again once the archive is sealed — only the .zip is meant to survive.
+        # are deleted again once the archives are sealed — only the .zip files are meant to survive.
         mkdir -p "$OUTPUT_DIR"
         for bin_path in "${BINARIES[@]}"; do
             echo "📥 Staging $(basename "$bin_path") in $OUTPUT_DIR..."
@@ -690,8 +695,9 @@ IMPSHIM
             echo "✂️  Stripped $(basename "$bin_path") with $STRIP_BIN"
         done
 
-        # Build a descriptive, space-free archive name:
-        #   DATE.Blockchain.CLI.vVERSION.Distro.DistroVer.ARCH.zip
+        # Build descriptive, space-free archive names, one per deliverable:
+        #   DATE.Blockchain.CLI.vVERSION.Distro.DistroVer.ARCH.zip   (daemon, CLI, tx tool)
+        #   DATE.Blockchain.QT.vVERSION.Distro.DistroVer.ARCH.zip    (Qt desktop wallet)
         local build_date
         build_date=$(date +%Y-%m-%d)
 
@@ -721,12 +727,21 @@ IMPSHIM
         zip -q -j "$archive_path" "$OUTPUT_DIR/${BIN_BASE}d" "$OUTPUT_DIR/${BIN_BASE}-cli" "$OUTPUT_DIR/${BIN_BASE}-tx"
         echo "📦 Archived to $archive_path"
 
-        # Final cleanup: the archive now holds everything, so drop the three loose binaries
-        # rather than leaving three per chain lying around next to the .zip files. Done only
-        # after zip has returned successfully — under 'set -e' a failed zip aborts the chain
-        # before this point, leaving the staged binaries in place to inspect.
-        rm -f "$OUTPUT_DIR/${BIN_BASE}d" "$OUTPUT_DIR/${BIN_BASE}-cli" "$OUTPUT_DIR/${BIN_BASE}-tx"
-        echo "🧹 Removed the loose ${BIN_BASE}d / ${BIN_BASE}-cli / ${BIN_BASE}-tx binaries; the .zip is the deliverable."
+        # The Qt wallet ships in its own archive. Spark (contrib/installer/install.sh) only
+        # downloads release assets whose name contains ".<chain>.CLI.", so a ".QT." archive is
+        # invisible to headless installs and the CLI zip stays small. The Qt binary is statically
+        # linked against depends' Qt; on the desktop it still needs the distro's libxcb,
+        # libxkbcommon, libfontconfig and libfreetype, which every desktop install already has.
+        local qt_archive_path="$OUTPUT_DIR/${build_date}.${BLOCKCHAIN}.QT.${version}.${DETECTED_DISTRO^}.${DETECTED_DISTRO_VERSION}.${arch_label}.zip"
+        zip -q -j "$qt_archive_path" "$OUTPUT_DIR/${BIN_BASE}-qt"
+        echo "📦 Archived to $qt_archive_path"
+
+        # Final cleanup: the archives now hold everything, so drop the four loose binaries
+        # rather than leaving four per chain lying around next to the .zip files. Done only
+        # after both zips have returned successfully — under 'set -e' a failed zip aborts the
+        # chain before this point, leaving the staged binaries in place to inspect.
+        rm -f "$OUTPUT_DIR/${BIN_BASE}d" "$OUTPUT_DIR/${BIN_BASE}-cli" "$OUTPUT_DIR/${BIN_BASE}-tx" "$OUTPUT_DIR/${BIN_BASE}-qt"
+        echo "🧹 Removed the loose ${BIN_BASE}d / ${BIN_BASE}-cli / ${BIN_BASE}-tx / ${BIN_BASE}-qt binaries; the .zip files are the deliverable."
     }
 
     # Build each selected chain in turn. Each build runs in a subshell with errexit
@@ -835,5 +850,5 @@ echo "🛫 Build phase detached (PID ${BUILD_PID}) — you can close this termin
 echo "   🪵 Watch progress:  tail -f $LOG_FILE"
 echo "   🔍 Still running?   ps -p \$(cat $PID_FILE) || echo done"
 echo "   🛑 Cancel build:    chain-build-stop"
-echo "   📦 Results land in $OUTPUT_DIR (dated .zip archives)."
+echo "   📦 Results land in $OUTPUT_DIR (dated .zip archives: one CLI and one QT per chain)."
 exit 0
