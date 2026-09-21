@@ -36,11 +36,18 @@ ifeq ($(NAME),lynx)\n\tCPFLAGS := -n\nelse\n\tCPFLAGS :=\nendif\n' Makefile.in
 # over a missing (or stale, from an earlier GUI build) src/qt/lynx-qt. It uses -f rather
 # than $(CPFLAGS): src/qt/lynx-qt -> src/lynx-qt is a real copy even for NAME=lynx, and -n
 # would freeze a stale first copy on later rebuilds.
+#
+# $(EXEEXT) is what lets these copies survive a Windows cross-build, where the real
+# outputs are lynxd.exe / lynx-cli.exe / lynx-tx.exe / src/qt/lynx-qt.exe. Without it
+# every one of these four lines fails and 'make' dies at the 'all' target AFTER a
+# successful multi-hour compile. Automake substitutes EXEEXT into every generated
+# Makefile.in including this one, and it is empty for every Linux host, so adding it
+# is a no-op for the native x86_64/armhf/aarch64 builds.
 sed -i '/^all: all-recursive$/a\
-\tcp $(CPFLAGS) src/lynxd src/$(NAME)d\
-\tcp $(CPFLAGS) src/lynx-cli src/$(NAME)-cli\
-\tcp $(CPFLAGS) src/lynx-tx src/$(NAME)-tx\
-@ENABLE_QT_TRUE@\tcp -f src/qt/lynx-qt src/$(NAME)-qt' Makefile.in
+\tcp $(CPFLAGS) src/lynxd$(EXEEXT) src/$(NAME)d$(EXEEXT)\
+\tcp $(CPFLAGS) src/lynx-cli$(EXEEXT) src/$(NAME)-cli$(EXEEXT)\
+\tcp $(CPFLAGS) src/lynx-tx$(EXEEXT) src/$(NAME)-tx$(EXEEXT)\
+@ENABLE_QT_TRUE@\tcp -f src/qt/lynx-qt$(EXEEXT) src/$(NAME)-qt$(EXEEXT)' Makefile.in
 
 sed -i '1i\
 ifndef NAME\nNAME = lynx\nendif\n' src/Makefile.in

@@ -83,7 +83,7 @@ chmod +x compile.sh
 | **RAM** | At least 2 GB. Checked at startup and refused below that. |
 | **Terminal** | An interactive TTY, because chain selection is a prompt. |
 | **`wget` or `curl`** | Only to fetch the script. Everything else it installs itself. |
-| **Disk** | A full build tree plus `depends` runs to several GB **per chain**. |
+| **Disk** | A full build tree plus `depends` runs to several GB **per chain** — and **double that** on a Debian 12 x86_64 host, which also builds Windows in its own tree. |
 
 **Supported build targets:**
 
@@ -91,9 +91,42 @@ chmod +x compile.sh
 | --- | --- |
 | Debian / Ubuntu | `x86_64-pc-linux-gnu`, `arm-linux-gnueabihf` (ARM 32-bit), `aarch64-linux-gnu` (ARM 64-bit) |
 | RHEL family (RHEL, Rocky, Alma, CentOS, Fedora) | `x86_64-pc-linux-gnu` **only** |
+| **Windows (cross-compiled)** | `x86_64-w64-mingw32` — **only from a Debian 12 x86_64 host** |
 
 RHEL-family repositories do not ship the ARM cross-toolchains the `depends` system needs,
 so ARM targets require Debian or Ubuntu. The script fails fast on that combination.
+
+### Windows builds
+
+On a **Debian 12 x86_64** host the script cross-compiles every selected chain to 64-bit
+Windows automatically, in addition to the Linux build. There is no flag and no prompt. On
+every other host the Windows target is silently skipped and never mentioned — no menu
+entry, no summary row.
+
+The Debian 12 restriction is deliberate, and not simple conservatism:
+
+- A cross-compiled, statically linked Windows binary is **unaffected by the host distro**.
+  The host only decides which toolchain compiles it, so "build on the newest distro" —
+  the usual instinct for Linux builds — buys nothing here.
+- Debian 12 ships mingw-w64 GCC **12.2**; Debian 13 ships GCC **14**. This tree pins Qt
+  **5.15.5** and OpenSSL **1.1.1n**, both of which predate GCC 13/14. The `_GNU_SOURCE`
+  workaround already in `compile.sh` exists because of exactly that mismatch on native
+  GCC 14 builds.
+- The project's own CI cross-compiles win64 on Ubuntu 22.04
+  (`ci/test/00_setup_env_win64.sh`) — the same toolchain generation as Debian 12, and the
+  configuration with actual test coverage.
+- ARM hosts have no mingw-w64 cross-toolchain in Debian, and RHEL repositories ship none
+  at all, so both are excluded.
+
+The script installs `g++-mingw-w64-x86-64-posix` and `binutils-mingw-w64-x86-64`, then
+verifies that `x86_64-w64-mingw32-g++-posix`, `-windres` and `-strip` all resolve. If any
+is missing it disables the Windows target for that run rather than failing every chain
+hours later. The `-posix` variant matters: `depends/hosts/mingw32.mk` auto-selects it when
+present, which is what replaced the old `update-alternatives` step.
+
+Windows builds use a **separate working directory** (`/root/<chain>-win64`) so each target
+keeps its own `depends` tree and object cache. Sharing one checkout would make every run
+reconfigure and rebuild both targets from scratch.
 
 A dedicated, disposable VPS is the intended environment. The script updates all system
 packages and installs a full build toolchain.
@@ -110,14 +143,18 @@ packages and installs a full build toolchain.
 5. **Detaches** — everything after selection runs in the background, so you can close your
    SSH session.
 6. **Prepares the system** — sets the `en_US.UTF-8` locale, applies all pending system
-   updates, and installs the build toolchain for your architecture. This happens once per
-   run regardless of how many chains you queued.
+   updates, and installs the build toolchain for your architecture — plus the mingw-w64
+   cross-toolchain on a Debian 12 x86_64 host. This happens once per run regardless of how
+   many chains you queued.
 7. **Builds each chain in turn** — clone or update the source, build `depends`, run
-   `autogen.sh` and `configure`, then `make`.
-8. **Packages each chain** — stages the four binaries, strips them, zips the command-line
+   `autogen.sh` and `configure`, then `make`. On a Debian 12 x86_64 host each chain is
+   built twice: Linux first, then Windows in its own tree, so a Windows failure never
+   costs you the Linux archives.
+8. **Packages each build** — stages the four binaries, strips them, zips the command-line
    trio into a `CLI` archive and the Qt wallet into a `QT` archive, and deletes the loose
    binaries so only the archives remain.
-9. **Prints a summary** — per-chain success/failure plus a ready-to-paste `scp` command for
+9. **Prints a summary** — per-build success/failure (named `<Chain> (linux)` /
+   `<Chain> (windows)` when both targets ran) plus a ready-to-paste `scp` command for
    pulling the archives to your local machine.
 
 ---
@@ -217,16 +254,40 @@ It escalates to `SIGKILL` if the build has not stopped within 10 seconds.
 
 ## Output
 
-Each chain produces exactly two archives:
+Each chain produces exactly two archives — or **four** on a Debian 12 x86_64 host, where
+the Windows cross-build runs too:
 
 ```
 2026-08-06.Lynx.CLI.v27.1.1.Debian.12.AMD.zip
 2026-08-06.Lynx.QT.v27.1.1.Debian.12.AMD.zip
 └─ date    └─ chain └─ version └─ distro └─ ver └─ arch
+
+2026-08-06.Lynx.CLI.v27.1.1.Windows.AMD.zip
+2026-08-06.Lynx.QT.v27.1.1.Windows.AMD.zip
+└─ date    └─ chain └─ version └─ os      └─ arch
 ```
 
-Architecture is labelled `AMD` for x86_64 and `ARM` for either ARM target. The version is
-read from `configure.ac` in the cloned source.
+Architecture is labelled `AMD` for x86_64 and `ARM` for either ARM target, on **every**
+platform — the arch token describes the CPU and is deliberately independent of the OS, so
+a Windows x86_64 build is `AMD` just as a Debian x86_64 build is. The version is read from
+`configure.ac` in the cloned source.
+
+The Windows name has one segment fewer than the Linux name, and that is intentional: the
+Linux archives carry a distro **and** a distro version because a binary built against
+Debian 12's glibc is not portable to every other release, whereas one Windows `.exe`
+covers Windows 7 through 11 — the Windows release is simply not a build axis.
+
+> **Keep Linux distro names out of the Windows archive names.** The [Spark
+> installer](../installer/) finds release assets by matching `.<chain>.CLI.`, which the
+> Windows CLI archive also matches — it is excluded one step later by a `debian|ubuntu`
+> filter on the filename. That filter, not the arch token, is what keeps `.exe` files away
+> from headless Linux installs, so the `Windows` OS field has to stay recognisably
+> non-Linux.
+
+One knock-on effect worth knowing: `listAvailableBuilds()` in the Spark installer parses
+asset names ending in `AMD`/`ARM`, so when a Linux user's own platform has no build, the
+"available builds" notice will list `Windows (AMD)` alongside the Linux ones. It is
+accurate, and Spark still refuses to install it, but it does appear in that list.
 
 The `CLI` archive contains three stripped binaries — for example, for Lynx:
 
@@ -241,6 +302,22 @@ the desktop are the X11 client libraries every Linux desktop already ships (`lib
 `libxkbcommon`, `libfontconfig`, `libfreetype`). It is meant for desktops, not headless
 servers; the [Spark installer](../installer/) ignores `QT` archives and only ever installs
 from the `CLI` one.
+
+The Windows archives hold the same four programs as `.exe` files (`lynxd.exe`,
+`lynx-cli.exe`, `lynx-tx.exe`, `lynx-qt.exe`). They need **nothing** installed on the
+target machine — Qt, OpenSSL and the mingw runtime are all linked in. Three things to know
+before handing them to users:
+
+- **One build covers Windows 10 and 11** (and back to Windows 7). Both are NT 10.0 x64 and
+  load the identical PE image; the tree targets `_WIN32_WINNT=0x0601` and links with
+  subsystem version 6.01.
+- **64-bit only.** There is no 32-bit build. Windows 11 on ARM runs the x64 binary under
+  emulation.
+- **The `.exe` files are unsigned**, so Windows SmartScreen shows an "unrecognized app"
+  warning on first run. Code signing is not part of this build.
+
+Every chain's Windows `.exe` currently carries the stock Lynx icon — per-chain Windows
+icons are not generated yet (see `share/branding/README.md`).
 
 **Archives land in the directory you ran the script from** (or next to the script, if you
 saved it and ran it directly). The loose binaries are deleted once the archives are sealed,

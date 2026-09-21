@@ -23,6 +23,10 @@ set -e
 #   the directory it was launched from): a CLI archive (daemon, CLI, tx tool) and a QT
 #   archive (the Qt desktop wallet). The loose binaries are deleted once zipped, so the
 #   archives are the only artifacts left behind.
+#   On a Debian 12 x86_64 host ONLY, each chain is additionally cross-compiled to 64-bit
+#   Windows, producing a second pair of archives (...Windows.AMD.zip) holding .exe builds.
+#   One .exe covers Windows 7 through 11; it is 64-bit only and unsigned, so SmartScreen
+#   warns on first run. Every other host builds Linux alone and never mentions Windows.
 
 echo "🚀 Starting the Lynx Data Storage Network (LDSN) Compiler..."
 
@@ -202,6 +206,31 @@ if [ "$DISTRO_FAMILY" = "rhel" ] && [ "$DETECTED_ARCH" != "x86_64-pc-linux-gnu" 
     exit 1
 fi
 
+# ── Windows cross-build gate ────────────────────────────────────────────────────
+# The Qt wallet is also cross-compiled to a 64-bit Windows .exe, but ONLY from a
+# Debian 12 x86_64 host. That is not caution for its own sake:
+#
+#   * The Windows binary is fully cross-compiled and statically linked, so the host
+#     distro has no bearing on which Windows releases it runs on. It only decides which
+#     toolchain compiles it, which makes "newest host" a non-argument here.
+#   * Debian 12 ships mingw-w64 GCC 12.2. Debian 13 ships GCC 14, which this tree's
+#     Qt 5.15.5 and OpenSSL 1.1.1n predate — the same pairing the _GNU_SOURCE shim
+#     further down already exists to work around on native GCC 14 builds.
+#   * The project's own CI cross-compiles win64 on Ubuntu 22.04 (ci/test/00_setup_env_win64.sh),
+#     the same toolchain generation as Debian 12. That is the configuration with coverage.
+#   * ARM hosts have no mingw-w64 cross-toolchain in Debian at all, and RHEL repos ship
+#     neither, so both are excluded by the architecture and family checks.
+#
+# When this is 0 the Windows target is never built and never mentioned — no prompt, no
+# line in the queue header, no row in the final summary.
+BUILD_WINDOWS=0
+WIN_HOST="x86_64-w64-mingw32"
+if [ "$DETECTED_DISTRO" = "debian" ] && [ "$DETECTED_DISTRO_VERSION" = "12" ] \
+   && [ "$DETECTED_ARCH" = "x86_64-pc-linux-gnu" ]; then
+    BUILD_WINDOWS=1
+    echo "🪟 Windows cross-build enabled (${WIN_HOST}) — each chain also builds a 64-bit .exe set."
+fi
+
 # Initialize packages before using curl/git
 init_packages
 
@@ -339,6 +368,9 @@ join_chains() {
 
 # One-line reminder of the detected build target, reshown while queueing coins.
 TARGET_LINE="🧭 Building for: ${DETECTED_DISTRO^} ${DETECTED_DISTRO_VERSION} (${DETECTED_ARCH})"
+# Only mentioned when the gate above opened; on every other host the operator sees the
+# same single-target line the script has always printed.
+[ "$BUILD_WINDOWS" -eq 1 ] && TARGET_LINE="${TARGET_LINE} + Windows (${WIN_HOST})"
 
 while [ "$SELECTION_DONE" -eq 0 ]; do
     START=$((PAGE * PAGE_SIZE))
@@ -527,19 +559,107 @@ run_build_phase() {
         [ "$arch" = "x86_64-pc-linux-gnu" ] && apt install -qq -y build-essential make automake curl htop git libtool binutils bsdextrautils pkg-config python3 patch bison zip openssl >/dev/null 2>&1
         [ "$arch" = "arm-linux-gnueabihf" ] && apt install -qq -y build-essential make automake curl htop git libtool g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf gperf pkg-config bison byacc zip openssl >/dev/null 2>&1
         [ "$arch" = "aarch64-linux-gnu" ] && apt install -qq -y build-essential make automake curl htop git libtool g++-aarch64-linux-gnu binutils-aarch64-linux-gnu gperf pkg-config bison byacc zip openssl >/dev/null 2>&1
+        # The mingw-w64 cross-toolchain, only when the Windows gate opened (Debian 12 x86_64).
+        # The -posix variant matters: depends/hosts/mingw32.mk auto-selects
+        # x86_64-w64-mingw32-g++-posix when it is on PATH, which is how the POSIX threading
+        # model gets picked without the old 'update-alternatives' dance. binutils-mingw-w64-x86-64
+        # supplies x86_64-w64-mingw32-windres — configure treats a missing windres as a HARD
+        # error, not a warning — plus the matching strip used when archiving below.
+        # nsis is deliberately not installed: this build ships .zip archives, not an installer,
+        # and configure only warns when makensis is absent.
+        if [ "$BUILD_WINDOWS" -eq 1 ]; then
+            echo "🧰 Installing the mingw-w64 cross-toolchain for ${WIN_HOST} (output suppressed)..."
+            apt install -qq -y g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64 >/dev/null 2>&1
+            # A missing cross-compiler must not silently degrade into "Windows just failed
+            # every chain" three hours from now. Verify the three tools the build actually
+            # shells out to, and disable the Windows target up front if any is absent.
+            for _wintool in "${WIN_HOST}-g++-posix" "${WIN_HOST}-windres" "${WIN_HOST}-strip"; do
+                if ! command -v "$_wintool" >/dev/null 2>&1; then
+                    echo "⚠️  $_wintool not found after install — disabling the Windows target for this run."
+                    BUILD_WINDOWS=0
+                    break
+                fi
+            done
+            [ "$BUILD_WINDOWS" -eq 1 ] && echo "✅ mingw-w64 cross-toolchain ready."
+        fi
     fi
 
     # ── Per-chain build ─────────────────────────────────────────────────────────────
     # Everything chain-specific lives here: checkout, depends, configure, make, install,
     # strip, archive. Invoked once per selected blockchain, inside a subshell so a failed
     # chain can't leak state (cwd, variables) into the next build or abort the batch.
+    # $2 is the target: "linux" (the native host) or "windows" (cross-compiled to
+    # x86_64-w64-mingw32). It defaults to linux so any older call site still means what it
+    # used to. Every target-specific value is derived once, here, and the body below reads
+    # only those variables — there is no second copy of the build logic.
     build_chain() {
         local BLOCKCHAIN="$1"
+        local TARGET="${2:-linux}"
 
         # Standardized names/paths derived from blockchain name.
         local BASE_NAME="${BLOCKCHAIN,,}"
         local BIN_BASE="$BASE_NAME"
         local WORKDIR="/root/${BASE_NAME}"
+
+        # Per-target derivations.
+        #
+        # WORKDIR is deliberately a SEPARATE tree for Windows. The two targets cannot share
+        # one checkout: a second ./configure would overwrite the first's config.status and
+        # object cache, so every run would rebuild both targets from scratch and destroy the
+        # "repeat builds are fast" property this script is built around. Two trees cost disk
+        # and buy back incremental rebuilds for each target independently.
+        #
+        # EXEEXT mirrors the autotools variable of the same name; it is what makes the
+        # binary lookups below find lynxd.exe rather than lynxd on the Windows target.
+        local BUILD_HOST EXEEXT STRIP_BIN os_label arch_label target_label
+        if [ "$TARGET" = "windows" ]; then
+            BUILD_HOST="$WIN_HOST"
+            WORKDIR="/root/${BASE_NAME}-win64"
+            EXEEXT=".exe"
+            STRIP_BIN="${WIN_HOST}-strip"
+            # Archive labels. The arch token stays AMD, the same token x86_64 carries on
+            # Linux — this builds for x86_64 Windows only, and reusing the token keeps one
+            # vocabulary across every archive (and leaves ARM free if Windows-on-ARM is ever
+            # built natively).
+            #
+            # The os_label is what keeps these archives away from headless Linux installs:
+            # Spark (contrib/installer/install.sh) matches assets on ".<chain>.CLI." — which
+            # the Windows CLI archive DOES match — and then filters with grep -iE
+            # "debian|ubuntu", which "Windows" cannot pass. So never put a Linux distro name
+            # in here; the arch token is not what provides that separation.
+            os_label="Windows"
+            arch_label="AMD"
+            target_label="Windows"
+        else
+            BUILD_HOST="$DETECTED_ARCH"
+            EXEEXT=""
+            case "$DETECTED_ARCH" in
+                arm-linux-gnueabihf)  STRIP_BIN="arm-linux-gnueabihf-strip" ;;
+                aarch64-linux-gnu)    STRIP_BIN="aarch64-linux-gnu-strip" ;;
+                *)                    STRIP_BIN="strip" ;;
+            esac
+            case "$DETECTED_ARCH" in
+                x86_64-pc-linux-gnu)                      arch_label="AMD" ;;
+                arm-linux-gnueabihf|aarch64-linux-gnu)    arch_label="ARM" ;;
+                *)                                        arch_label="$DETECTED_ARCH" ;;
+            esac
+            os_label="${DETECTED_DISTRO^}.${DETECTED_DISTRO_VERSION}"
+            target_label="Linux"
+        fi
+        # Falling back to the native strip is only ever right for a Linux target. Handing a
+        # PE/COFF .exe to the host strip is not a graceful degradation — it either refuses
+        # the format or produces a corrupt binary that fails at run time on Windows, long
+        # after anyone is watching this log. The toolchain check during package install
+        # should already have caught this and disabled the Windows target, so reaching here
+        # means something removed the cross-strip mid-run: fail the chain instead.
+        if ! command -v "$STRIP_BIN" >/dev/null 2>&1; then
+            if [ "$TARGET" = "windows" ]; then
+                echo "❗ $STRIP_BIN not found; refusing to strip a Windows .exe with the host strip."
+                exit 1
+            fi
+            STRIP_BIN="strip"
+        fi
+        echo "🎯 Target: ${target_label} (host ${BUILD_HOST}, workdir ${WORKDIR})"
 
         cd /root
         # First run: clone fresh. Subsequent runs: fetch the latest source and hard-reset to the
@@ -589,8 +709,8 @@ run_build_phase() {
 
         # Build depends only when they haven't been built yet (config.site absent); an existing
         # depends build is reused to keep recompiles fast.
-        if [ ! -f "$WORKDIR/depends/$arch/share/config.site" ]; then
-            echo "🧰 Building depends for $arch ..."
+        if [ ! -f "$WORKDIR/depends/$BUILD_HOST/share/config.site" ]; then
+            echo "🧰 Building depends for $BUILD_HOST ..."
             # _GNU_SOURCE exposes POSIX functions (fileno, fdopen) that OpenSSL 1.1.1n
             # needs but are hidden under strict -std=c11 on Debian 13+ / GCC 14+.
             # Python 3.12+ removed the 'imp' module that xcb_proto's build uses for
@@ -616,9 +736,17 @@ def load_module(name, file, pathname, description):
 IMPSHIM
                 echo "🩹 Installed imp shim for Python 3.12+ compatibility (xcb_proto)."
             fi
-            make -j8 HOST=$arch CFLAGS="-fPIC -D_GNU_SOURCE" CXXFLAGS="-fPIC -D_GNU_SOURCE"
+            # The -fPIC/_GNU_SOURCE overrides are native-Linux workarounds and are wrong for
+            # mingw: -fPIC is meaningless on Windows (configure skips it there outright) and
+            # _GNU_SOURCE is a glibc concept. depends/hosts/mingw32.mk already supplies the
+            # right flags for the Windows host, so pass it nothing and let it do its job.
+            if [ "$TARGET" = "windows" ]; then
+                make -j8 HOST=$BUILD_HOST
+            else
+                make -j8 HOST=$BUILD_HOST CFLAGS="-fPIC -D_GNU_SOURCE" CXXFLAGS="-fPIC -D_GNU_SOURCE"
+            fi
         else
-            echo "♻️  Reusing existing depends for $arch (no make)."
+            echo "♻️  Reusing existing depends for $BUILD_HOST (no make)."
         fi
         cd ..
 
@@ -631,12 +759,12 @@ IMPSHIM
         #fi
         # Always run ./configure; the conditional skip below is intentionally left commented out.
         #if [ "$CLEAN" -eq 1 ] || [ ! -f "$PWD/config.log" ]; then
-            echo "🛠️  Running configure for $arch (Qt GUI on, no bench/tests, reduced exports)..."
+            echo "🛠️  Running configure for $BUILD_HOST (Qt GUI on, no bench/tests, reduced exports)..."
             # The Qt wallet is built from the static Qt in depends (built above without NO_QT=1),
             # so no Qt host packages are needed; libqrencode is auto-detected from depends too.
             # Benches and tests are left out to speed up the build.
             # --enable-reduce-exports hides internal symbols (-fvisibility=hidden) to trim binary size.
-            CONFIG_SITE=$PWD/depends/$arch/share/config.site ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports
+            CONFIG_SITE=$PWD/depends/$BUILD_HOST/share/config.site ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports
         #else
             #echo "♻️  Reusing existing configure output (skipping ./configure)."
         #fi
@@ -663,7 +791,9 @@ IMPSHIM
 
         # The Qt wallet is a required output: a chain whose GUI failed to build is a failed
         # chain, not a CLI-only success, so it is checked with the same loop as the rest.
-        local BINARIES=("$SRC_DIR/${BIN_BASE}d" "$SRC_DIR/${BIN_BASE}-cli" "$SRC_DIR/${BIN_BASE}-tx" "$SRC_DIR/${BIN_BASE}-qt")
+        # $EXEEXT is "" on Linux and ".exe" on Windows, so this one list covers both targets.
+        # These are the names autogen.sh's injected 'all:' rules produce from NAME=.
+        local BINARIES=("$SRC_DIR/${BIN_BASE}d${EXEEXT}" "$SRC_DIR/${BIN_BASE}-cli${EXEEXT}" "$SRC_DIR/${BIN_BASE}-tx${EXEEXT}" "$SRC_DIR/${BIN_BASE}-qt${EXEEXT}")
 
         # Ensure expected binaries exist before installing.
         for bin_path in "${BINARIES[@]}"; do
@@ -682,14 +812,9 @@ IMPSHIM
             install -m 755 "$bin_path" "$OUTPUT_DIR/"
         done
 
-        # Strip symbols/debug info to shrink production binaries (arch-aware for cross-builds).
-        # The matching binutils are installed above per arch; fall back to the native strip.
-        case "$DETECTED_ARCH" in
-            arm-linux-gnueabihf)  STRIP_BIN="arm-linux-gnueabihf-strip" ;;
-            aarch64-linux-gnu)    STRIP_BIN="aarch64-linux-gnu-strip" ;;
-            *)                    STRIP_BIN="strip" ;;
-        esac
-        command -v "$STRIP_BIN" >/dev/null 2>&1 || STRIP_BIN="strip"
+        # Strip symbols/debug info to shrink production binaries. $STRIP_BIN was resolved
+        # per target at the top of this function (the ARM cross-strips, the mingw strip, or
+        # the native one), so there is nothing arch-specific left to decide here.
         for bin_path in "${BINARIES[@]}"; do
             "$STRIP_BIN" --strip-all "$OUTPUT_DIR/$(basename "$bin_path")"
             echo "✂️  Stripped $(basename "$bin_path") with $STRIP_BIN"
@@ -715,55 +840,69 @@ IMPSHIM
             version="vunknown"
         fi
 
-        # Map the detected target arch to a friendly label.
-        local arch_label
-        case "$DETECTED_ARCH" in
-            x86_64-pc-linux-gnu)                      arch_label="AMD" ;;
-            arm-linux-gnueabihf|aarch64-linux-gnu)    arch_label="ARM" ;;
-            *)                                        arch_label="$DETECTED_ARCH" ;;
-        esac
-
-        local archive_path="$OUTPUT_DIR/${build_date}.${BLOCKCHAIN}.CLI.${version}.${DETECTED_DISTRO^}.${DETECTED_DISTRO_VERSION}.${arch_label}.zip"
-        zip -q -j "$archive_path" "$OUTPUT_DIR/${BIN_BASE}d" "$OUTPUT_DIR/${BIN_BASE}-cli" "$OUTPUT_DIR/${BIN_BASE}-tx"
+        # $os_label and $arch_label were resolved per target at the top of this function:
+        #   Linux   -> "Debian.12"  + "AMD"  =>  ...CLI.v28.0.0.Debian.12.AMD.zip
+        #   Windows -> "Windows"    + "AMD"  =>  ...CLI.v28.0.0.Windows.AMD.zip
+        # The Windows name intentionally has one segment fewer than the Linux name, because
+        # the Windows release version is not a build axis — one .exe covers Windows 7 to 11.
+        local archive_path="$OUTPUT_DIR/${build_date}.${BLOCKCHAIN}.CLI.${version}.${os_label}.${arch_label}.zip"
+        zip -q -j "$archive_path" "$OUTPUT_DIR/${BIN_BASE}d${EXEEXT}" "$OUTPUT_DIR/${BIN_BASE}-cli${EXEEXT}" "$OUTPUT_DIR/${BIN_BASE}-tx${EXEEXT}"
         echo "📦 Archived to $archive_path"
 
         # The Qt wallet ships in its own archive. Spark (contrib/installer/install.sh) only
         # downloads release assets whose name contains ".<chain>.CLI.", so a ".QT." archive is
         # invisible to headless installs and the CLI zip stays small. The Qt binary is statically
-        # linked against depends' Qt; on the desktop it still needs the distro's libxcb,
+        # linked against depends' Qt; on a Linux desktop it still needs the distro's libxcb,
         # libxkbcommon, libfontconfig and libfreetype, which every desktop install already has.
-        local qt_archive_path="$OUTPUT_DIR/${build_date}.${BLOCKCHAIN}.QT.${version}.${DETECTED_DISTRO^}.${DETECTED_DISTRO_VERSION}.${arch_label}.zip"
-        zip -q -j "$qt_archive_path" "$OUTPUT_DIR/${BIN_BASE}-qt"
+        # The Windows .exe needs nothing installed at all — Qt, OpenSSL and the mingw runtime
+        # are all linked in — but it is unsigned, so Windows SmartScreen will warn on first run.
+        local qt_archive_path="$OUTPUT_DIR/${build_date}.${BLOCKCHAIN}.QT.${version}.${os_label}.${arch_label}.zip"
+        zip -q -j "$qt_archive_path" "$OUTPUT_DIR/${BIN_BASE}-qt${EXEEXT}"
         echo "📦 Archived to $qt_archive_path"
 
         # Final cleanup: the archives now hold everything, so drop the four loose binaries
         # rather than leaving four per chain lying around next to the .zip files. Done only
         # after both zips have returned successfully — under 'set -e' a failed zip aborts the
         # chain before this point, leaving the staged binaries in place to inspect.
-        rm -f "$OUTPUT_DIR/${BIN_BASE}d" "$OUTPUT_DIR/${BIN_BASE}-cli" "$OUTPUT_DIR/${BIN_BASE}-tx" "$OUTPUT_DIR/${BIN_BASE}-qt"
-        echo "🧹 Removed the loose ${BIN_BASE}d / ${BIN_BASE}-cli / ${BIN_BASE}-tx / ${BIN_BASE}-qt binaries; the .zip files are the deliverable."
+        rm -f "$OUTPUT_DIR/${BIN_BASE}d${EXEEXT}" "$OUTPUT_DIR/${BIN_BASE}-cli${EXEEXT}" "$OUTPUT_DIR/${BIN_BASE}-tx${EXEEXT}" "$OUTPUT_DIR/${BIN_BASE}-qt${EXEEXT}"
+        echo "🧹 Removed the loose ${BIN_BASE}d${EXEEXT} / ${BIN_BASE}-cli${EXEEXT} / ${BIN_BASE}-tx${EXEEXT} / ${BIN_BASE}-qt${EXEEXT} binaries; the .zip files are the deliverable."
     }
 
-    # Build each selected chain in turn. Each build runs in a subshell with errexit
-    # re-enabled, so one chain failing (or calling exit 1) marks that chain failed and
+    # Targets to build for every selected chain. Linux is always first so that a Windows
+    # failure never costs the operator the Linux archives that already built cleanly.
+    TARGETS=("linux")
+    [ "$BUILD_WINDOWS" -eq 1 ] && TARGETS+=("windows")
+
+    # Build each (chain x target) pair in turn. Each build runs in a subshell with errexit
+    # re-enabled, so one pair failing (or calling exit 1) marks that pair failed and
     # the loop moves on to the next instead of killing the whole batch.
     BUILT=()
     FAILED=()
     CHAIN_NUM=0
+    TOTAL_BUILDS=$(( ${#BLOCKCHAINS[@]} * ${#TARGETS[@]} ))
     for BLOCKCHAIN in "${BLOCKCHAINS[@]}"; do
-        CHAIN_NUM=$((CHAIN_NUM + 1))
-        echo ""
-        echo "🏗️  [${CHAIN_NUM}/${#BLOCKCHAINS[@]}] Building ${BLOCKCHAIN}..."
-        set +e
-        ( set -e; build_chain "$BLOCKCHAIN" )
-        BUILD_RC=$?
-        set -e
-        if [ "$BUILD_RC" -eq 0 ]; then
-            BUILT+=("$BLOCKCHAIN")
-        else
-            FAILED+=("$BLOCKCHAIN")
-            echo "❌ Build failed for ${BLOCKCHAIN} (exit ${BUILD_RC}); continuing with the next chain."
-        fi
+        for TARGET in "${TARGETS[@]}"; do
+            CHAIN_NUM=$((CHAIN_NUM + 1))
+            # Only name the target when there is more than one, so a Linux-only host's log
+            # reads exactly as it always has.
+            if [ "${#TARGETS[@]}" -gt 1 ]; then
+                BUILD_LABEL="${BLOCKCHAIN} (${TARGET})"
+            else
+                BUILD_LABEL="${BLOCKCHAIN}"
+            fi
+            echo ""
+            echo "🏗️  [${CHAIN_NUM}/${TOTAL_BUILDS}] Building ${BUILD_LABEL}..."
+            set +e
+            ( set -e; build_chain "$BLOCKCHAIN" "$TARGET" )
+            BUILD_RC=$?
+            set -e
+            if [ "$BUILD_RC" -eq 0 ]; then
+                BUILT+=("$BUILD_LABEL")
+            else
+                FAILED+=("$BUILD_LABEL")
+                echo "❌ Build failed for ${BUILD_LABEL} (exit ${BUILD_RC}); continuing with the next build."
+            fi
+        done
     done
 
     # Compile-only script: the .zip archives are now in $OUTPUT_DIR. Drop the
@@ -771,7 +910,7 @@ IMPSHIM
     # daemon is started.
     rm -f "$CHAINPARAMS_FILE"
     echo ""
-    echo "🏁 Batch complete — ${#BUILT[@]}/${#BLOCKCHAINS[@]} build(s) succeeded. Archives are in $OUTPUT_DIR."
+    echo "🏁 Batch complete — ${#BUILT[@]}/${TOTAL_BUILDS} build(s) succeeded. Archives are in $OUTPUT_DIR."
     for chain in "${BUILT[@]}"; do
         echo "   ✅ $chain"
     done
@@ -850,5 +989,9 @@ echo "🛫 Build phase detached (PID ${BUILD_PID}) — you can close this termin
 echo "   🪵 Watch progress:  tail -f $LOG_FILE"
 echo "   🔍 Still running?   ps -p \$(cat $PID_FILE) || echo done"
 echo "   🛑 Cancel build:    chain-build-stop"
-echo "   📦 Results land in $OUTPUT_DIR (dated .zip archives: one CLI and one QT per chain)."
+if [ "$BUILD_WINDOWS" -eq 1 ]; then
+    echo "   📦 Results land in $OUTPUT_DIR (dated .zip archives: CLI + QT per chain, for Linux and Windows)."
+else
+    echo "   📦 Results land in $OUTPUT_DIR (dated .zip archives: one CLI and one QT per chain)."
+fi
 exit 0
