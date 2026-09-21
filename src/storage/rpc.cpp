@@ -3,6 +3,11 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <time.h>
+// POSIX sleep() does not exist on Windows (mingw offers only the Win32 Sleep(), which takes
+// milliseconds). UninterruptibleSleep is the codebase's own portable wait and, unlike
+// sleep(), cannot be cut short by a signal.
+#include <util/time.h>
+#include <chrono>
 
 #include <key_io.h>
 #include <opfile/src/protocol.h>
@@ -959,7 +964,7 @@ static RPCHelpMan fetchall()
             while (gintFetchDone == 0) {
 
                 // Sleep
-                sleep (1);
+                UninterruptibleSleep(std::chrono::seconds{1});
 
             // End while fetch not done
             }
@@ -2025,7 +2030,7 @@ static RPCHelpMan auth()
         }
 
         // Sleep
-	sleep (intSleep);
+	UninterruptibleSleep(std::chrono::seconds{intSleep});
 
         // Exit
         return unvResults;
@@ -2095,7 +2100,7 @@ static RPCHelpMan auth()
                 }
 
                 // Sleep
-                sleep (intSleep);
+                UninterruptibleSleep(std::chrono::seconds{intSleep});
         
                 // Exit
                 return unvResults;
@@ -2256,7 +2261,7 @@ static RPCHelpMan auth()
             gintAuthenticationFailures = 0;
 
             // Sleep
-            sleep (1);
+            UninterruptibleSleep(std::chrono::seconds{1});
 
             unvResults.push_back(unvEntry);
 
