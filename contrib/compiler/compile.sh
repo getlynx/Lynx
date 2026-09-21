@@ -711,6 +711,41 @@ run_build_phase() {
         # depends build is reused to keep recompiles fast.
         if [ ! -f "$WORKDIR/depends/$BUILD_HOST/share/config.site" ]; then
             echo "🧰 Building depends for $BUILD_HOST ..."
+
+            # Clear stale "configured" stamps before building depends.
+            #
+            # depends keeps a package's stamps in two different trees, and only one of them
+            # is keyed by the package's build id:
+            #
+            #   work/build/<host>/<pkg>/<version>-<build_id>/.stamp_{extracted,preprocessed,built}
+            #   <host_prefix>/.<pkg>_stamp_configured          <-- NO build id in the name
+            #
+            # Two consequences collide. First, funcs.mk deletes the whole extract dir at the
+            # "staged" step, taking .stamp_built with it. Second, editing a package recipe
+            # (say depends/packages/openssl.mk) changes that package's build id, so the next
+            # run wants a brand-new extract dir — but finds the OLD, build-id-agnostic
+            # configure stamp still sitting in host_prefix and concludes the package is
+            # already configured. It then skips extract/preprocess/configure, recreates the
+            # new extract dir empty via 'mkdir -p', and runs the build there. The result is
+            # a baffling "No rule to make target 'build_libs'" (or equivalent) from an empty
+            # directory, hours into a run, with nothing in the log explaining why.
+            #
+            # Deleting these stamps here is cheap and safe: a package that already cached
+            # successfully is satisfied by its tarball in depends/built and will not be
+            # rebuilt or reconfigured, so the only packages affected are ones that were going
+            # to be (re)built in this pass anyway. We only reach this branch when config.site
+            # is absent — i.e. depends is incomplete — so any stamp found here is left over
+            # from an earlier interrupted or failed attempt, which is exactly the trap.
+            #
+            # find -delete rather than 'rm -f <dir>/.*_stamp_configured': the shell glob
+            # '.*' also matches '.' and '..'.
+            if [ -d "$WORKDIR/depends/$BUILD_HOST" ]; then
+                stale_stamps=$(find "$WORKDIR/depends/$BUILD_HOST" -maxdepth 1 -type f -name '.*_stamp_configured' 2>/dev/null | wc -l)
+                if [ "$stale_stamps" -gt 0 ]; then
+                    echo "🧽 Clearing $stale_stamps stale depends configure stamp(s) from a previous attempt..."
+                    find "$WORKDIR/depends/$BUILD_HOST" -maxdepth 1 -type f -name '.*_stamp_configured' -delete 2>/dev/null || true
+                fi
+            fi
             # _GNU_SOURCE exposes POSIX functions (fileno, fdopen) that OpenSSL 1.1.1n
             # needs but are hidden under strict -std=c11 on Debian 13+ / GCC 14+.
             # Python 3.12+ removed the 'imp' module that xcb_proto's build uses for
