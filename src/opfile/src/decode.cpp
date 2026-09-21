@@ -218,7 +218,7 @@ bool build_file_from_chunks(std::pair<std::string, std::string> get_info, int& e
 
     double t_bfh = 0.0;
 
-    error_level = NO_ERROR;
+    error_level = ERR_NONE;
 
     int intDecryptedFilesize;
 

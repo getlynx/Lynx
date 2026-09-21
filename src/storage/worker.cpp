@@ -255,7 +255,7 @@ void thread_storage_worker()
     
     const char* error_level_string[] = {
     
-     "NO_ERROR",
+     "ERR_NONE",
      //internal
      "ERR_FILESZ",
      "ERR_MALLOC",
@@ -312,14 +312,14 @@ void thread_storage_worker()
         // perform putqueue tasks
         if (putqueue_sz > 0) {
             std::pair<std::string, std::string> putTask;
-            error_level = NO_ERROR;
+            error_level = ERR_NONE;
             set_storage_worker_status(WORKER_BUSY);
             {
                 LOCK(workQueueLock);
                 putTask = workQueuePut.back();
             }
             perform_put_task(putTask, error_level);
-            if (error_level != NO_ERROR) {
+            if (error_level != ERR_NONE) {
                 //sprintf(buffer, "putTask %s had error_level %d", putTask.first.c_str(), error_level);
                 sprintf(buffer, "putTask %s had error_level %s", putTask.first.c_str(), error_level_string[error_level]);
                 std::string stringbuf = std::string(buffer);
@@ -340,7 +340,7 @@ void thread_storage_worker()
         // perform getqueue tasks
         if (getqueue_sz > 0) {
             std::pair<std::string, std::string> getTask;
-            error_level = NO_ERROR;
+            error_level = ERR_NONE;
             set_storage_worker_status(WORKER_BUSY);
             {
                 LOCK(workQueueLock);
@@ -348,7 +348,7 @@ void thread_storage_worker()
             }
             perform_get_task(getTask, error_level);
 
-            if (error_level != NO_ERROR) {
+            if (error_level != ERR_NONE) {
 
                 sprintf(buffer, "getTask %s, %s had error_level %s", getTask.first.c_str(), getTask.second.c_str(), error_level_string[error_level]);
                 std::string stringbuf = std::string(buffer);

@@ -36,8 +36,15 @@ const std::string OPENCODING_MAGIC = "6c796e78";
 //! 01 is a variation where 4 extra bytes are added to the datachunk (file extension in ascii)
 
 //! errorlevel enum
+//!
+//! The success enumerator is ERR_NONE, not NO_ERROR: NO_ERROR is a Win32 macro
+//! (winerror.h: "#define NO_ERROR 0"), so on a mingw cross-build the preprocessor turned
+//! this first enumerator into "0 = 0" and the whole enum failed to compile. It cannot be
+//! worked around with #undef here either -- util/system.cpp legitimately compares the
+//! WSAStartup() return value against the real Win32 NO_ERROR. ERR_NONE also matches the
+//! ERR_* convention every other enumerator below already follows.
 enum {
-     NO_ERROR = 0,
+     ERR_NONE = 0,
      //internal
      ERR_FILESZ,
      ERR_MALLOC,
