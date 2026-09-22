@@ -174,9 +174,6 @@ QT_RES_FONTS = \
 QT_RES_ICONS = \
   qt/res/icons/add.png \
   qt/res/icons/address-book.png \
-  qt/res/icons/bitcoin.ico \
-  qt/res/icons/bitcoin_testnet.ico \
-  qt/res/icons/bitcoin.png \
   qt/res/icons/chevron.png \
   qt/res/icons/clock1.png \
   qt/res/icons/clock2.png \
@@ -376,24 +373,102 @@ $(QT_QRC_LOCALE_CPP): $(QT_QRC_LOCALE) $(QT_QM)
 	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(RCC) -name bitcoin_locale --format-version 1 $(@D)/temp_$(<F) > $@
 	@rm $(@D)/temp_$(<F)
 
-# Per-chain application icon. bitcoin.qrc's "bitcoin" alias (app icon, splash, tray)
-# points at the generated qt/res/icons/chain_icon.png, which is share/branding/$(NAME)/icon.png
-# when that chain has artwork and the stock qt/res/icons/bitcoin.png otherwise. It lives
-# next to the .qrc (rcc resolves paths relative to the .qrc file) and is untracked.
-# Compare-then-copy keeps its mtime stable, so qrc_bitcoin.cpp is regenerated exactly when
-# the icon really changes; the FORCE prerequisite makes 'make NAME=<other>' re-brand the
-# same tree without a clean.
+# Per-chain application artwork.
+#
+# Two generated, untracked files are selected per chain, both by the same three-step
+# lookup: the chain's own art, else the Lynx art, else fail the build. Falling back to
+# Lynx rather than to a stock Bitcoin asset is deliberate - it is what makes it impossible
+# to ship a Bitcoin-branded wallet by accident - and the final failure is a repo-integrity
+# check, since share/branding/lynx/ must always exist.
+#
+#   chain_icon.png  bitcoin.qrc's "bitcoin" alias: window, tray, splash, About dialog
+#   chain_icon.ico  the Windows PE icon, compiled in by windres via bitcoin-qt-res.rc
+#
+# Both live next to the .qrc because rcc and windres resolve paths relative to their own
+# input file. Compare-then-copy keeps their mtimes stable, so the resources are regenerated
+# exactly when the artwork really changes; the FORCE prerequisite makes 'make NAME=<other>'
+# re-brand the same tree without a clean.
+#
+# Artwork is committed, never generated here: contrib/branding/branding.py is a maintainer
+# tool, so no build host needs Pillow or ImageMagick.
+#
+# The two lookups below are spelled out separately rather than shared via a make
+# 'define ... endef' helper. automake cannot handle define blocks in an included
+# Makefile.am fragment: it strips the define/endef lines, reinterprets the body as a
+# variable assignment, and silently DROPS the rules that follow, with no warning at
+# automake time. The failure only surfaces as a missing generated file mid-build.
 QT_CHAIN_ICON = $(srcdir)/qt/res/icons/chain_icon.png
+QT_CHAIN_ICO = $(srcdir)/qt/res/icons/chain_icon.ico
+
 $(QT_CHAIN_ICON): FORCE
 	@src=$(top_srcdir)/share/branding/$(NAME)/icon.png; \
-	test -f $$src || src=$(srcdir)/qt/res/icons/bitcoin.png; \
+	if test ! -f $$src; then \
+	  src=$(top_srcdir)/share/branding/lynx/icon.png; \
+	  test -f $$src || { echo "ERROR: chain '$(NAME)' has no icon.png and no Lynx fallback at $$src" >&2; exit 1; }; \
+	  echo "  FALLBACK $@ <- $$src (chain '$(NAME)' has no icon.png)"; \
+	fi; \
 	cmp -s $$src $@ 2>/dev/null || { echo "  BRAND    $@ <- $$src"; cp -f $$src $@; }
+
+$(QT_CHAIN_ICO): FORCE
+	@src=$(top_srcdir)/share/branding/$(NAME)/icon.ico; \
+	if test ! -f $$src; then \
+	  src=$(top_srcdir)/share/branding/lynx/icon.ico; \
+	  test -f $$src || { echo "ERROR: chain '$(NAME)' has no icon.ico and no Lynx fallback at $$src" >&2; exit 1; }; \
+	  echo "  FALLBACK $@ <- $$src (chain '$(NAME)' has no icon.ico)"; \
+	fi; \
+	cmp -s $$src $@ 2>/dev/null || { echo "  BRAND    $@ <- $$src"; cp -f $$src $@; }
+
+# windres embeds chain_icon.ico into the Qt binary, so the object has to be rebuilt when
+# the icon changes. The object name is unprefixed even though qt_lynx_qt_CPPFLAGS exists,
+# because the .rc.o suffix rule in Makefile.am bypasses automake's per-target naming.
+qt/res/bitcoin-qt-res.$(OBJEXT): $(QT_CHAIN_ICO)
+
+# ── Linux desktop integration ───────────────────────────────────────────────────
+# This only affects 'make install'. The .zip archives this project actually ships do not
+# run it, so it is groundwork for distro packaging - plus it is what makes the Icon= key
+# resolve in the autostart file written by GUIUtil::SetStartOnSystemStartup().
+#
+# Installed per chain, named after the chain rather than after the artwork:
+#   $(datadir)/pixmaps/<chain>.png        what Icon=<chain> resolves against
+#   $(datadir)/applications/<chain>.desktop   launcher entry
+#
+# Both are installed by hand rather than through an automake _DATA primary, because a
+# _DATA primary installs a file under its source basename and every chain's source file is
+# called icon.png.
+QT_CHAIN_DESKTOP = $(NAME).desktop
+
+# Name= is a plain capitalisation of the chain id, because CurrentChainDisplayName() is a
+# C++ function the build cannot call. That matches the display name for every chain except
+# infiniloop, which renders "InfiniLooP" inside the wallet but "Infiniloop" here.
+$(QT_CHAIN_DESKTOP): FORCE
+	@{ echo "[Desktop Entry]"; \
+	   echo "Type=Application"; \
+	   echo "Version=1.0"; \
+	   echo "Name=$$(echo '$(NAME)' | sed 's/^./\U&/')"; \
+	   echo "Comment=$$(echo '$(NAME)' | sed 's/^./\U&/') peer-to-peer wallet and full node"; \
+	   echo "Exec=$(NAME)-qt %u"; \
+	   echo "Icon=$(NAME)"; \
+	   echo "Terminal=false"; \
+	   echo "Categories=Office;Finance;"; \
+	   echo "MimeType=x-scheme-handler/$(NAME);"; \
+	   echo "StartupWMClass=$(NAME)-qt"; \
+	} > $@.tmp
+	@cmp -s $@.tmp $@ 2>/dev/null && rm -f $@.tmp || { mv -f $@.tmp $@; echo "  GEN      $@"; }
+
+install-data-local: $(QT_CHAIN_DESKTOP) $(QT_CHAIN_ICON)
+	$(MKDIR_P) $(DESTDIR)$(datadir)/pixmaps $(DESTDIR)$(datadir)/applications
+	$(INSTALL_DATA) $(QT_CHAIN_ICON) $(DESTDIR)$(datadir)/pixmaps/$(NAME).png
+	$(INSTALL_DATA) $(QT_CHAIN_DESKTOP) $(DESTDIR)$(datadir)/applications/$(NAME).desktop
+
+uninstall-local:
+	-rm -f $(DESTDIR)$(datadir)/pixmaps/$(NAME).png
+	-rm -f $(DESTDIR)$(datadir)/applications/$(NAME).desktop
 
 $(QT_QRC_CPP): $(QT_QRC) $(QT_FORMS_H) $(QT_RES_FONTS) $(QT_RES_ICONS) $(QT_RES_ANIMATION) $(QT_CHAIN_ICON)
 	@test -f $(RCC)
 	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(RCC) -name bitcoin --format-version 1 $< > $@
 
-CLEAN_QT = $(nodist_qt_liblynxqt_a_SOURCES) $(QT_QM) $(QT_FORMS_H) qt/*.gcda qt/*.gcno qt/temp_bitcoin_locale.qrc $(QT_CHAIN_ICON)
+CLEAN_QT = $(nodist_qt_liblynxqt_a_SOURCES) $(QT_QM) $(QT_FORMS_H) qt/*.gcda qt/*.gcno qt/temp_bitcoin_locale.qrc $(QT_CHAIN_ICON) $(QT_CHAIN_ICO) $(QT_CHAIN_DESKTOP)
 
 CLEANFILES += $(CLEAN_QT)
 

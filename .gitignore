@@ -43,6 +43,8 @@ src/*-cli
 src/*-tx
 src/*-qt
 src/qt/res/icons/chain_icon.png
+src/qt/res/icons/chain_icon.ico
+src/*.desktop
 
 # Qt build artifacts (moc/uic/rcc/lrelease output), regenerated on every GUI build.
 src/qt/*.moc

@@ -655,6 +655,12 @@ bool SetStartOnSystemStartup(bool fAutoStart)
         else
             optionFile << strprintf("Name=%s (%s)\n", CurrentChainDisplayName(), ChainTypeToString(chain));
         optionFile << "Exec=" << pszExePath << strprintf(" -min -chain=%s\n", ChainTypeToString(chain));
+        // Icon= names the chain, matching the icon installed as
+        // $(datadir)/pixmaps/<chain>.png (see the pixmap install rule in src/Makefile.am).
+        // Desktop environments resolve a bare name against the icon theme and the legacy
+        // pixmaps directory, so no path or extension belongs here. Without this key the
+        // autostart entry shows no icon at all.
+        optionFile << "Icon=" CURRENT_CHAIN "\n";
         optionFile << "Terminal=false\n";
         optionFile << "Hidden=false\n";
         optionFile.close();

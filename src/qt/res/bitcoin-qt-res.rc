@@ -1,5 +1,10 @@
-IDI_ICON1 ICON DISCARDABLE "icons/bitcoin.ico"
-IDI_ICON2 ICON DISCARDABLE "icons/bitcoin_testnet.ico"
+// Both icons are the generated per-chain icon (see QT_CHAIN_ICO in
+// src/Makefile.qt.include). IDI_ICON1 is the icon Windows shows for the .exe.
+// IDI_ICON2 exists only so share/setup.nsi.in can reference "icon index 1" for its
+// testnet shortcut; pointing it at the same file keeps that index valid without
+// requiring a second piece of artwork per chain.
+IDI_ICON1 ICON DISCARDABLE "icons/chain_icon.ico"
+IDI_ICON2 ICON DISCARDABLE "icons/chain_icon.ico"
 
 #include <windows.h>             // needed for VERSIONINFO
 #include "../../clientversion.h" // holds the needed client version information
