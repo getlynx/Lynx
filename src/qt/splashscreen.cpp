@@ -25,6 +25,7 @@
 #include <QPainter>
 #include <QRadialGradient>
 #include <QScreen>
+#include <QStringList>
 
 
 SplashScreen::SplashScreen(const NetworkStyle* networkStyle)
@@ -66,7 +67,10 @@ SplashScreen::SplashScreen(const NetworkStyle* networkStyle)
     pixPaint.fillRect(rGradient, gradient);
 
     // draw the lynx icon, expected size of PNG: 1024x1024
-    QRect rectIcon(QPoint(-150,-122), QSize(430,430));
+    // Sized and positioned so the icon's right edge stays clear of the title
+    // block, which starts at width-titleTextWidth-paddingRight (x=254 at the
+    // 176px title clamp above).
+    QRect rectIcon(QPoint(-122,-90), QSize(366,366));
 
     const QSize requiredSize(1024,1024);
     QPixmap icon(networkStyle->getAppIcon().pixmap(requiredSize));
@@ -99,11 +103,42 @@ SplashScreen::SplashScreen(const NetworkStyle* networkStyle)
 
     // draw copyright stuff
     {
-        pixPaint.setFont(QFont(font, 10*fontFactor));
+        // One copyright holder per line, never wrapped. The block may run closer to
+        // the right edge than the title does, and the font steps down if a longer
+        // holder string ever stops fitting.
+        const int copyrightPaddingRight = 15;
         const int x = pixmap.width()/devicePixelRatio-titleTextWidth-paddingRight;
         const int y = paddingTop+titleCopyrightVSpace;
-        QRect copyrightRect(x, y, pixmap.width() - x - paddingRight, pixmap.height() - y);
-        pixPaint.drawText(copyrightRect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, copyrightText);
+        const int availableWidth = pixmap.width()/devicePixelRatio - x - copyrightPaddingRight;
+        // Kept in step with the documentation line in NetworkInfo() (clientversion.cpp),
+        // which is what the About dialog shows.
+        const QString docsText = QStringLiteral("Documentation: https://docs.getlynx.io");
+
+        QStringList textLines = copyrightText.split(QChar('\n'));
+        textLines << docsText;
+
+        int copyrightFontSize = 10*fontFactor;
+        if (copyrightFontSize < 5) copyrightFontSize = 5;
+        for (; copyrightFontSize > 5; copyrightFontSize--) {
+            pixPaint.setFont(QFont(font, copyrightFontSize));
+            fm = pixPaint.fontMetrics();
+            int widestLine = 0;
+            for (const QString& line : textLines) {
+                const int lineWidth = GUIUtil::TextWidth(fm, line);
+                if (lineWidth > widestLine) widestLine = lineWidth;
+            }
+            if (widestLine <= availableWidth) break;
+        }
+
+        pixPaint.setFont(QFont(font, copyrightFontSize));
+        fm = pixPaint.fontMetrics();
+        int lineY = y + fm.ascent();
+        for (int i = 0; i < textLines.size(); ++i) {
+            // set the documentation line off from the copyright block
+            if (i == textLines.size()-1) lineY += fm.lineSpacing()/2;
+            pixPaint.drawText(x, lineY, textLines.at(i));
+            lineY += fm.lineSpacing();
+        }
     }
 
     // draw additional text if special network
