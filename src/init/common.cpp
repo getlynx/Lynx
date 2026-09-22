@@ -19,6 +19,7 @@
 #include <util/translation.h>
 
 #include <algorithm>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -152,23 +153,15 @@ void LogPackageVersion()
     // ticker, then version.
     LogPrintf("%s (%s) version %s\n", CurrentChainDisplayName(), CurrentCoinSymbol(), version_string);
     LogPrintf("\n");
-    LogPrintf("%s is built from the Lynx Core codebase and part of the Lynx Data Storage Network.\n", CurrentChainDisplayName());
-    LogPrintf("\n");
-    LogPrintf("The Lynx Data Storage Network (LDSN) is a decentralized, eco-friendly global\n");
-    LogPrintf("platform for permanent data storage. Files are written whole onto the\n");
-    LogPrintf("blockchain, where they outlive us. It safeguards family photos, legal and\n");
-    LogPrintf("medical records, journalistic archives, dissertations, published papers,\n");
-    LogPrintf("and long-term climate and medical research. Every stored file is encrypted\n");
-    LogPrintf("and private, not publicly readable unless its creator chooses to share it.\n");
-    LogPrintf("Staking creates coins to secure the network; storing data burns them - a\n");
-    LogPrintf("working commodity with real utility.\n");
-    LogPrintf("\n");
-    LogPrintf("Thank you for helping change the world. History cannot be rewritten when its\n");
-    LogPrintf("records cannot be erased. Facts kill fascism - and keeping facts alive,\n");
-    LogPrintf("permanently and verifiably, is exactly what this network was built to do.\n");
-    LogPrintf("\n");
-    LogPrintf("Store your first file at https://clevver.org\n");
-    LogPrintf("Documentation: https://docs.getlynx.io\n");
+    // The network description lives in NetworkInfo() (src/clientversion.cpp) so this log
+    // banner and the GUI's About dialog always show the same copy. Printed one line at a
+    // time rather than as a single multi-line string, because LogPrintf prefixes each
+    // call with a timestamp - emitting it in one call would timestamp only the first line
+    // and change how the log has always looked.
+    std::istringstream banner{NetworkInfo(CurrentChainDisplayName())};
+    for (std::string line; std::getline(banner, line);) {
+        LogPrintf("%s\n", line);
+    }
     LogPrintf("\n");
 }
 } // namespace init

@@ -50,10 +50,21 @@ HelpMessageDialog::HelpMessageDialog(QWidget *parent, bool about) :
         // Replace newlines with HTML breaks
         licenseInfoHTML.replace("\n", "<br>");
 
+        // The network description, shared with the startup banner written to debug.log by
+        // init::LogPackageVersion(), so the two can never drift apart.
+        const std::string networkInfo = NetworkInfo(GUIUtil::chainName().toStdString());
+        QString networkInfoHTML = QString::fromStdString(networkInfo).toHtmlEscaped();
+        // LicenseInfo() marks its URLs with <angle brackets> and is linkified by the
+        // regex above; this text carries bare URLs, so it needs its own pass. Run before
+        // newlines become <br> so the pattern cannot wander into generated markup.
+        QRegularExpression bare_url(QStringLiteral("(https?://[^\\s<]+)"));
+        networkInfoHTML.replace(bare_url, QStringLiteral("<a href=\"\\1\">\\1</a>"));
+        networkInfoHTML.replace("\n", "<br>");
+
         ui->aboutMessage->setTextFormat(Qt::RichText);
         ui->scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        text = version + "\n" + QString::fromStdString(FormatParagraph(licenseInfo));
-        ui->aboutMessage->setText(version + "<br><br>" + licenseInfoHTML);
+        text = version + "\n\n" + QString::fromStdString(networkInfo) + "\n" + QString::fromStdString(FormatParagraph(licenseInfo));
+        ui->aboutMessage->setText(version + "<br><br>" + networkInfoHTML + "<br>" + licenseInfoHTML);
         ui->aboutMessage->setWordWrap(true);
         ui->helpMessage->setVisible(false);
     } else {

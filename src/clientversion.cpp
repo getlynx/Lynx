@@ -102,6 +102,27 @@ std::string CopyrightHolders(const std::string& strPrefix)
     return strCopyrightHolders;
 }
 
+std::string NetworkInfo(const std::string& chain_display_name)
+{
+    return strprintf("%s is built from the Lynx Core codebase and part of the Lynx Data Storage Network.\n", chain_display_name) +
+           "\n"
+           "The Lynx Data Storage Network (LDSN) is a decentralized, eco-friendly global\n"
+           "platform for permanent data storage. Files are written whole onto the\n"
+           "blockchain, where they outlive us. It safeguards family photos, legal and\n"
+           "medical records, journalistic archives, dissertations, published papers,\n"
+           "and long-term climate and medical research. Every stored file is encrypted\n"
+           "and private, not publicly readable unless its creator chooses to share it.\n"
+           "Staking creates coins to secure the network; storing data burns them - a\n"
+           "working commodity with real utility.\n"
+           "\n"
+           "Thank you for helping change the world. History cannot be rewritten when its\n"
+           "records cannot be erased. Facts kill fascism - and keeping facts alive,\n"
+           "permanently and verifiably, is exactly what this network was built to do.\n"
+           "\n"
+           "Store your first file at https://clevver.org\n"
+           "Documentation: https://docs.getlynx.io\n";
+}
+
 std::string LicenseInfo()
 {
     const std::string URL_SOURCE_CODE = "<https://github.com/getlynx/Lynx>";
