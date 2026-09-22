@@ -35,6 +35,11 @@ SendCoinsEntry::SendCoinsEntry(const PlatformStyle *_platformStyle, QWidget *par
 
     GUIUtil::setupAddressWidget(ui->payTo, this);
 
+    // The .ui carries upstream's wording, which names the coin "bitcoins". Set this
+    // chain's name instead. chainName() is deliberately not pluralised, so the sentence
+    // reads correctly for every chain: "less Lynx", "less Alioth", "less InfiniLooP".
+    ui->checkboxSubtractFeeFromAmount->setToolTip(tr("The fee will be deducted from the amount being sent. The recipient will receive less %1 than you enter in the amount field. If multiple recipients are selected, the fee is split equally.").arg(GUIUtil::chainName()));
+
     // Connect signals
     connect(ui->payAmount, &BitcoinAmountField::valueChanged, this, &SendCoinsEntry::payAmountChanged);
     connect(ui->checkboxSubtractFeeFromAmount, &QCheckBox::toggled, this, &SendCoinsEntry::subtractFeeFromAmountChanged);

@@ -29,6 +29,12 @@ ModalOverlay::ModalOverlay(bool enable_wallet, QWidget* parent)
     if (!enable_wallet) {
         ui->infoText->setVisible(false);
         ui->infoTextStrong->setText(tr("%1 is currently syncing.  It will download headers and blocks from peers and validate them until reaching the tip of the block chain.").arg(GUIUtil::productName()));
+    } else {
+        // The .ui carries upstream's wording, which names the coin "bitcoins". Replace it
+        // with this chain's name. chainName() is used rather than a pluralised form so the
+        // sentence reads correctly for every chain - "spend Lynx", "spend Alioth",
+        // "spend InfiniLooP" - which is also why "that are affected" becomes "affected".
+        ui->infoTextStrong->setText(tr("Attempting to spend %1 affected by not-yet-displayed transactions will not be accepted by the network.").arg(GUIUtil::chainName()));
     }
 
     m_animation.setTargetObject(this);

@@ -37,6 +37,11 @@ SignVerifyMessageDialog::SignVerifyMessageDialog(const PlatformStyle *_platformS
     GUIUtil::setupAddressWidget(ui->addressIn_SM, this);
     GUIUtil::setupAddressWidget(ui->addressIn_VM, this);
 
+    // The .ui carries upstream's wording, which names the coin "bitcoins". Set this
+    // chain's name instead, unpluralised so it reads correctly for every chain:
+    // "receive Lynx sent to them", "receive InfiniLooP sent to them".
+    ui->infoLabel_SM->setText(tr("You can sign messages/agreements with your addresses to prove you can receive %1 sent to them. Be careful not to sign anything vague or random, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.").arg(GUIUtil::chainName()));
+
     ui->addressIn_SM->installEventFilter(this);
     ui->messageIn_SM->installEventFilter(this);
     ui->signatureOut_SM->installEventFilter(this);

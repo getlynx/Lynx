@@ -81,7 +81,15 @@ struct ChainSpec {
     // int checkpointHeight;
     std::map<std::string, int> checkpointHeight;
     // std::string checkpointHash;
-    std::map<std::string, std::string> checkpointHash;};
+    std::map<std::string, std::string> checkpointHash;
+    // Per-chain ChainTxData anchor. Display only, never consensus.
+    // Source: getchaintxstats.
+    // int txDataTime;
+    std::map<std::string, int> txDataTime;
+    // int txDataCount;
+    std::map<std::string, int> txDataCount;
+    // double txDataRate;
+    std::map<std::string, double> txDataRate;};
 
 
 ChainSpec spec;
@@ -189,6 +197,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["alioth"]                = 1757546169;
     spec.checkpointHeight["alioth"]         = 10500;
     spec.checkpointHash["alioth"]           = "0x74f2f2840068536ec9aec7a97abb4abc71bdedc4fd04e80bb750addea114ac61";
+    spec.txDataTime["alioth"]               = 1790094448;
+    spec.txDataCount["alioth"]              = 44316;
+    spec.txDataRate["alioth"]               = 0.006629;
 
     spec.coinSymbol["borrelly"]             = "BORR";
     spec.psztimestamp["borrelly"]           = "Memory becomes unreliable without external verification.";
@@ -208,6 +219,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["borrelly"]              = 1757546169;
     spec.checkpointHeight["borrelly"]       = 10500;
     spec.checkpointHash["borrelly"]         = "0xa75562856a068540a0f9480e5540ca935e963bbdde8af837cf3e821e2044f453";
+    spec.txDataTime["borrelly"]             = 1790094320;
+    spec.txDataCount["borrelly"]            = 44343;
+    spec.txDataRate["borrelly"]             = 0.006599;
 
     spec.coinSymbol["cassiopeia"]           = "CASS";
     spec.psztimestamp["cassiopeia"]         = "The platform shapes thought through design.";
@@ -227,6 +241,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["cassiopeia"]            = 1757546169;
     spec.checkpointHeight["cassiopeia"]     = 6750;
     spec.checkpointHash["cassiopeia"]       = "0x2ad7da8b9e87b286bbe8ffbf2e3b560625ecca35f9436d74a34115f3470d6b56";
+    spec.txDataTime["cassiopeia"]           = 1790094528;
+    spec.txDataCount["cassiopeia"]          = 36091;
+    spec.txDataRate["cassiopeia"]           = 0.006604;
 
     spec.coinSymbol["delphinus"]            = "DELP";
     spec.psztimestamp["delphinus"]          = "Truth becomes what the fact-checkers approve.";
@@ -246,6 +263,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["delphinus"]             = 1757546169;
     spec.checkpointHeight["delphinus"]      = 10200;
     spec.checkpointHash["delphinus"]        = "0x37735afcd430501b8570de4bd00428240dcd985ed67c5006fd4c07b351990b7c";
+    spec.txDataTime["delphinus"]            = 1790093168;
+    spec.txDataCount["delphinus"]           = 43352;
+    spec.txDataRate["delphinus"]            = 0.006642;
 
     spec.coinSymbol["digitalcoin"]         = "DGC";
     spec.displayName["digitalcoin"]        = "Digitalcoin";
@@ -264,6 +284,10 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["digitalcoin"]          = 1367867384;
     spec.checkpointHeight["digitalcoin"]   = 0;
     spec.checkpointHash["digitalcoin"]     = "0x5e039e1ca1dbf128973bf6cff98169e40a1b194c3b91463ab74956f413b2f9c8";
+    // Provisional; count intentionally 0. Refresh from getchaintxstats.
+    spec.txDataTime["digitalcoin"]          = 1790094352;
+    spec.txDataCount["digitalcoin"]         = 0;
+    spec.txDataRate["digitalcoin"]          = 0.006590;
 
     spec.coinSymbol["enceladus"]            = "ENCE";
     spec.psztimestamp["enceladus"]          = "Every interaction feeds machine learning.";
@@ -283,6 +307,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["enceladus"]             = 1757546169;
     spec.checkpointHeight["enceladus"]      = 10175;
     spec.checkpointHash["enceladus"]        = "0x47e8bac1e2fdec00cb6edd3349910b46257c2c36d88caef34b8782c2093a20fc";
+    spec.txDataTime["enceladus"]            = 1790094496;
+    spec.txDataCount["enceladus"]           = 43241;
+    spec.txDataRate["enceladus"]            = 0.006610;
 
     spec.coinSymbol["fenrir"]               = "FENR";
     spec.psztimestamp["fenrir"]             = "Conformity spreads through social proof.";
@@ -302,6 +329,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["fenrir"]                = 1757546169;
     spec.checkpointHeight["fenrir"]         = 10100;
     spec.checkpointHash["fenrir"]           = "0x7b8bfd71e74fdad2cbb827c5303511e3ace04dd697fb5d2277b10144faed0909";
+    spec.txDataTime["fenrir"]               = 1790094352;
+    spec.txDataCount["fenrir"]              = 43087;
+    spec.txDataRate["fenrir"]               = 0.006609;
 
     spec.coinSymbol["galatea"]              = "GALA";
     spec.psztimestamp["galatea"]            = "Power manifests through permitted pathways.";
@@ -321,6 +351,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["galatea"]               = 1757546169;
     spec.checkpointHeight["galatea"]        = 9800;
     spec.checkpointHash["galatea"]          = "0x75ccd5fac5fed32d39284d9e3e2964df2fce943359430f0db5f2caeb84e272e8";
+    spec.txDataTime["galatea"]              = 1790094400;
+    spec.txDataCount["galatea"]             = 42503;
+    spec.txDataRate["galatea"]              = 0.006593;
 
     spec.coinSymbol["halley"]               = "HALL";
     spec.psztimestamp["halley"]             = "Dissent becomes indistinguishable from noise.";
@@ -340,6 +373,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["halley"]                = 1757546169;
     spec.checkpointHeight["halley"]         = 6775;
     spec.checkpointHash["halley"]           = "0x182a8c4632ff0f1a4629960cf5cc889519c230dd0ec2484bb323f1603ece74af";
+    spec.txDataTime["halley"]               = 1790094544;
+    spec.txDataCount["halley"]              = 36114;
+    spec.txDataRate["halley"]               = 0.006607;
 
     spec.coinSymbol["indus"]                = "INDU";
     spec.psztimestamp["indus"]              = "The crawler maps all possible connections.";
@@ -359,6 +395,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["indus"]                 = 1757546169;
     spec.checkpointHeight["indus"]          = 6775;
     spec.checkpointHash["indus"]            = "0x9e04be9327e3952c5a20cc744f51e5a885f624b407750b263eefad94d8afade8";
+    spec.txDataTime["indus"]                = 1790093440;
+    spec.txDataCount["indus"]               = 36166;
+    spec.txDataRate["indus"]                = 0.006572;
 
     spec.coinSymbol["infiniloop"]           = "IL8P";
     spec.displayName["infiniloop"]          = "InfiniLooP";
@@ -379,6 +418,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["infiniloop"]            = 1609281149;
     spec.checkpointHeight["infiniloop"]     = 2808765;
     spec.checkpointHash["infiniloop"]       = "0xa437ef7f4666568ad9642a4b71f969b6a4215f5f80d28e9e9f1a01e3d27dcf75";
+    spec.txDataTime["infiniloop"]           = 1790094352;
+    spec.txDataCount["infiniloop"]          = 5772667;
+    spec.txDataRate["infiniloop"]           = 0.006590;
 
     spec.coinSymbol["lynx"]                 = "LYNX";
     spec.psztimestamp["lynx"]               = "ICanHazKitteh at epoch 1387779684. Meow. Now pet me.";
@@ -398,6 +440,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["lynx"]                  = 1387779684;
     spec.checkpointHeight["lynx"]           = 3251660;
     spec.checkpointHash["lynx"]             = "0x0869637aeb85c4fcd680a117a2a67e76360fbdd2780b99951bb85762db5ef5ec";
+    spec.txDataTime["lynx"]                 = 1790094224;
+    spec.txDataCount["lynx"]                = 4779870;
+    spec.txDataRate["lynx"]                 = 0.006755;
 }
 
 // Ticker for the chain this binary was built for -- "ALIO" when CURRENT_CHAIN is
@@ -811,23 +856,12 @@ public:
          // TODO to be specified in a future patch.
         };
 
-        if (std::string(CURRENT_CHAIN) == "lynx") {
-            chainTxData = ChainTxData{
-                // Data from RPC: getchaintxstats 4096 000000000000000000035c3f0d31e71a5ee24c5aaf3354689f65bd7b07dee632
-                1387905669, // * UNIX timestamp of last known number of transactions
-                1717,       // * total number of transactions between genesis and that timestamp
-                            //   (the tx=... number in the SetBestChain debug.log lines)
-                3.0         // * estimated number of transactions per second after that timestamp
-            };
-        } else {
-            chainTxData = ChainTxData{
-                // Data from RPC: getchaintxstats 4096 000000000000000000035c3f0d31e71a5ee24c5aaf3354689f65bd7b07dee632
-                1757546169, // * UNIX timestamp of last known number of transactions
-                0,       // * total number of transactions between genesis and that timestamp
-                            //   (the tx=... number in the SetBestChain debug.log lines)
-                0.0         // * estimated number of transactions per second after that timestamp
-            };
-        }
+        // Per-chain anchor; rows in the spec list above.
+        chainTxData = ChainTxData{
+            spec.txDataTime[CURRENT_CHAIN],
+            spec.txDataCount[CURRENT_CHAIN],
+            spec.txDataRate[CURRENT_CHAIN],
+        };
 
     }
 };
