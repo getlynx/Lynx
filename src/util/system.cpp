@@ -75,6 +75,7 @@
 // bitcoin args.cpp
 #include <cstdint>
 #include <cstdlib>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <stdexcept>
@@ -96,6 +97,32 @@
 #define CURRENT_CHAIN_CONF CURRENT_CHAIN ".conf"
 
 #define CURRENT_CHAIN_DATADIR "." CURRENT_CHAIN
+
+//! Per-chain data directory name for platforms that use a capitalised, dotless
+//! convention (Windows, macOS). Unix uses the dotted CURRENT_CHAIN_DATADIR above.
+//!
+//! Every chain must get its own directory: users run several chains' wallets side by side
+//! on one desktop, and sharing a directory would mean sharing blocks/, chainstate/ and -
+//! the dangerous one - wallets/. It also fixes a second collision for free, because
+//! PaymentServer::ipcServerName() derives its name by hashing the data directory, so
+//! per-chain datadirs make the IPC socket per-chain too.
+//!
+//! Derived from the CURRENT_CHAIN define rather than CurrentChainDisplayName(): that
+//! lives in kernel/chainparams.cpp, and calling it from libbitcoin_util would pull
+//! chainparams and its genesis/merkle dependencies into every binary linking this file
+//! (see the LIBBITCOIN_CONSENSUS note in src/Makefile.am). The consequence is that a
+//! chain with irregular capitalisation gets the plain form - infiniloop yields
+//! "Infiniloop" here while the wallet displays "InfiniLooP" - which is cosmetic, as
+//! nothing matches on this string.
+//!
+//! For "lynx" this yields "Lynx", byte-for-byte the path previous Windows builds used, so
+//! existing installations keep their chain data and wallets without migration.
+static std::string CurrentChainDirName()
+{
+    std::string name{CURRENT_CHAIN};
+    if (!name.empty()) name[0] = std::toupper(static_cast<unsigned char>(name[0]));
+    return name;
+}
 
 // Application startup time (used for uptime calculation)
 const int64_t nStartupTime = GetTime();
@@ -764,12 +791,14 @@ std::string HelpMessageOpt(const std::string &option, const std::string &message
 
 fs::path GetDefaultDataDir()
 {
-    // Windows: C:\Users\Username\AppData\Roaming\Lynx
-    // macOS: ~/Library/Application Support/Lynx
-    // Unix-like: ~/.lynx
+    // One directory per chain, so several chains' wallets can run on the same desktop
+    // without sharing blocks/, chainstate/ or wallets/:
+    //   Windows:   C:\Users\Username\AppData\Roaming\<Chain>   e.g. ...\Roaming\Alioth
+    //   macOS:     ~/Library/Application Support/<Chain>
+    //   Unix-like: ~/.<chain>                                    e.g. ~/.alioth
 #ifdef WIN32
     // Windows
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "Lynx";
+    return GetSpecialFolderPath(CSIDL_APPDATA) / fs::u8path(CurrentChainDirName());
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -779,7 +808,7 @@ fs::path GetDefaultDataDir()
         pathRet = fs::path(pszHome);
 #ifdef MAC_OSX
     // macOS
-    return pathRet / "Library/Application Support/Lynx";
+    return pathRet / "Library/Application Support" / fs::u8path(CurrentChainDirName());
 #else
     // Unix-like
 

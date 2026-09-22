@@ -56,8 +56,8 @@ std::string LicenseInfo();
  * link-order problem the -version banner already caused for lynx-cli (see the
  * LIBBITCOIN_CONSENSUS comment in src/Makefile.am).
  *
- * Line breaks are meaningful: the text is hard-wrapped for the log, and the About dialog
- * reproduces that layout so both read identically.
+ * Returned as unwrapped paragraphs. The log hard-wraps it with FormatParagraph(); the
+ * About dialog leaves it alone so Qt can reflow it to the window width.
  */
 std::string NetworkInfo(const std::string& chain_display_name);
 

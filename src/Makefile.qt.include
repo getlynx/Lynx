@@ -437,15 +437,20 @@ qt/res/bitcoin-qt-res.$(OBJEXT): $(QT_CHAIN_ICO)
 # called icon.png.
 QT_CHAIN_DESKTOP = $(NAME).desktop
 
-# Name= is a plain capitalisation of the chain id, because CurrentChainDisplayName() is a
-# C++ function the build cannot call. That matches the display name for every chain except
-# infiniloop, which renders "InfiniLooP" inside the wallet but "Infiniloop" here.
+# Name= must match what the wallet calls itself, including irregular capitalisation like
+# "InfiniLooP". CurrentChainDisplayName() is a C++ function the build cannot call, so this
+# reads the same source that function reads - the spec.displayName rows in
+# kernel/chainparams.cpp - and falls back to capitalising the chain id exactly as that
+# function does when a chain has no row. Chain names are plain ASCII identifiers, so a
+# sed lookup is sufficient and cannot disagree with the compiled-in value.
 $(QT_CHAIN_DESKTOP): FORCE
-	@{ echo "[Desktop Entry]"; \
+	@display=$$(sed -n 's/.*spec\.displayName\["$(NAME)"\][[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' $(srcdir)/kernel/chainparams.cpp | head -n1); \
+	test -n "$$display" || display=$$(echo '$(NAME)' | sed 's/^./\U&/'); \
+	{ echo "[Desktop Entry]"; \
 	   echo "Type=Application"; \
 	   echo "Version=1.0"; \
-	   echo "Name=$$(echo '$(NAME)' | sed 's/^./\U&/')"; \
-	   echo "Comment=$$(echo '$(NAME)' | sed 's/^./\U&/') peer-to-peer wallet and full node"; \
+	   echo "Name=$$display"; \
+	   echo "Comment=$$display peer-to-peer wallet and full node"; \
 	   echo "Exec=$(NAME)-qt %u"; \
 	   echo "Icon=$(NAME)"; \
 	   echo "Terminal=false"; \

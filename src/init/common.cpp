@@ -13,6 +13,7 @@
 #include <tinyformat.h>
 #include <util/fs.h>
 #include <util/fs_helpers.h>
+#include <util/strencodings.h>
 #include <util/string.h>
 #include <util/system.h>
 #include <util/time.h>
@@ -154,11 +155,13 @@ void LogPackageVersion()
     LogPrintf("%s (%s) version %s\n", CurrentChainDisplayName(), CurrentCoinSymbol(), version_string);
     LogPrintf("\n");
     // The network description lives in NetworkInfo() (src/clientversion.cpp) so this log
-    // banner and the GUI's About dialog always show the same copy. Printed one line at a
-    // time rather than as a single multi-line string, because LogPrintf prefixes each
-    // call with a timestamp - emitting it in one call would timestamp only the first line
-    // and change how the log has always looked.
-    std::istringstream banner{NetworkInfo(CurrentChainDisplayName())};
+    // banner and the GUI's About dialog always show the same copy. It is stored unwrapped,
+    // so hard-wrap it here for the log; the GUI deliberately does not, and reflows instead.
+    //
+    // Printed one line at a time rather than as a single multi-line string, because
+    // LogPrintf prefixes each call with a timestamp - emitting it in one call would
+    // timestamp only the first line and change how the log has always looked.
+    std::istringstream banner{FormatParagraph(NetworkInfo(CurrentChainDisplayName()), 76)};
     for (std::string line; std::getline(banner, line);) {
         LogPrintf("%s\n", line);
     }

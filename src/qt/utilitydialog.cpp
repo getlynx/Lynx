@@ -63,7 +63,10 @@ HelpMessageDialog::HelpMessageDialog(QWidget *parent, bool about) :
 
         ui->aboutMessage->setTextFormat(Qt::RichText);
         ui->scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        text = version + "\n\n" + QString::fromStdString(networkInfo) + "\n" + QString::fromStdString(FormatParagraph(licenseInfo));
+        // `text` goes to the console (see the tfm::format at the bottom of this file), so it
+        // is hard-wrapped like the log. The dialog itself is fed the unwrapped form above
+        // and reflows to the window width.
+        text = version + "\n\n" + QString::fromStdString(FormatParagraph(networkInfo, 76)) + "\n" + QString::fromStdString(FormatParagraph(licenseInfo));
         ui->aboutMessage->setText(version + "<br><br>" + networkInfoHTML + "<br>" + licenseInfoHTML);
         ui->aboutMessage->setWordWrap(true);
         ui->helpMessage->setVisible(false);

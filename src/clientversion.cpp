@@ -104,19 +104,26 @@ std::string CopyrightHolders(const std::string& strPrefix)
 
 std::string NetworkInfo(const std::string& chain_display_name)
 {
+    // Stored as unwrapped paragraphs, one logical line each. Callers decide how to
+    // present it: the log runs it through FormatParagraph() to hard-wrap at 76 columns,
+    // while the GUI's About dialog uses it as-is and lets Qt reflow to the window width.
+    // Keeping the canonical form unwrapped is what makes both possible from one source -
+    // hard-wrapped text cannot be reflowed without guessing which newlines are paragraph
+    // breaks and which are wrapping, and the two URL lines at the end are exactly the
+    // case such a guess would get wrong.
     return strprintf("%s is built from the Lynx Core codebase and part of the Lynx Data Storage Network.\n", chain_display_name) +
            "\n"
-           "The Lynx Data Storage Network (LDSN) is a decentralized, eco-friendly global\n"
-           "platform for permanent data storage. Files are written whole onto the\n"
-           "blockchain, where they outlive us. It safeguards family photos, legal and\n"
-           "medical records, journalistic archives, dissertations, published papers,\n"
-           "and long-term climate and medical research. Every stored file is encrypted\n"
-           "and private, not publicly readable unless its creator chooses to share it.\n"
-           "Staking creates coins to secure the network; storing data burns them - a\n"
+           "The Lynx Data Storage Network (LDSN) is a decentralized, eco-friendly global "
+           "platform for permanent data storage. Files are written whole onto the "
+           "blockchain, where they outlive us. It safeguards family photos, legal and "
+           "medical records, journalistic archives, dissertations, published papers, "
+           "and long-term climate and medical research. Every stored file is encrypted "
+           "and private, not publicly readable unless its creator chooses to share it. "
+           "Staking creates coins to secure the network; storing data burns them - a "
            "working commodity with real utility.\n"
            "\n"
-           "Thank you for helping change the world. History cannot be rewritten when its\n"
-           "records cannot be erased. Facts kill fascism - and keeping facts alive,\n"
+           "Thank you for helping change the world. History cannot be rewritten when its "
+           "records cannot be erased. Facts kill fascism - and keeping facts alive, "
            "permanently and verifiably, is exactly what this network was built to do.\n"
            "\n"
            "Store your first file at https://clevver.org\n"
