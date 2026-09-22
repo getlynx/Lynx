@@ -284,10 +284,9 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.timestamp["digitalcoin"]          = 1367867384;
     spec.checkpointHeight["digitalcoin"]   = 0;
     spec.checkpointHash["digitalcoin"]     = "0x5e039e1ca1dbf128973bf6cff98169e40a1b194c3b91463ab74956f413b2f9c8";
-    // Provisional; count intentionally 0. Refresh from getchaintxstats.
-    spec.txDataTime["digitalcoin"]          = 1790094352;
-    spec.txDataCount["digitalcoin"]         = 0;
-    spec.txDataRate["digitalcoin"]          = 0.006590;
+    spec.txDataTime["digitalcoin"]          = 1790098144;
+    spec.txDataCount["digitalcoin"]         = 10199218;
+    spec.txDataRate["digitalcoin"]          = 0.003930;
 
     spec.coinSymbol["enceladus"]            = "ENCE";
     spec.psztimestamp["enceladus"]          = "Every interaction feeds machine learning.";
