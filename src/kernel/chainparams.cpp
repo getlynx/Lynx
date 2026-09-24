@@ -61,6 +61,8 @@ struct ChainSpec {
     std::map<std::string, int>  lasttimestamp;
     // int uuidlastblock;
     std::map<std::string, int>  uuidlastblock;
+    // double blockreward; proof-of-stake block reward in whole coins
+    std::map<std::string, double>  blockreward;
     // std::string initauthuser;
     std::map<std::string, std::string>  initauthuser;
     // std::string psztimestamp;
@@ -200,6 +202,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.txDataTime["alioth"]               = 1790094448;
     spec.txDataCount["alioth"]              = 44316;
     spec.txDataRate["alioth"]               = 0.006629;
+    spec.blockreward["alioth"]              = 1;
 
     spec.coinSymbol["borrelly"]             = "BORR";
     spec.psztimestamp["borrelly"]           = "Memory becomes unreliable without external verification.";
@@ -222,6 +225,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.txDataTime["borrelly"]             = 1790094320;
     spec.txDataCount["borrelly"]            = 44343;
     spec.txDataRate["borrelly"]             = 0.006599;
+    spec.blockreward["borrelly"]            = 1;
 
     spec.coinSymbol["cassiopeia"]           = "CASS";
     spec.psztimestamp["cassiopeia"]         = "The platform shapes thought through design.";
@@ -244,6 +248,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.txDataTime["cassiopeia"]           = 1790094528;
     spec.txDataCount["cassiopeia"]          = 36091;
     spec.txDataRate["cassiopeia"]           = 0.006604;
+    spec.blockreward["cassiopeia"]          = 1;
 
     spec.coinSymbol["delphinus"]            = "DELP";
     spec.psztimestamp["delphinus"]          = "Truth becomes what the fact-checkers approve.";
@@ -266,6 +271,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.txDataTime["delphinus"]            = 1790093168;
     spec.txDataCount["delphinus"]           = 43352;
     spec.txDataRate["delphinus"]            = 0.006642;
+    spec.blockreward["delphinus"]           = 1;
 
     spec.coinSymbol["digitalcoin"]         = "DGC";
     spec.displayName["digitalcoin"]        = "Digitalcoin";
@@ -282,11 +288,14 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.pchMessageStart["digitalcoin"][2] = 0xb6;
     spec.pchMessageStart["digitalcoin"][3] = 0xdb;
     spec.timestamp["digitalcoin"]          = 1367867384;
-    spec.checkpointHeight["digitalcoin"]   = 0;
-    spec.checkpointHash["digitalcoin"]     = "0x5e039e1ca1dbf128973bf6cff98169e40a1b194c3b91463ab74956f413b2f9c8";
     spec.txDataTime["digitalcoin"]          = 1790098144;
     spec.txDataCount["digitalcoin"]         = 10199218;
     spec.txDataRate["digitalcoin"]          = 0.003930;
+    spec.uuidlastblock["digitalcoin"]        = 8645471;
+    spec.initauthuser["digitalcoin"]         = "24a4fcb529d6ffc507ed1ebcaa81e299f8ede0b6";
+    spec.checkpointHeight["digitalcoin"]   = 0;
+    spec.checkpointHash["digitalcoin"]     = "0x5e039e1ca1dbf128973bf6cff98169e40a1b194c3b91463ab74956f413b2f9c8";
+    spec.blockreward["digitalcoin"]        = 1.75;
 
     spec.coinSymbol["enceladus"]            = "ENCE";
     spec.psztimestamp["enceladus"]          = "Every interaction feeds machine learning.";
@@ -309,6 +318,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.txDataTime["enceladus"]            = 1790094496;
     spec.txDataCount["enceladus"]           = 43241;
     spec.txDataRate["enceladus"]            = 0.006610;
+    spec.blockreward["enceladus"]           = 1;
 
     spec.coinSymbol["fenrir"]               = "FENR";
     spec.psztimestamp["fenrir"]             = "Conformity spreads through social proof.";
@@ -331,6 +341,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.txDataTime["fenrir"]               = 1790094352;
     spec.txDataCount["fenrir"]              = 43087;
     spec.txDataRate["fenrir"]               = 0.006609;
+    spec.blockreward["fenrir"]              = 1;
 
     spec.coinSymbol["galatea"]              = "GALA";
     spec.psztimestamp["galatea"]            = "Power manifests through permitted pathways.";
@@ -353,6 +364,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.txDataTime["galatea"]              = 1790094400;
     spec.txDataCount["galatea"]             = 42503;
     spec.txDataRate["galatea"]              = 0.006593;
+    spec.blockreward["galatea"]             = 1;
 
     spec.coinSymbol["halley"]               = "HALL";
     spec.psztimestamp["halley"]             = "Dissent becomes indistinguishable from noise.";
@@ -375,6 +387,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.txDataTime["halley"]               = 1790094544;
     spec.txDataCount["halley"]              = 36114;
     spec.txDataRate["halley"]               = 0.006607;
+    spec.blockreward["halley"]              = 1;
 
     spec.coinSymbol["indus"]                = "INDU";
     spec.psztimestamp["indus"]              = "The crawler maps all possible connections.";
@@ -397,6 +410,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.txDataTime["indus"]                = 1790093440;
     spec.txDataCount["indus"]               = 36166;
     spec.txDataRate["indus"]                = 0.006572;
+    spec.blockreward["indus"]               = 1;
 
     spec.coinSymbol["infiniloop"]           = "IL8P";
     spec.displayName["infiniloop"]          = "InfiniLooP";
@@ -420,6 +434,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.txDataTime["infiniloop"]           = 1790094352;
     spec.txDataCount["infiniloop"]          = 5772667;
     spec.txDataRate["infiniloop"]           = 0.006590;
+    spec.blockreward["infiniloop"]          = 1;
 
     spec.coinSymbol["lynx"]                 = "LYNX";
     spec.psztimestamp["lynx"]               = "ICanHazKitteh at epoch 1387779684. Meow. Now pet me.";
@@ -442,6 +457,7 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.txDataTime["lynx"]                 = 1790094224;
     spec.txDataCount["lynx"]                = 4779870;
     spec.txDataRate["lynx"]                 = 0.006755;
+    spec.blockreward["lynx"]                = 1;
 }
 
 // Ticker for the chain this binary was built for -- "ALIO" when CURRENT_CHAIN is
@@ -651,6 +667,7 @@ public:
 
         consensus.initAuthUser = uint160S(spec.initauthuser[CURRENT_CHAIN]);
         consensus.nUUIDBlockStart = spec.uuidlastblock[CURRENT_CHAIN] ;
+        consensus.nBlockReward = spec.blockreward[CURRENT_CHAIN] * COIN;
 
         consensus.fPowNoRetargeting = false;
 
@@ -671,7 +688,8 @@ public:
             // assimilation/transition block (to be determined at cutover). Placeholder
             // sits above the live tip (~9-10M) so the whole legacy chain syncs as PoW;
             // set to the true cutover height when it is chosen.
-            consensus.lastPoWBlock = 100000000;
+            consensus.lastPoWBlock = 8645471;
+            consensus.nUUIDBlockStart = 8645471;
         } else {
             consensus.lastPoWBlock = 1500;
             consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");

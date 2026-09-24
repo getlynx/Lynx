@@ -24,6 +24,14 @@
 #include <hash.h>
 #include <kernel/chainparams.h>
 #include <kernel/mempool_entry.h>
+#include <memusage.h>
+#include <index/txindex.h>
+#include <index/coinstatsindex.h>
+#include <index/blockfilterindex.h>
+#include <cstdio>
+#if defined(__GLIBC__)
+#include <malloc.h>
+#endif
 #include <logging.h>
 #include <logging/timer.h>
 #include <node/blockstorage.h>
@@ -1703,7 +1711,7 @@ CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& params, const uint
 
 CAmount GetProofOfStakeReward(int nHeight, const Consensus::Params& params)
 {
-    return 1 * COIN;
+    return params.nBlockReward;
 }
 
 CoinsViews::CoinsViews(DBParams db_params, CoinsViewOptions options)
@@ -1923,6 +1931,7 @@ bool CScriptCheck::operator()() {
 
 static CuckooCache::cache<uint256, SignatureCacheHasher> g_scriptExecutionCache;
 static CSHA256 g_scriptExecutionCacheHasher;
+static size_t g_scriptExecutionCacheBytes = 0;
 
 bool InitScriptExecutionCache(size_t max_size_bytes)
 {
@@ -1938,6 +1947,7 @@ bool InitScriptExecutionCache(size_t max_size_bytes)
     if (!setup_results) return false;
 
     const auto [num_elems, approx_size_bytes] = *setup_results;
+    g_scriptExecutionCacheBytes = approx_size_bytes;
     LogPrint(BCLog::STARTUP, "Using %zu MiB out of %zu MiB requested for script execution cache, able to store %zu elements\n",
               approx_size_bytes >> 20, max_size_bytes >> 20, num_elems);
     return true;
@@ -3092,6 +3102,86 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
         return;
     }
 
+    // [RAM] footprint trace, same two structures throughout: block records (every
+    // CBlockIndex in m_block_index) and the unspent coins held in memory. During
+    // the sync it fires every 1M blocks, and every 100K above height 8,000,000.
+    // Once the sync is done it fires on every new block that arrives (the first
+    // such block is the sync-done reading), including blocks this node stakes.
+    {
+        const bool ibd = this->IsInitialBlockDownload();
+        bool do_log = false;
+        if (ibd) {
+            if (pindexNew->nHeight % 1000000 == 0) do_log = true;
+            else if (pindexNew->nHeight > 8000000 && pindexNew->nHeight % 100000 == 0) do_log = true;
+        } else {
+            do_log = true;
+        }
+        if (do_log) {
+            const size_t n_index = m_chainman.m_blockman.m_block_index.size();
+            const double block_records_mib = (double)n_index * (double)sizeof(CBlockIndex) / (1024.0 * 1024.0);
+            const double coins_mib = (double)coins_tip.DynamicMemoryUsage() / (1024.0 * 1024.0);
+            LogPrintf("[RAM] height=%d | block records: %d x %u B = %.1f MiB | unspent coins in memory: %.1f MiB\n",
+                pindexNew->nHeight, (int)n_index, (unsigned)sizeof(CBlockIndex), block_records_mib, coins_mib);
+            // Accounting for the steady-state footprint beyond block records + coins.
+            // The map measurement includes each CBlockIndex (already counted as block
+            // records above), so subtract the struct bytes to leave only the extra
+            // lookup bookkeeping the map keeps around the records.
+            // Same formula memusage uses for an unordered_map (node MallocUsage x size
+            // + bucket array), inlined because BlockMap's custom allocator makes it a
+            // 5-parameter type that memusage::DynamicUsage doesn't match.
+            const size_t bi_node_size = sizeof(std::pair<const uint256, CBlockIndex>) + sizeof(void*);
+            const size_t map_full = memusage::MallocUsage(bi_node_size) * n_index
+                + memusage::MallocUsage(sizeof(void*) * m_chainman.m_blockman.m_block_index.bucket_count());
+            const double block_lookup_mib = (double)(map_full - n_index * sizeof(CBlockIndex)) / (1024.0 * 1024.0);
+            const double coinsdb_mib = (double)this->CoinsDB().DynamicMemoryUsage() / (1024.0 * 1024.0);
+            const double blocktreedb_mib = (double)m_chainman.m_blockman.m_block_tree_db->DynamicMemoryUsage() / (1024.0 * 1024.0);
+            const double mempool_mib = m_mempool ? (double)m_mempool->DynamicMemoryUsage() / (1024.0 * 1024.0) : 0.0;
+            LogPrintf("[RAM] height=%d | block record lookup bookkeeping: %.1f MiB | coins leveldb: %.1f MiB | block leveldb: %.1f MiB | mempool: %.1f MiB\n",
+                pindexNew->nHeight, block_lookup_mib, coinsdb_mib, blocktreedb_mib, mempool_mib);
+            // The newly named categories. Six are reachable from here and measured;
+            // signature cache, addrman, net buffers, and wallet live in other link
+            // units with no handle from UpdateTip, so they print n/a.
+            extern std::vector<std::pair<uint160, int>> authList;
+            extern std::vector<std::pair<std::string, std::string>> blockuuidList;
+            extern std::vector<std::pair<std::string, std::string>> blocktenantList;
+            const double txindex_mib = g_txindex ? (double)g_txindex->DynamicMemoryUsage() / (1024.0 * 1024.0) : 0.0;
+            const double coinstats_mib = g_coin_stats_index ? (double)g_coin_stats_index->DynamicMemoryUsage() / (1024.0 * 1024.0) : 0.0;
+            const double scriptcache_mib = (double)g_scriptExecutionCacheBytes / (1024.0 * 1024.0);
+            const double storageauth_mib = (double)(memusage::DynamicUsage(authList)
+                + memusage::DynamicUsage(blockuuidList)
+                + memusage::DynamicUsage(blocktenantList)) / (1024.0 * 1024.0);
+            double malloc_frag_mib = 0.0;
+#if defined(__GLIBC__)
+            malloc_frag_mib = (double)mallinfo2().fordblks / (1024.0 * 1024.0);
+#endif
+            int thread_count = 0;
+            if (std::FILE* tf = std::fopen("/proc/self/status", "r")) {
+                char sline[256];
+                while (std::fgets(sline, sizeof(sline), tf)) { if (std::sscanf(sline, "Threads: %d", &thread_count) == 1) break; }
+                std::fclose(tf);
+            }
+            const double threadstacks_mib = (double)thread_count * 8.0; // 8 MiB reserved stack per thread
+            LogPrintf("[RAM] height=%d | txindex leveldb: %.1f MiB | signature cache: n/a | script exec cache: %.1f MiB | storage/auth index: %.1f MiB | addrman: n/a | net buffers: n/a | wallet: n/a | coinstatsindex: %.1f MiB | malloc fragmentation: %.1f MiB | thread stacks(reserved): %.1f MiB\n",
+                pindexNew->nHeight, txindex_mib, scriptcache_mib, storageauth_mib, coinstats_mib, malloc_frag_mib, threadstacks_mib);
+            // Fourth line: more named categories. active chain vector, block index
+            // aux sets, versionbits/warning caches, and block filter index are
+            // reachable and measured; rolling bloom filters, orphan tx pool, and
+            // checkqueue scratch live in net_processing/transient and print n/a.
+            const double activechain_mib = (double)((size_t)(m_chain.Height() + 1) * sizeof(CBlockIndex*)) / (1024.0 * 1024.0);
+            const size_t auxsets_bytes = memusage::DynamicUsage(setBlockIndexCandidates)
+                + m_chainman.m_blockman.m_blocks_unlinked.size() * (sizeof(std::pair<CBlockIndex* const, CBlockIndex*>) + 3 * sizeof(void*));
+            const double blockindexaux_mib = (double)auxsets_bytes / (1024.0 * 1024.0);
+            size_t warncache_bytes = 0;
+            for (const auto& wc : warningcache) warncache_bytes += memusage::DynamicUsage(wc);
+            const double warncache_mib = (double)warncache_bytes / (1024.0 * 1024.0);
+            size_t filterindex_bytes = 0;
+            ForEachBlockFilterIndex([&](BlockFilterIndex& idx){ filterindex_bytes += idx.DynamicMemoryUsage(); });
+            const double filterindex_mib = (double)filterindex_bytes / (1024.0 * 1024.0);
+            LogPrintf("[RAM] height=%d | active chain vector: %.1f MiB | block index aux sets: %.1f MiB | rolling bloom filters: n/a | orphan tx pool: n/a | versionbits/warning caches: %.1f MiB | block filter index: %.1f MiB | checkqueue scratch: n/a\n",
+                pindexNew->nHeight, activechain_mib, blockindexaux_mib, warncache_mib, filterindex_mib);
+        }
+    }
+
     // New best block
     if (m_mempool) {
         m_mempool->AddTransactionsUpdated(1);
@@ -3603,8 +3693,19 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
              Ticks<MillisecondsDouble>(time_flush) / num_blocks_total);
     // Write the chain state to disk, if necessary.
     // At the tip (post-IBD), flush after every connect so the on-disk chainstate stays
-    // current and any shutdown finishes fast; during IBD keep the batched IF_NEEDED.
-    if (!FlushStateToDisk(state, IsInitialBlockDownload() ? FlushStateMode::IF_NEEDED : FlushStateMode::ALWAYS)) {
+    // current and any shutdown finishes fast. During IBD keep the batched IF_NEEDED,
+    // EXCEPT force a full flush every 100K blocks: otherwise dirty coins accumulate for
+    // the whole sync and the in-memory coins peak runs up to ~2G. Flushing every 100K
+    // caps that peak at one 100K window's worth, trading a slower sync for lower RAM.
+    FlushStateMode flush_mode;
+    if (!IsInitialBlockDownload()) {
+        flush_mode = FlushStateMode::ALWAYS;
+    } else if (pindexNew->nHeight % 100000 == 0) {
+        flush_mode = FlushStateMode::ALWAYS;
+    } else {
+        flush_mode = FlushStateMode::IF_NEEDED;
+    }
+    if (!FlushStateToDisk(state, flush_mode)) {
         return false;
     }
     const auto time_5{SteadyClock::now()};
@@ -4485,7 +4586,7 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
     // Check proof of work
     const Consensus::Params& consensusParams = chainman.GetConsensus();
     bool checkTarget = nHeight >= consensusParams.HardFork3Height + 5; // few blocks extra to clear the window
-    if (std::string(CURRENT_CHAIN) != "digitalcoin" && !consensusParams.IsLegacyInfiniloopBlock(nHeight) && checkTarget && (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams)))
+    if ((std::string(CURRENT_CHAIN) != "digitalcoin" || nHeight > consensusParams.lastPoWBlock) && !consensusParams.IsLegacyInfiniloopBlock(nHeight) && checkTarget && (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams)))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", "incorrect proof of work");
 
     // Check against checkpoints
@@ -4542,8 +4643,8 @@ static bool ContextualCheckBlock(const CBlock& block, BlockValidationState& stat
 
     // Enforce rule that the coinbase starts with serialized block height.
     // legacy digitalcoin predates BIP34 and does not carry the height in its coinbase,
-    // so blanket-skip this on digitalcoin during legacy sync; re-introduce at cutover.
-    if (std::string(CURRENT_CHAIN) != "digitalcoin" && DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_HEIGHTINCB))
+    // so skip it for the legacy PoW range (at/below lastPoWBlock); enforce above the transition.
+    if ((std::string(CURRENT_CHAIN) != "digitalcoin" || nHeight > chainman.GetConsensus().lastPoWBlock) && DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_HEIGHTINCB))
     {
         CScript expect = CScript() << nHeight;
         if (block.vtx[0]->vin[0].scriptSig.size() < expect.size() ||

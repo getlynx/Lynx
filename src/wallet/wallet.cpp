@@ -3302,6 +3302,14 @@ std::shared_ptr<CWallet> CWallet::Create(WalletContext& context, const std::stri
         walletInstance->m_default_change_type = parsed.value();
     }
 
+    if (std::string(CURRENT_CHAIN) == "digitalcoin") {
+        // legacy digitalcoin has no SegWit/bech32; force legacy base58 addresses and
+        // non-witness change so getnewaddress and every send are accepted by the
+        // segwit-less network. Code gate, not a conf entry.
+        walletInstance->m_default_address_type = OutputType::LEGACY;
+        walletInstance->m_default_change_type  = OutputType::LEGACY;
+    }
+
     if (args.IsArgSet("-mintxfee")) {
         std::optional<CAmount> min_tx_fee = ParseMoney(args.GetArg("-mintxfee", ""));
         if (!min_tx_fee) {

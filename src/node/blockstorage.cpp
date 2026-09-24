@@ -24,8 +24,14 @@
 #include <validation.h>
 
 #include <map>
+#include <mutex>
+#include <stdexcept>
 #include <unistd.h>
 #include <unordered_map>
+#if !defined(_WIN32)
+#include <fcntl.h>
+#include <sys/mman.h>
+#endif
 
 #ifdef WIN32
 #include <io.h>        // _get_osfhandle
@@ -129,6 +135,41 @@ const CBlockIndex* BlockManager::LookupBlockIndex(const uint256& hash) const
     AssertLockHeld(cs_main);
     BlockMap::const_iterator it = m_block_index.find(hash);
     return it == m_block_index.end() ? nullptr : &it->second;
+}
+
+void* BlockIndexArena::Alloc(std::size_t bytes, std::size_t align)
+{
+    static std::mutex mtx;
+    std::lock_guard<std::mutex> lock(mtx);
+#if defined(_WIN32)
+    // No mmap on Windows; fall back to the heap. Entries are never freed, so the
+    // no-op deallocate leaks nothing (they live for the life of the process).
+    return ::operator new(bytes, std::align_val_t{align});
+#else
+    static char* base = nullptr;
+    static std::size_t offset = 0;
+    // Reserved address space for the arena. Sparse: only touched pages consume
+    // disk/RAM. 8 GiB holds well past the current chain length with headroom.
+    static const std::size_t reserved = std::size_t{8} * 1024 * 1024 * 1024;
+    if (base == nullptr) {
+        const fs::path path = gArgs.GetDataDirNet() / "blockindex.arena";
+        const int fd = open(fs::PathToString(path).c_str(), O_RDWR | O_CREAT | O_TRUNC, 0600);
+        if (fd < 0) throw std::runtime_error("blockindex arena: open failed");
+        if (ftruncate(fd, static_cast<off_t>(reserved)) != 0) {
+            close(fd);
+            throw std::runtime_error("blockindex arena: ftruncate failed");
+        }
+        void* m = mmap(nullptr, reserved, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        close(fd);
+        if (m == MAP_FAILED) throw std::runtime_error("blockindex arena: mmap failed");
+        base = static_cast<char*>(m);
+    }
+    const std::size_t aligned = (offset + (align - 1)) & ~(align - 1);
+    if (aligned + bytes > reserved) throw std::runtime_error("blockindex arena: reserve exhausted");
+    void* p = base + aligned;
+    offset = aligned + bytes;
+    return p;
+#endif
 }
 
 CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block, CBlockIndex*& best_header)
@@ -304,6 +345,10 @@ CBlockIndex* BlockManager::InsertBlockIndex(const uint256& hash)
 
 bool BlockManager::LoadBlockIndex()
 {
+    // Size the bucket array once, up front, so it is allocated a single time at
+    // its final size rather than reallocated on repeated rehashes (which would
+    // strand dead bucket arrays in the bump arena).
+    m_block_index.reserve(10000000);
     if (!m_block_tree_db->LoadBlockIndexGuts(GetConsensus(), [this](const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertBlockIndex(hash); })) {
         return false;
     }

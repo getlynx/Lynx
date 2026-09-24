@@ -139,6 +139,9 @@ public:
 
     void Interrupt();
 
+    //! Approximate in-memory (leveldb) usage of the index's database.
+    size_t DynamicMemoryUsage() const { return GetDB().DynamicMemoryUsage(); }
+
     /// Start initializes the sync state and registers the instance as a
     /// ValidationInterface so that it stays in sync with blockchain updates.
     [[nodiscard]] bool Start();

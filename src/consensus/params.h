@@ -179,6 +179,8 @@ struct Params {
     uint160 initAuthUser;
     uint32_t initAuthTime{0};
     uint32_t nUUIDBlockStart;
+    /** Proof-of-stake block reward, from spec.blockreward for the chain */
+    CAmount nBlockReward;
     /** Weight dampener */
     CAmount weightDampener{0};
     int weightDampenerHeight{0};
