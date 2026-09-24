@@ -13,7 +13,7 @@ Documentation: https://docs.getlynx.io/
 
 ### install.sh (Spark)
 
-The Spark installer. It automates the full lifecycle of one or more blockchain daemons on AMD and ARM-based systems — from initial setup to ongoing maintenance. Multiple chains can run in parallel on the same host; each chain gets its own daemon, systemd service, working directory, and RPC loopback address. Spark is deliberately tuned for low-resource hardware — it reacts to memory pressure during sync by restarting the daemon, uses `awk` instead of `jq` to keep dependencies minimal, and stays out of the way when idle.
+The Spark installer. It automates the full lifecycle of one or more blockchain daemons on AMD and ARM-based systems — from initial setup to ongoing maintenance. Multiple chains can run in parallel on the same host; each chain gets its own daemon, systemd service, working directory, and ports (P2P, RPC and onion ports are unique per chain, so every chain's RPC stays on `127.0.0.1`). Spark is deliberately tuned for low-resource hardware — it leaves the daemon undisturbed while it syncs, uses `awk` instead of `jq` to keep dependencies minimal, and stays out of the way when idle.
 
 The installer is versioned (`SPARK_INSTALLER_VERSION`) and the current version is displayed in the Spark console footer.
 
@@ -23,7 +23,7 @@ The installer is versioned (`SPARK_INSTALLER_VERSION`) and the current version i
 - Downloads the correct pre-built daemon binary from GitHub releases (matched by OS, version, and architecture)
 - Creates systemd services for the daemon and a wallet backup timer
 - Configures firewall rules and SSH security (skipped with [`--shared-host`](#the---shared-host-parameter))
-- Monitors blockchain sync status and restarts the daemon as needed (good for low RAM deployments)
+- Monitors blockchain sync status and starts the daemon if it is not running
 - Adds shell aliases and the Spark console with daemon statistics and staking yield metrics
 - Installs the `chain` / `c` selector for switching between multiple installed chains from a single shell — the menu shows each chain's wallet balance, current block height, and staking state at a glance
 - Adds an `s` toggle that flips staking on or off for the active chain
@@ -113,7 +113,7 @@ bash <(curl -sL install.getlynx.io) --chain=lynx --shared-host
 |------|---------|-------------|
 | Initial Setup | First run (no existing service) | Full installation of all components |
 | Update | `update` argument, or auto-detected when the service already exists | Updates system packages and downloads the latest binary |
-| Maintenance | Systemd timer (every 12 minutes) | Checks sync status, restarts daemon if needed |
+| Maintenance | Systemd timer (every 12 minutes until synced) | Checks sync status, starts the daemon if stopped, disables itself once synced |
 | Rebuild | `rebuild` argument (or the `reb` alias) | Updates services, timers, firewall rules, and aliases without touching blockchain data or wallet |
 
 ---
@@ -170,7 +170,7 @@ Both options together
 | **Runs on** | Any supported AMD or ARM system | Linux build machine (produces an image for Raspberry Pi) |
 | **When to use** | Deploying a Spark on an existing server or device | Creating SD card images for Raspberry Pi distribution |
 | **Chain default** | No default (matches all binaries if omitted) | Defaults to `lynx` |
-| **Ongoing** | Yes — re-runs every 12 minutes via systemd timer | One-time build process |
+| **Ongoing** | Yes — re-runs every 12 minutes via systemd timer until the chain has synced | One-time build process |
 
 ## The --chain Parameter
 
@@ -246,19 +246,19 @@ Every other console command — wallet, daemon, `chain`/`c`, `upd`, `reb`, logs 
 With `--shared-host`, Spark no longer manages the host's network rules, so:
 
 - **Open the chain's P2P port yourself** if the host has its own firewall or a cloud security group in front of it. Without inbound access the daemon still syncs over outbound connections, but it will not accept incoming peers.
-- **The RPC interface needs no action** — it binds to a per-chain loopback address (`127.0.0.x`) and is never exposed, regardless of firewall state.
+- **The RPC interface needs no action** — it binds to `127.0.0.1` on a per-chain port (`main.rpcport` in `{chain}.conf`) and is never exposed, regardless of firewall state.
 
 ## Spark vs Beacon
 
 Both Spark and Beacon run multiple daemons per host. The difference is not *how many* daemons they manage but *how* they manage them — and which hardware they're aimed at.
 
-- **Spark** is shell-alias driven. The `chain` / `c` selector switches the active chain in the current shell — and the menu itself doubles as a multi-chain dashboard, listing each installed chain's balance, block height, and staking state. Per-chain aliases (`lyr`, `gbi`, `lyl`, `s`, etc.) act on whichever chain is selected. It's deliberately lean: no TUI process sitting in memory, minimal dependencies, and sync-time daemon restarts that make it forgiving on low-RAM Raspberry Pis and small VPSs.
+- **Spark** is shell-alias driven. The `chain` / `c` selector switches the active chain in the current shell — and the menu itself doubles as a multi-chain dashboard, listing each installed chain's balance, block height, and staking state. Per-chain aliases (`lyr`, `gbi`, `lyl`, `s`, etc.) act on whichever chain is selected. It's deliberately lean: no TUI process sitting in memory, minimal dependencies, and a hands-off sync that makes it forgiving on low-RAM Raspberry Pis and small VPSs.
 - **Beacon** is a TUI. It's more fun and more convenient — live dashboards, at-a-glance status for every daemon, keyboard-driven navigation — but it carries more runtime overhead and assumes the host has the resources to spare.
 
 | | Spark | Beacon |
 |---|-------|--------|
 | **Interface** | Shell aliases + `chain` / `c` selector | TUI (terminal user interface) |
-| **Resource footprint** | Minimal — no persistent UI process, `awk`-only JSON parsing, sync-time restarts tuned for low RAM | Higher — TUI process running continuously |
+| **Resource footprint** | Minimal — no persistent UI process, `awk`-only JSON parsing, tuned for low RAM | Higher — TUI process running continuously |
 | **Ergonomics** | Functional; command-line driven | Richer and more convenient — live views and keyboard-driven navigation |
 | **Wallet encryption** | Not provided — use `<chain>-cli encryptwallet` / `walletpassphrase` directly if needed | Built-in wallet encryption workflows |
 | **ElectrumX** | Not included — install separately if you need it | Built-in ElectrumX installer |

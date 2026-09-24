@@ -204,4 +204,14 @@ const std::string& CurrentCoinSymbol();
  */
 const std::string& CurrentChainDisplayName();
 
+/**
+ * Ports for the chain this binary was built for, from the spec.nRPCPort,
+ * spec.nOnionPort and spec.nDefaultPort rows. Like CurrentCoinSymbol(), these are
+ * safe before SelectParams(): lynx-cli reaches CurrentChainRPCPort() through
+ * SelectBaseParams() without ever selecting chain params.
+ */
+uint16_t CurrentChainRPCPort();
+uint16_t CurrentChainOnionPort();
+uint16_t CurrentChainP2PPort();
+
 #endif // BITCOIN_KERNEL_CHAINPARAMS_H

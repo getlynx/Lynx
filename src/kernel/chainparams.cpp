@@ -42,6 +42,15 @@ struct ChainSpec {
     std::string name;
     // int nDefaultPort;
     std::map<std::string, int>  nDefaultPort;
+    // JSON-RPC and local Tor onion listener ports. Unique per chain so several
+    // chains can run side by side on 127.0.0.1. Convention is P2P port +1 and +2,
+    // but each is set explicitly so a chain can deviate (lynx, digitalcoin and
+    // infiniloop keep their historical RPC ports). HardcodedSpecs() refuses to
+    // start if any P2P, RPC or onion port is used twice across chains.
+    // int nRPCPort;
+    std::map<std::string, int>  nRPCPort;
+    // int nOnionPort;
+    std::map<std::string, int>  nOnionPort;
     // unsigned char pchMessageStart[4];
     std::map<std::string, unsigned char[4]> pchMessageStart;
     // int pubkeyPrefix;
@@ -131,6 +140,8 @@ ChainSpec LoadChainSpec(const std::string& specFile, const std::string& chainNam
         if (key == "nDefaultPort") {
             current.nDefaultPort[chainName] = std::stoi(val);
         }
+        else if (key == "nRPCPort") current.nRPCPort[chainName] = std::stoi(val);
+        else if (key == "nOnionPort") current.nOnionPort[chainName] = std::stoi(val);
         else if (key == "pchMessageStart") {
             std::replace(val.begin(), val.end(), ',', ' ');
             std::istringstream ss(val);
@@ -187,6 +198,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["alioth"]              = "0xfa9f9bd23d7ed9984c1fe756caeaa3af9e63887f4b1fe4807f3915af74c61a7b";
     spec.genesismerkleroot["alioth"]        = "0xa3757e41c96b21f473e891486c7e1afe35fea214dfc4e43540ef5a71884918cf";
     spec.nDefaultPort["alioth"]             = 55801;
+    spec.nRPCPort["alioth"]                 = 55802;
+    spec.nOnionPort["alioth"]               = 55803;
     spec.pubkeyPrefix["alioth"]             = 215;
     spec.scriptPrefix["alioth"]             = 239;
     spec.secretPrefix["alioth"]             = 214;
@@ -210,6 +223,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["borrelly"]            = "0xc936175d9ea6f49a595f7cd75ce065c5bb08ed5abc0e5d8b42b04735d916e4a7";
     spec.genesismerkleroot["borrelly"]      = "0x9b9d2ba1a92f6b99301fa4e580a0b9d59220d1b70ef504740d2aa97f6a22e509";
     spec.nDefaultPort["borrelly"]           = 58400;
+    spec.nRPCPort["borrelly"]               = 58401;
+    spec.nOnionPort["borrelly"]             = 58402;
     spec.pubkeyPrefix["borrelly"]           = 189;
     spec.scriptPrefix["borrelly"]           = 87;
     spec.secretPrefix["borrelly"]           = 117;
@@ -233,6 +248,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["cassiopeia"]          = "0xd288cc1734cefc4a36a13c5de8d663356dcc6b1ca7a6d1f0fd3b6a6a34b0d0c3";
     spec.genesismerkleroot["cassiopeia"]    = "0x6d185b08de212b5a2b0b3bab3efc4178751f3507bb270fe0aa7a7f2990c3cb50";
     spec.nDefaultPort["cassiopeia"]         = 53053;
+    spec.nRPCPort["cassiopeia"]             = 53054;
+    spec.nOnionPort["cassiopeia"]           = 53055;
     spec.pubkeyPrefix["cassiopeia"]         = 252;
     spec.scriptPrefix["cassiopeia"]         = 193;
     spec.secretPrefix["cassiopeia"]         = 136;
@@ -256,6 +273,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["delphinus"]           = "0x2d749f17c25d34c4cd443dc44a0e895e99bce4d59a6d38404c2ab4bc3a244237";
     spec.genesismerkleroot["delphinus"]     = "0x6e0a0884c287f779601517c18224109711f5a5f753e73daa1aa9117a0ec97721";
     spec.nDefaultPort["delphinus"]          = 57690;
+    spec.nRPCPort["delphinus"]              = 57691;
+    spec.nOnionPort["delphinus"]            = 57692;
     spec.pubkeyPrefix["delphinus"]          = 163;
     spec.scriptPrefix["delphinus"]          = 137;
     spec.secretPrefix["delphinus"]          = 149;
@@ -280,6 +299,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["digitalcoin"]        = "0x5e039e1ca1dbf128973bf6cff98169e40a1b194c3b91463ab74956f413b2f9c8";
     spec.genesismerkleroot["digitalcoin"]  = "0xecb2c595fff9f2364152c32027737007c5a4c60ec960cf93754b0211bc2a1501";
     spec.nDefaultPort["digitalcoin"]       = 7999;
+    spec.nRPCPort["digitalcoin"]           = 7998;
+    spec.nOnionPort["digitalcoin"]         = 7997;
     spec.pubkeyPrefix["digitalcoin"]       = 30;
     spec.scriptPrefix["digitalcoin"]       = 5;
     spec.secretPrefix["digitalcoin"]       = 128;
@@ -303,6 +324,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["enceladus"]           = "0x68274c0a8bcb86634a341a8a98294c4883e70953a07f7db6c9982eb1b1a66efe";
     spec.genesismerkleroot["enceladus"]     = "0x76aea56ac1430737e0593c4f7f6fa733a8e4d620f0beee0511a2346af33adbdf";
     spec.nDefaultPort["enceladus"]          = 58610;
+    spec.nRPCPort["enceladus"]              = 58611;
+    spec.nOnionPort["enceladus"]            = 58612;
     spec.pubkeyPrefix["enceladus"]          = 85;
     spec.scriptPrefix["enceladus"]          = 118;
     spec.secretPrefix["enceladus"]          = 141;
@@ -326,6 +349,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["fenrir"]              = "0x43204086224f60f8ab041f5fc6b3c6b72b01323fb9408fc7c49412d916188c7d";
     spec.genesismerkleroot["fenrir"]        = "0xb9f9c5cd75b0d1f261b0d3683dfc8ed79a696d5c7ecfa814d7fb2cdc28071e12";
     spec.nDefaultPort["fenrir"]             = 54825;
+    spec.nRPCPort["fenrir"]                 = 54826;
+    spec.nOnionPort["fenrir"]               = 54827;
     spec.pubkeyPrefix["fenrir"]             = 5;
     spec.scriptPrefix["fenrir"]             = 239;
     spec.secretPrefix["fenrir"]             = 208;
@@ -349,6 +374,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["galatea"]             = "0x0ea1f114252089752aa0016f27d7e8faee61a8e7586700b2a87c7b368eb7468d";
     spec.genesismerkleroot["galatea"]       = "0x5eabdc8ff70c6507462e4f089ded44892fd5351ab3035f981953666be8b80f86";
     spec.nDefaultPort["galatea"]            = 55785;
+    spec.nRPCPort["galatea"]                = 55786;
+    spec.nOnionPort["galatea"]              = 55787;
     spec.pubkeyPrefix["galatea"]            = 74;
     spec.scriptPrefix["galatea"]            = 51;
     spec.secretPrefix["galatea"]            = 151;
@@ -372,6 +399,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["halley"]              = "0x77fe25810bdd8930db8e69fd85b7912a984a6a362ad8b2e528f3bd765c02a778";
     spec.genesismerkleroot["halley"]        = "0x3fa8eb9960cfb7a94fcd70309ecf1d595028418958c1a9499e5e243d0f57df04";
     spec.nDefaultPort["halley"]             = 53836;
+    spec.nRPCPort["halley"]                 = 53837;
+    spec.nOnionPort["halley"]               = 53838;
     spec.pubkeyPrefix["halley"]             = 54;
     spec.scriptPrefix["halley"]             = 63;
     spec.secretPrefix["halley"]             = 120;
@@ -395,6 +424,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["indus"]               = "0x18d80573782f9dfc69e2230a876f86e587f081ef3eb1ab81ca66a20d6625f00a";
     spec.genesismerkleroot["indus"]         = "0x97f255138b3a7d9f9ac3b770d4d5b92a24e7c49a7624b18b1c866d0d15fb35c0";
     spec.nDefaultPort["indus"]              = 54700;
+    spec.nRPCPort["indus"]                  = 54701;
+    spec.nOnionPort["indus"]                = 54702;
     spec.pubkeyPrefix["indus"]              = 12;
     spec.scriptPrefix["indus"]              = 11;
     spec.secretPrefix["indus"]              = 126;
@@ -419,6 +450,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["infiniloop"]          = "0x000001ed1ed7503c6ef472314d8138b7440ebd0c5c8b539481705032bbed295a";
     spec.genesismerkleroot["infiniloop"]    = "0xab44c95608c9971475915ed3d31326569dee3b30b610d1bd1e423aab32015c74";
     spec.nDefaultPort["infiniloop"]         = 9449;
+    spec.nRPCPort["infiniloop"]             = 9459;
+    spec.nOnionPort["infiniloop"]           = 9460;
     spec.pubkeyPrefix["infiniloop"]         = 33;
     spec.scriptPrefix["infiniloop"]         = 85;
     spec.secretPrefix["infiniloop"]         = 153;
@@ -442,6 +475,8 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
     spec.genesishash["lynx"]                = "0x984b30fc9bb5e5ff424ad7f4ec1930538a7b14a2d93e58ad7976c23154ea4a76";
     spec.genesismerkleroot["lynx"]          = "0xc2adb964220f170f6c4fe9002f0db19a6f9c9608f6f765ba0629ac3897028de5";
     spec.nDefaultPort["lynx"]               = 22566;
+    spec.nRPCPort["lynx"]                   = 8332;
+    spec.nOnionPort["lynx"]                 = 8334;
     spec.pubkeyPrefix["lynx"]               = 45;
     spec.scriptPrefix["lynx"]               = 22;
     spec.secretPrefix["lynx"]               = 173;
@@ -475,14 +510,58 @@ static void LoadHardcodedChainSpecs(ChainSpec& spec)
 // A function-local static has no such ordering problem: it is constructed on first
 // use, whenever that happens to be. The global `spec` is left exactly as it was for
 // the chain params constructors, which run long after startup.
+// Every chain must have its own P2P, RPC and onion ports, or two chains installed
+// on one machine fight over the same socket and the second one fails to start.
+// Checked across all chains, not just CURRENT_CHAIN, so a clash introduced when
+// adding a chain fails the very first run of any chain's binary.
+static void CheckChainSpecPorts(const ChainSpec& s)
+{
+    std::map<int, std::string> used;
+    auto claim = [&](int port, const std::string& owner) {
+        if (port <= 0 || port > 65535) {
+            throw std::runtime_error("chainparams: " + owner + " port " + std::to_string(port) + " is missing or out of range");
+        }
+        auto [it, inserted] = used.emplace(port, owner);
+        if (!inserted) {
+            throw std::runtime_error("chainparams: port " + std::to_string(port) + " is used by both " + it->second + " and " + owner);
+        }
+    };
+    for (const auto& [chain, p2p] : s.nDefaultPort) {
+        auto rpc = s.nRPCPort.find(chain);
+        auto onion = s.nOnionPort.find(chain);
+        claim(p2p, chain + " P2P");
+        claim(rpc != s.nRPCPort.end() ? rpc->second : 0, chain + " RPC");
+        claim(onion != s.nOnionPort.end() ? onion->second : 0, chain + " onion");
+    }
+}
+
 static const ChainSpec& HardcodedSpecs()
 {
     static const ChainSpec specs = [] {
         ChainSpec s;
         LoadHardcodedChainSpecs(s);
+        CheckChainSpecPorts(s);
         return s;
     }();
     return specs;
+}
+
+uint16_t CurrentChainRPCPort()
+{
+    static const uint16_t port = HardcodedSpecs().nRPCPort.at(CURRENT_CHAIN);
+    return port;
+}
+
+uint16_t CurrentChainOnionPort()
+{
+    static const uint16_t port = HardcodedSpecs().nOnionPort.at(CURRENT_CHAIN);
+    return port;
+}
+
+uint16_t CurrentChainP2PPort()
+{
+    static const uint16_t port = HardcodedSpecs().nDefaultPort.at(CURRENT_CHAIN);
+    return port;
 }
 
 const std::string& CurrentCoinSymbol()

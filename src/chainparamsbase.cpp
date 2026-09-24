@@ -5,6 +5,7 @@
 
 #include <chainparamsbase.h>
 
+#include <kernel/chainparams.h>
 #include <tinyformat.h>
 #include <util/system.h>
 #include <util/chaintype.h>
@@ -35,12 +36,14 @@ const CBaseChainParams& BaseParams()
 /**
  * Port numbers for incoming Tor connections (8334, 19334, 38334, 18445) have
  * been chosen arbitrarily to keep ranges of used ports tight.
+ * Mainnet takes its RPC and onion ports from the chain's spec rows instead, so
+ * each chain listens on its own ports and several can share one machine.
  */
 std::unique_ptr<CBaseChainParams> CreateBaseChainParams(const ChainType chain)
 {
     switch (chain) {
     case ChainType::MAIN:
-        return std::make_unique<CBaseChainParams>("", 8332, 8334);
+        return std::make_unique<CBaseChainParams>("", CurrentChainRPCPort(), CurrentChainOnionPort());
     case ChainType::TESTNET:
         return std::make_unique<CBaseChainParams>("testnet3", 18332, 18334);
     case ChainType::SIGNET:

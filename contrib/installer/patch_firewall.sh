@@ -17,7 +17,6 @@
 #
 #   CLI_PATH     - full path to the CLI binary (e.g. /usr/local/bin/fenrir-cli)
 #   DATADIR      - daemon data directory (e.g. /var/lib/fenrir)
-#   RPCCONNECT   - RPC loopback IP (e.g. 127.0.0.108)
 #   CHAIN_NAME   - display name for logging (e.g. Fenrir)
 #   CHAIN_LOWER  - lowercase chain name (e.g. fenrir)
 #   TIMER_UNIT   - fast-poll timer unit name (for self-disabling)
@@ -25,7 +24,7 @@
 set -euo pipefail
 
 # Validate required environment variables
-for var in CLI_PATH DATADIR RPCCONNECT CHAIN_NAME CHAIN_LOWER TIMER_UNIT; do
+for var in CLI_PATH DATADIR CHAIN_NAME CHAIN_LOWER TIMER_UNIT; do
     if [ -z "${!var:-}" ]; then
         logger -t patch_firewall "ERROR: $var not set. Exiting."
         exit 1
@@ -39,7 +38,7 @@ ssh_port="${ssh_port:-22}"
 # Dynamically detect the P2P port from the daemon
 p2p_port=""
 if [ -f "$CLI_PATH" ]; then
-    p2p_port=$("$CLI_PATH" -datadir="$DATADIR" -rpcconnect="$RPCCONNECT" getnetworkinfo 2>/dev/null | sed -n '/"localaddresses"/,/]/p' | grep '"port"' | head -1 | sed 's/[^0-9]//g') || true
+    p2p_port=$("$CLI_PATH" -datadir="$DATADIR" getnetworkinfo 2>/dev/null | sed -n '/"localaddresses"/,/]/p' | grep '"port"' | head -1 | sed 's/[^0-9]//g') || true
 fi
 
 # If the daemon isn't ready yet, exit and let the timer retry

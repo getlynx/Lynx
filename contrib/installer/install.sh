@@ -94,7 +94,8 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 #   This script performs the following operations in sequence:
 #
 #   1. SYSTEM SETUP:
-#      - Creates systemd timer (install.timer) to run every 12 minutes
+#      - Creates systemd timer ({chain}-install.timer) to run every 12 minutes
+#        until the chain has synced, then disables itself
 #      - Sets up 4GB swap file if current swap is less than 3GB
 #      - Installs respective daemon ARM/AMD binaries if not present
 #      - Creates systemd service ({chain}.service) for the daemon
@@ -232,8 +233,8 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 ################################################################################
 #
 # NETWORK PORTS:
-#   - Daemon P2P port: 22566 (configurable in {chain}.conf)
-#   - RPC port: 8332 (configurable in {chain}.conf)
+#   - Daemon P2P port: per chain, listed as main.port in {chain}.conf
+#   - RPC port: per chain, set by main.rpcport in {chain}.conf (localhost only)
 #   - SSH port: configurable via usp command (default varies by system)
 #
 # FILES CREATED:
@@ -363,36 +364,7 @@ packageInstallAndUpdate() {
 # Set the working directory variable for use throughout the script
 WorkingDirectory=/var/lib/${chain_lower}
 
-# Derive a unique loopback IP for this chain's RPC (range 127.0.0.2-254, reserving .1 for system)
-rpc_octet=$(printf '%s' "$chain_lower" | cksum | awk '{print ($1 % 253) + 2}')
-
-# Collision guard: scan existing chain conf files for rpcbind= and bump if taken
-# by a different chain. Retry up to 253 times (full range).
-_collision_tries=0
-while [ "$_collision_tries" -lt 253 ]; do
-    _taken_by=""
-    for _conf_file in /var/lib/*/[a-z]*.conf; do
-        [ -f "$_conf_file" ] || continue
-        if grep -Eq "^(main\.|test\.)?rpcbind=127\.0\.0\.${rpc_octet}$" "$_conf_file" 2>/dev/null; then
-            # Extract chain name from path: /var/lib/<chain>/<chain>.conf
-            _conf_chain=$(basename "$(dirname "$_conf_file")")
-            if [ "$_conf_chain" != "$chain_lower" ]; then
-                _taken_by="$_conf_chain"
-                break
-            fi
-        fi
-    done
-    if [ -z "$_taken_by" ]; then
-        break
-    fi
-    log "RPC octet $rpc_octet already used by $_taken_by — incrementing."
-    rpc_octet=$(( (rpc_octet % 253) + 2 ))
-    _collision_tries=$(( _collision_tries + 1 ))
-done
-unset _collision_tries _taken_by _conf_file _conf_chain
-
-rpc_host="127.0.0.${rpc_octet}"
-cli_flags="-datadir=$WorkingDirectory -rpcconnect=$rpc_host"
+cli_flags="-datadir=$WorkingDirectory"
 
 echo "Please wait while the script runs..."
 
@@ -1195,19 +1167,6 @@ _show_menu() {
                 fi
             fi
 
-            conf="/var/lib/${cname}/${cname}.conf"
-            [ -r "$conf" ] || exit 0
-            # Bash-side parse of one short file, rather than forking awk per
-            # chain just to pull a single value out of it.
-            rpc_host=""
-            while IFS= read -r line || [ -n "$line" ]; do
-                case "$line" in
-                    rpcbind=*|main.rpcbind=*|test.rpcbind=*)
-                        rpc_host="${line#*=}"; break ;;
-                esac
-            done < "$conf"
-            [ -n "$rpc_host" ] || exit 0
-
             # The win estimate is only ever displayed for a staking wallet, so
             # asking a non-staking chain for it is a wasted round trip — and on
             # a host where most chains sit idle that's most of the calls. But
@@ -1248,13 +1207,13 @@ _show_menu() {
             # were. The interval is a property of stake weight against
             # difficulty, so it answers what this column is for — is the
             # wallet funded enough to win, and how often.
-            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getbalances 2>/dev/null > "$tmpdir/${cname}.bals" &
-            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" setstaking  2>/dev/null > "$tmpdir/${cname}.stk" &
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" getbalances 2>/dev/null > "$tmpdir/${cname}.bals" &
+            timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" setstaking  2>/dev/null > "$tmpdir/${cname}.stk" &
             if [ "$want_rate" = "1" ]; then
-                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate 2>/dev/null > "$tmpdir/${cname}.rate" &
+                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" getblockrate 2>/dev/null > "$tmpdir/${cname}.rate" &
             fi
             if [ "$need_net" = "1" ]; then
-                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getnetworkinfo 2>/dev/null > "$tmpdir/${cname}.net" &
+                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" getnetworkinfo 2>/dev/null > "$tmpdir/${cname}.net" &
             fi
             wait
 
@@ -1266,7 +1225,7 @@ _show_menu() {
             [ -s "$tmpdir/${cname}.stk" ] && { read -r stk < "$tmpdir/${cname}.stk" || :; }
             printf '%s\n' "$stk" > "$hint" 2>/dev/null || :
             if [ "$stk" = "true" ] && [ "$want_rate" = "0" ]; then
-                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" -rpcconnect="$rpc_host" getblockrate 2>/dev/null > "$tmpdir/${cname}.rate" || :
+                timeout 5 "$cli_bin" -datadir="/var/lib/${cname}" getblockrate 2>/dev/null > "$tmpdir/${cname}.rate" || :
             fi
 
             # One getbalances call yields the balance and
@@ -1663,49 +1622,23 @@ if [ -f "$_SPARK_CURRENT_FILE" ] && [ -s "$_SPARK_CURRENT_FILE" ]; then
     SPARK_CONF="${SPARK_DATADIR}/${SPARK_CHAIN}.conf"
     SPARK_SERVICE="${SPARK_CHAIN}.service"
 
-    # Derive RPC IP (mirrors install.sh cksum logic)
-    _spark_octet=$(printf '%s' "$SPARK_CHAIN" | cksum | awk '{print ($1 % 253) + 2}')
-    # Collision resolution
-    _spark_tries=0
-    while [ "$_spark_tries" -lt 253 ]; do
-        _spark_taken=""
-        for _spark_cf in /var/lib/*/[a-z]*.conf; do
-            [ -f "$_spark_cf" ] || continue
-            if grep -Eq "^(main\.|test\.)?rpcbind=127\.0\.0\.${_spark_octet}$" "$_spark_cf" 2>/dev/null; then
-                _spark_cc=$(basename "$(dirname "$_spark_cf")")
-                if [ "$_spark_cc" != "$SPARK_CHAIN" ]; then
-                    _spark_taken="$_spark_cc"
-                    break
-                fi
-            fi
-        done
-        [ -z "$_spark_taken" ] && break
-        _spark_octet=$(( (_spark_octet % 253) + 2 ))
-        _spark_tries=$(( _spark_tries + 1 ))
-    done
-    SPARK_RPC_HOST="127.0.0.${_spark_octet}"
-    SPARK_CLI="${SPARK_CHAIN}-cli -datadir=${SPARK_DATADIR} -rpcconnect=${SPARK_RPC_HOST}"
-    unset _spark_octet _spark_tries _spark_taken _spark_cf _spark_cc
+    SPARK_CLI="${SPARK_CHAIN}-cli -datadir=${SPARK_DATADIR}"
 
-    export SPARK_CHAIN SPARK_DATADIR SPARK_CONF SPARK_SERVICE SPARK_RPC_HOST SPARK_CLI
+    export SPARK_CHAIN SPARK_DATADIR SPARK_CONF SPARK_SERVICE SPARK_CLI
 else
     # No chain selected — clear vars
-    unset SPARK_CHAIN SPARK_DATADIR SPARK_CONF SPARK_SERVICE SPARK_RPC_HOST SPARK_CLI 2>/dev/null
+    unset SPARK_CHAIN SPARK_DATADIR SPARK_CONF SPARK_SERVICE SPARK_CLI 2>/dev/null
 fi
 
 # Define a wrapper function for every installed chain's CLI so that running
-# "<chain>-cli <args>" auto-injects -datadir and -rpcconnect. Reads rpcbind
-# straight from each chain's conf file rather than re-deriving via cksum.
+# "<chain>-cli <args>" auto-injects -datadir. The RPC port needs no flag: each
+# chain's CLI defaults to its own chain's port, matching its daemon.
 if [ -f "$_SPARK_REGISTRY" ] && [ -s "$_SPARK_REGISTRY" ]; then
     while IFS= read -r _spark_c; do
         [ -n "$_spark_c" ] || continue
-        _spark_cf="/var/lib/${_spark_c}/${_spark_c}.conf"
-        [ -f "$_spark_cf" ] || continue
-        _spark_rpc=$(awk -F= '/^(main\.|test\.)?rpcbind=/ {print $2; exit}' "$_spark_cf" 2>/dev/null)
-        [ -n "$_spark_rpc" ] || continue
-        eval "${_spark_c}-cli() { command /usr/local/bin/${_spark_c}-cli -datadir=/var/lib/${_spark_c} -rpcconnect=${_spark_rpc} \"\$@\"; }"
+        eval "${_spark_c}-cli() { command /usr/local/bin/${_spark_c}-cli -datadir=/var/lib/${_spark_c} \"\$@\"; }"
     done < "$_SPARK_REGISTRY"
-    unset _spark_c _spark_cf _spark_rpc
+    unset _spark_c
 fi
 unset _SPARK_CURRENT_FILE _SPARK_REGISTRY
 
@@ -1783,52 +1716,6 @@ HELPEREOF
     chmod +x /usr/local/bin/spark-current-chain.sh
 
     log "Installed chain selector (/usr/local/bin/chain, /usr/local/bin/c) and helper (/usr/local/bin/spark-current-chain.sh)."
-}
-
-# Create a one-shot service and timer that fetches and runs patch_rpc_conf.sh
-# to set the per-chain loopback RPC address. The timer disables itself once done.
-patchRpcConf() {
-    local service_unit="${chain_lower}-patch-rpc-conf.service"
-    local timer_unit="${chain_lower}-patch-rpc-conf.timer"
-    local conf_path="$WorkingDirectory/$conf_name"
-
-    # Create the systemd service unit (fetches and runs patch_rpc_conf.sh remotely)
-    cat <<EOF > /etc/systemd/system/$service_unit
-[Unit]
-Description=Patch ${effective_chain} conf with per-chain RPC address
-Documentation=https://docs.getlynx.io/
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_rpc_conf.sh | bash -s'
-Environment=CONF_PATH=$conf_path
-Environment=RPC_HOST=$rpc_host
-Environment=SERVICE_NAME=$service_name
-Environment=TIMER_UNIT=$timer_unit
-StandardOutput=journal
-StandardError=journal
-EOF
-
-    # Create the systemd timer unit
-    cat <<EOF > /etc/systemd/system/$timer_unit
-[Unit]
-Description=Run ${chain_lower}-patch-rpc-conf every 5 seconds until patched
-
-[Timer]
-OnBootSec=5sec
-OnUnitActiveSec=5sec
-AccuracySec=5sec
-Unit=$service_unit
-Persistent=false
-
-[Install]
-WantedBy=timers.target
-EOF
-
-    systemctl daemon-reload 2>/dev/null
-    systemctl enable "$timer_unit" >/dev/null 2>&1
-    systemctl start "$timer_unit" 2>/dev/null
-    log "Created and started $timer_unit to patch RPC settings in $conf_path."
 }
 
 # Create per-chain install.service and install.timer if not present
@@ -2404,7 +2291,7 @@ Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
 ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory
-ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory -rpcconnect=$rpc_host stop
+ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory stop
 Restart=on-failure
 RestartSec=30
 User=root
@@ -2485,7 +2372,6 @@ Type=oneshot
 ExecStart=/bin/bash -c 'curl -sfL $SCRIPT_BASE_URL/patch_firewall.sh | bash -s'
 Environment=CLI_PATH=/usr/local/bin/$cli_name
 Environment=DATADIR=$WorkingDirectory
-Environment=RPCCONNECT=$rpc_host
 Environment=CHAIN_NAME=$effective_chain
 Environment=CHAIN_LOWER=$chain_lower
 Environment=TIMER_UNIT=$timer_unit
@@ -2601,7 +2487,7 @@ isBlockchainSyncComplete() {
     fi
 
     # Get blockchain sync status
-    SYNC_STATUS=$(/usr/local/bin/$cli_name -datadir=$WorkingDirectory -rpcconnect=$rpc_host getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
+    SYNC_STATUS=$(/usr/local/bin/$cli_name -datadir=$WorkingDirectory getblockchaininfo 2>/dev/null | grep -o '"initialblockdownload":[^,}]*' | sed 's/.*://' | tr -d '"' | xargs)
 
     # If sync is complete (false), stop and disable timer
     if [ "$SYNC_STATUS" = "false" ]; then
@@ -2619,10 +2505,7 @@ isBlockchainSyncComplete() {
         exit 0
     fi
 
-    # If still syncing, leave the daemon alone. Older builds needed a periodic
-    # restart to get unstuck; the current sync is stable and self-recovering, so
-    # a 12-minute restart only discards in-flight progress — on slower disks it
-    # can keep the sync from ever finishing.
+    # If still syncing, leave the daemon alone; restarting only discards progress.
     if [ -n "$SYNC_STATUS" ] && [ "$SYNC_STATUS" != "null" ]; then
         log "Blockchain still syncing (initialblockdownload: $SYNC_STATUS). Leaving ${effective_chain} daemon running."
     else
@@ -2654,8 +2537,7 @@ if [[ -z "$update_mode" ]] && [[ -z "$rebuild_mode" ]]; then
     preflightBinaryCheck
 fi
 
-# Ensure patch timers are in place (runs in all modes)
-patchRpcConf
+# Ensure patch timers are in place (runs in all modes).
 # Firewall setup is skipped on shared hosts (--shared-host) to avoid colliding
 # with an existing host firewall or the ports used by pre-existing services
 # (e.g. a web server on 80/443).

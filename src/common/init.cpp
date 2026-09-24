@@ -73,8 +73,13 @@ std::optional<ConfigError> InitConfig(ArgsManager& args, SettingsAbortFn setting
             fs::create_directories(base_path / "wallets");
         }
 
-        // Check if conf file exists
-        check_lynx_config(args);
+        // Write a default conf file if there is none. The config was already read
+        // above, before the file existed, so read it again: otherwise the very first
+        // run ignores daemon=, server=, rpcuser/rpcpassword and rpcport, and the CLI
+        // (which does read the new file) cannot authenticate until a restart.
+        if (check_lynx_config(args) && !args.ReadConfigFiles(error, true)) {
+            return ConfigError{ConfigStatus::FAILED, strprintf(_("Error reading configuration file: %s"), error)};
+        }
 
         const auto net_path{args.GetDataDirNet()};
         if (!fs::exists(net_path)) {

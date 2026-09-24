@@ -7,7 +7,7 @@
 #   CHAIN_LOWER        - lowercase chain name (e.g. galatea)
 #   EFFECTIVE_CHAIN    - display name (e.g. Galatea)
 #   CLI_NAME           - CLI binary (e.g. galatea-cli)
-#   CLI_FLAGS          - CLI flags (e.g. -datadir=/var/lib/galatea -rpcconnect=127.0.0.193)
+#   CLI_FLAGS          - CLI flags (e.g. -datadir=/var/lib/galatea)
 #   CONF_NAME          - conf filename (e.g. galatea.conf)
 #   WORKING_DIRECTORY  - data directory (e.g. /var/lib/galatea)
 #   TIMER_UNIT         - this timer's unit name (for self-disabling)
