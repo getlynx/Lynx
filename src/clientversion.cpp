@@ -111,23 +111,33 @@ std::string NetworkInfo(const std::string& chain_display_name)
     // hard-wrapped text cannot be reflowed without guessing which newlines are paragraph
     // breaks and which are wrapping, and the two URL lines at the end are exactly the
     // case such a guess would get wrong.
-    return strprintf("%s is built from the Lynx Core codebase and part of the Lynx Data Storage Network.\n", chain_display_name) +
+    return strprintf("%s is built from the Lynx Core codebase and is part of the Lynx Data Storage Network.\n", chain_display_name) +
+           "\n"
+           "In Ray Bradbury's Fahrenheit 451 (1953), paper burns at 451 degrees and the "
+           "books are gone. What survives is kept by ordinary people, each one holding a "
+           "single book in memory, waiting for the day the world needs it back. Alone, "
+           "each of them saved one book. Together, they saved a library.\n"
+           "\n"
+           "This node is one of those people.\n"
            "\n"
            "The Lynx Data Storage Network (LDSN) is a decentralized, eco-friendly global "
            "platform for permanent data storage. Files are written whole onto the "
-           "blockchain, where they outlive us. It safeguards family photos, legal and "
-           "medical records, journalistic archives, dissertations, published papers, "
-           "and long-term climate and medical research. Every stored file is encrypted "
-           "and private, not publicly readable unless its creator chooses to share it. "
-           "Staking creates coins to secure the network; storing data burns them - a "
-           "working commodity with real utility.\n"
+           "blockchain, where they outlive us: family photos, legal and medical records, "
+           "journalistic archives, dissertations, published papers, and decades of "
+           "climate and medical research. Every stored file is encrypted and private "
+           "unless its creator chooses to share it.\n"
            "\n"
-           "Thank you for helping change the world. History cannot be rewritten when its "
-           "records cannot be erased. Facts kill fascism - and keeping facts alive, "
-           "permanently and verifiably, is exactly what this network was built to do.\n"
+           "Staking creates coins to secure the network. Storing data burns them. It's "
+           "the only thing that burns here.\n"
            "\n"
-           "Store your first file at https://clevver.org\n"
-           "Documentation: https://docs.getlynx.io\n";
+           "There is no temperature at which this blockchain burns. What is written here "
+           "cannot be quietly edited, erased, or made to disappear. Every node that joins "
+           "makes that promise harder to break.\n"
+           "\n"
+           "You're part of that now. Thank you.\n"
+           "\n"
+           "Store your first file: https://clevver.org\n"
+           "Documentation:         https://docs.getlynx.io\n";
 }
 
 std::string LicenseInfo()

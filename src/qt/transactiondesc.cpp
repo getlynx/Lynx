@@ -26,6 +26,7 @@
 #include <string>
 
 #include <QLatin1String>
+#include <QStringList>
 
 using wallet::ISMINE_ALL;
 using wallet::ISMINE_SPENDABLE;
@@ -121,6 +122,19 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
     CAmount nDebit = wtx.debit;
     CAmount nNet = nCredit - nDebit;
 
+    // A coinstake returns the staked coins to the staking address plus the block
+    // reward. wtx.credit stays 0 until it matures, so work from the outputs instead:
+    // the staker's own outputs minus the coins it staked is the reward, and that does
+    // not change as the stake matures. See TransactionRecord::decomposeTransaction.
+    CAmount nStakeOut = 0;
+    if (wtx.is_coinstake)
+    {
+        for (unsigned int i = 0; i < wtx.tx->vout.size(); i++)
+            if (wtx.txout_is_mine[i])
+                nStakeOut += wtx.tx->vout[i].nValue;
+        nNet = nStakeOut - nDebit;
+    }
+
     strHTML += "<b>" + tr("Status") + ":</b> " + FormatTxStatus(status, inMempool);
     strHTML += "<br>";
 
@@ -132,6 +146,18 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
     if (wtx.is_coinbase)
     {
         strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated") + "<br>";
+    }
+    else if (wtx.is_coinstake)
+    {
+        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Staked") + "<br>";
+        if (!rec->address.empty())
+        {
+            strHTML += "<b>" + tr("Staking address") + ":</b> " + GUIUtil::HtmlEscape(rec->address);
+            std::string name;
+            if (wallet.getAddress(DecodeDestination(rec->address), &name, /* is_mine= */ nullptr, /* purpose= */ nullptr) && !name.empty())
+                strHTML += " (" + tr("label") + ": " + GUIUtil::HtmlEscape(name) + ")";
+            strHTML += "<br>";
+        }
     }
     else if (wtx.value_map.count("from") && !wtx.value_map["from"].empty())
     {
@@ -183,7 +209,29 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
     //
     // Amount
     //
-    if ((wtx.is_coinbase || wtx.is_coinstake) && nCredit == 0)
+    if (wtx.is_coinstake)
+    {
+        //
+        // Stake
+        //
+        strHTML += "<b>" + tr("Amount staked") + ":</b> " + BitcoinUnits::formatHtmlWithUnit(unit, nDebit) + "<br>";
+        strHTML += "<b>" + tr("Stake reward") + ":</b> " + BitcoinUnits::formatHtmlWithUnit(unit, nNet, true) + "<br>";
+
+        QStringList returned;
+        for (unsigned int i = 0; i < wtx.tx->vout.size(); i++)
+            if (wtx.txout_is_mine[i])
+                returned << BitcoinUnits::formatHtmlWithUnit(unit, wtx.tx->vout[i].nValue);
+        strHTML += "<b>" + tr("Returned to staking address") + ":</b> " + BitcoinUnits::formatHtmlWithUnit(unit, nStakeOut);
+        if (returned.size() > 1)
+            strHTML += " (" + tr("split into %1 outputs: %2").arg(returned.size()).arg(returned.join(" + ")) + ")";
+        strHTML += "<br>";
+
+        if (!status.is_in_main_chain)
+            strHTML += "<b>" + tr("Maturity") + ":</b> (" + tr("not accepted") + ")<br>";
+        else if (status.blocks_to_maturity > 0)
+            strHTML += "<b>" + tr("Maturity") + ":</b> " + tr("matures in %n more block(s)", "", status.blocks_to_maturity) + "<br>";
+    }
+    else if (wtx.is_coinbase && nCredit == 0)
     {
         //
         // Coinbase
@@ -335,10 +383,10 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
         quint32 numBlocksToMaturity = COINBASE_MATURITY +  1;
         strHTML += "<br>";
         if (wtx.is_coinstake)
-            strHTML += tr("Staked");
-        else if (wtx.is_coinbase)
-            strHTML += tr("Generated");
-        strHTML += tr(" coins must mature %1 blocks before they can be spent. When you created this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node creates a block within a few seconds of yours.").arg(QString::number(numBlocksToMaturity)) + "<br>";
+            strHTML += tr("Staked coins, both the amount staked and the reward, must mature %1 blocks before they can be spent.").arg(QString::number(numBlocksToMaturity));
+        else
+            strHTML += tr("Generated coins must mature %1 blocks before they can be spent.").arg(QString::number(numBlocksToMaturity));
+        strHTML += " " + tr("When you created this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node creates a block within a few seconds of yours.") + "<br>";
     }
 
     //

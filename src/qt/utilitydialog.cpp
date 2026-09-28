@@ -17,12 +17,15 @@
 #include <util/system.h>
 #include <util/strencodings.h>
 
+#include <algorithm>
 #include <cstdio>
 
 #include <QCloseEvent>
 #include <QLabel>
 #include <QMainWindow>
 #include <QRegularExpression>
+#include <QScreen>
+#include <QScrollBar>
 #include <QString>
 #include <QTextCursor>
 #include <QTextTable>
@@ -70,6 +73,24 @@ HelpMessageDialog::HelpMessageDialog(QWidget *parent, bool about) :
         ui->aboutMessage->setText(version + "<br><br>" + networkInfoHTML + "<br>" + licenseInfoHTML);
         ui->aboutMessage->setWordWrap(true);
         ui->helpMessage->setVisible(false);
+
+        // The .ui opens this dialog at 780x400, which is shared with the command-line
+        // options window and is too short for the About text. Grow it here so the whole
+        // message shows without scrolling, capped at 90% of the screen; on a smaller
+        // screen the scroll area takes over.
+        //
+        // The dialog is not shown yet, so the scroll area's viewport has not been sized
+        // (Qt defers the resize event until show) - measure from the scroll area itself,
+        // which the layout does place. A scrollbar's width is reserved so the fit errs on
+        // the side of a few spare pixels rather than a scrollbar for a line or two.
+        layout()->setGeometry(rect());
+        const int frame = 2 * ui->scrollArea->frameWidth();
+        const int text_width = ui->scrollArea->width() - frame - ui->scrollArea->verticalScrollBar()->sizeHint().width();
+        const int overflow = ui->scrollAreaWidgetContents->heightForWidth(text_width) - (ui->scrollArea->height() - frame);
+        if (overflow > 0) {
+            const int max_height = screen()->availableGeometry().height() * 9 / 10;
+            resize(width(), std::min(height() + overflow, max_height));
+        }
     } else {
         setWindowTitle(tr("Command-line options"));
         QString header = QString("Usage:  %1-qt [command-line options]                     \n").arg(CURRENT_CHAIN);

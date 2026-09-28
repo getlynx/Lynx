@@ -39,7 +39,41 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const interface
     uint256 hash = wtx.tx->GetHash();
     std::map<std::string, std::string> mapValue = wtx.value_map;
 
-    if (nNet > 0 || wtx.is_coinbase || wtx.is_coinstake)
+    if (wtx.is_coinstake)
+    {
+        //
+        // Staked
+        //
+        // A coinstake spends the staked coins and pays them back to the same address
+        // plus the block reward, split across two outputs once the total reaches the
+        // stake split threshold. Show it as one row carrying only the reward.
+        //
+        // The reward is taken from the outputs rather than from wtx.credit: the wallet
+        // reports credit as 0 until the stake matures, which would make the row read as
+        // minus the whole staked amount, and the table never recomputes an amount after
+        // the record is created. The outputs and debit are fixed once the transaction
+        // exists, so the row is right from the moment the block is found.
+        CAmount nStakeOut = 0;
+        int nFirstMine = -1;
+        for (unsigned int i = 0; i < wtx.tx->vout.size(); i++)
+        {
+            if (wtx.txout_is_mine[i])
+            {
+                nStakeOut += wtx.tx->vout[i].nValue;
+                if (nFirstMine < 0) nFirstMine = i;
+            }
+        }
+        if (nFirstMine >= 0)
+        {
+            TransactionRecord sub(hash, nTime, TransactionRecord::Staked, "", /*_debit=*/0, /*_credit=*/nStakeOut - nDebit);
+            sub.idx = nFirstMine;
+            sub.involvesWatchAddress = wtx.txout_is_mine[nFirstMine] & ISMINE_WATCH_ONLY;
+            if (wtx.txout_address_is_mine[nFirstMine])
+                sub.address = EncodeDestination(wtx.txout_address[nFirstMine]);
+            parts.append(sub);
+        }
+    }
+    else if (nNet > 0 || wtx.is_coinbase)
     {
         //
         // Credit
@@ -51,16 +85,8 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const interface
             if(mine)
             {
                 TransactionRecord sub(hash, nTime);
-                if(wtx.is_coinstake)
-                {
-                    sub.idx = 1; // vout index
-                    sub.credit = nNet;
-                }
-                else
-                {
-                    sub.idx = i; // vout index
-                    sub.credit = txout.nValue;
-                }
+                sub.idx = i; // vout index
+                sub.credit = txout.nValue;
                 sub.involvesWatchAddress = mine & ISMINE_WATCH_ONLY;
                 if (wtx.txout_address_is_mine[i])
                 {
@@ -79,16 +105,8 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const interface
                     // Generated
                     sub.type = TransactionRecord::Generated;
                 }
-                else if (wtx.is_coinstake)
-                {
-                    // Staked
-                    sub.type = TransactionRecord::Staked;
-                }
 
                 parts.append(sub);
-
-                if(wtx.is_coinstake)
-                    break; // Single output for coinstake
             }
         }
     }
