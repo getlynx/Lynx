@@ -155,7 +155,16 @@ BlockSource ClientModel::getBlockSource() const
 
 QString ClientModel::getStatusBarWarnings() const
 {
-    return QString::fromStdString(m_node.getWarnings().translated);
+    const auto warnings = m_node.getWarnings();
+    // digitalcoin: legacy blocks assert a version-bit rule (bit 0) our chainparams
+    // don't map, so bidha raises a permanent "unknown new rules" warning. It's a
+    // chain-assimilation artifact and harmless. Keep it in debug.log and in
+    // getnetworkinfo, but don't surface it in the GUI.
+    if (std::string(CURRENT_CHAIN) == "digitalcoin" &&
+        warnings.original.find("Unknown new rules activated") != std::string::npos) {
+        return QString();
+    }
+    return QString::fromStdString(warnings.translated);
 }
 
 OptionsModel *ClientModel::getOptionsModel()

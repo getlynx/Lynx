@@ -3202,6 +3202,7 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             if (state == ThresholdState::ACTIVE || state == ThresholdState::LOCKED_IN) {
                 const bilingual_str warning = strprintf(_("Unknown new rules activated (versionbit %i)"), bit);
                 if (state == ThresholdState::ACTIVE) {
+                    LogPrintf("%s: %s\n", __func__, warning.original);
                     DoWarning(warning);
                 } else {
                     AppendWarning(warning_messages, warning);
