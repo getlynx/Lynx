@@ -2757,6 +2757,14 @@ LogPrint (BCLog::STORAGE, "is_opreturn_an_authdata from validation.cpp \n");
 		LogPrintf("ERROR: ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)\n", stakeActual, stakeReward);
 		return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-amount");
 	}
+        // A proof-of-stake block's reward is paid through the coinstake (vtx[1]);
+        // the coinbase (vtx[0]) must pay nothing. Enforce this only on new blocks
+        // (not while replaying history during the sync), so no already-accepted
+        // block is retroactively rejected.
+        if (!IsInitialBlockDownload() && block.vtx[0]->GetValueOut() > 0) {
+		LogPrintf("ERROR: ConnectBlock(): proof-of-stake coinbase pays nonzero (actual=%d)\n", block.vtx[0]->GetValueOut());
+		return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-amount");
+	}
     }
 
     bool queue_ok = control.Wait();
