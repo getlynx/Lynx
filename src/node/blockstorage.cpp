@@ -36,6 +36,7 @@
 #ifdef WIN32
 #include <io.h>        // _get_osfhandle
 #include <windows.h>   // ReadFile, OVERLAPPED
+#include <winioctl.h>  // FSCTL_SET_SPARSE
 #endif
 
 namespace {
@@ -142,9 +143,38 @@ void* BlockIndexArena::Alloc(std::size_t bytes, std::size_t align)
     static std::mutex mtx;
     std::lock_guard<std::mutex> lock(mtx);
 #if defined(_WIN32)
-    // No mmap on Windows; fall back to the heap. Entries are never freed, so the
-    // no-op deallocate leaks nothing (they live for the life of the process).
-    return ::operator new(bytes, std::align_val_t{align});
+    // Windows equivalent of the POSIX arena below, using the Win32 file-mapping
+    // API. A sparse backing file is mapped once as a single fixed view and
+    // bump-allocated; the view keeps the file and mapping alive for the life of
+    // the process, so the handles are closed once the view exists. The file MUST
+    // be marked sparse (FSCTL_SET_SPARSE) before it is sized by CreateFileMapping,
+    // otherwise NTFS materializes the full 8 GiB reserve on disk.
+    static char* base = nullptr;
+    static std::size_t offset = 0;
+    static const std::size_t reserved = std::size_t{8} * 1024 * 1024 * 1024;
+    if (base == nullptr) {
+        const fs::path path = gArgs.GetDataDirNet() / "blockindex.arena";
+        HANDLE hFile = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
+                                   FILE_SHARE_READ, nullptr, CREATE_ALWAYS,
+                                   FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (hFile == INVALID_HANDLE_VALUE) throw std::runtime_error("blockindex arena: CreateFile failed");
+        DWORD bytes_returned = 0;
+        DeviceIoControl(hFile, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &bytes_returned, nullptr);
+        HANDLE hMap = CreateFileMappingW(hFile, nullptr, PAGE_READWRITE,
+                                         static_cast<DWORD>(reserved >> 32),
+                                         static_cast<DWORD>(reserved & 0xFFFFFFFFu), nullptr);
+        if (hMap == nullptr) { CloseHandle(hFile); throw std::runtime_error("blockindex arena: CreateFileMapping failed"); }
+        void* m = MapViewOfFile(hMap, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, 0);
+        CloseHandle(hMap);
+        CloseHandle(hFile);
+        if (m == nullptr) throw std::runtime_error("blockindex arena: MapViewOfFile failed");
+        base = static_cast<char*>(m);
+    }
+    const std::size_t aligned = (offset + (align - 1)) & ~(align - 1);
+    if (aligned + bytes > reserved) throw std::runtime_error("blockindex arena: reserve exhausted");
+    void* p = base + aligned;
+    offset = aligned + bytes;
+    return p;
 #else
     static char* base = nullptr;
     static std::size_t offset = 0;
