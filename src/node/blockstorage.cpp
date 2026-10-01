@@ -36,6 +36,7 @@
 #ifdef WIN32
 #include <io.h>        // _get_osfhandle
 #include <windows.h>   // ReadFile, OVERLAPPED
+#include <winioctl.h>  // FSCTL_SET_SPARSE
 #endif
 
 namespace {
@@ -141,10 +142,67 @@ void* BlockIndexArena::Alloc(std::size_t bytes, std::size_t align)
 {
     static std::mutex mtx;
     std::lock_guard<std::mutex> lock(mtx);
+
+    // The arena is an optimization: it lets the cold block index page out to a
+    // backing file instead of pinning RAM. It must NEVER be fatal. If the file
+    // can't be created or mapped (e.g. the datadir volume is short on space), or
+    // if the reserve is ever exhausted, we fall back to the heap for this and all
+    // later allocations — the index simply lives in RAM as it did before the
+    // arena, with no flattening on this box. Failing instead would surface as a
+    // failed block-index load, which makes the daemon force a full reindex.
+    // deallocate is a no-op and the index lives for the whole process, so the
+    // heap allocations are not a meaningful leak (same as the pre-arena path).
+    static bool use_heap = false;
+    auto heap_alloc = [](std::size_t b, std::size_t a) -> void* {
+        return ::operator new(b, std::align_val_t{a});
+    };
+    if (use_heap) return heap_alloc(bytes, align);
 #if defined(_WIN32)
-    // No mmap on Windows; fall back to the heap. Entries are never freed, so the
-    // no-op deallocate leaks nothing (they live for the life of the process).
-    return ::operator new(bytes, std::align_val_t{align});
+    // Windows equivalent of the POSIX arena below, using the Win32 file-mapping
+    // API. A sparse backing file is mapped once as a single fixed view and
+    // bump-allocated; the view keeps the file and mapping alive for the life of
+    // the process, so the handles are closed once the view exists. The file MUST
+    // be marked sparse (FSCTL_SET_SPARSE) before it is sized by CreateFileMapping,
+    // otherwise NTFS materializes the full 8 GiB reserve on disk.
+    static char* base = nullptr;
+    static std::size_t offset = 0;
+    static const std::size_t reserved = std::size_t{8} * 1024 * 1024 * 1024;
+    if (base == nullptr) {
+        const fs::path path = gArgs.GetDataDirNet() / "blockindex.arena";
+        HANDLE hFile = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
+                                   FILE_SHARE_READ, nullptr, CREATE_ALWAYS,
+                                   FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (hFile == INVALID_HANDLE_VALUE) {
+            LogPrintf("blockindex arena: CreateFile failed; falling back to heap (no index paging on this run)\n");
+            use_heap = true; return heap_alloc(bytes, align);
+        }
+        DWORD bytes_returned = 0;
+        DeviceIoControl(hFile, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &bytes_returned, nullptr);
+        HANDLE hMap = CreateFileMappingW(hFile, nullptr, PAGE_READWRITE,
+                                         static_cast<DWORD>(reserved >> 32),
+                                         static_cast<DWORD>(reserved & 0xFFFFFFFFu), nullptr);
+        if (hMap == nullptr) {
+            CloseHandle(hFile);
+            LogPrintf("blockindex arena: CreateFileMapping failed; falling back to heap (no index paging on this run)\n");
+            use_heap = true; return heap_alloc(bytes, align);
+        }
+        void* m = MapViewOfFile(hMap, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, 0);
+        CloseHandle(hMap);
+        CloseHandle(hFile);
+        if (m == nullptr) {
+            LogPrintf("blockindex arena: MapViewOfFile failed; falling back to heap (no index paging on this run)\n");
+            use_heap = true; return heap_alloc(bytes, align);
+        }
+        base = static_cast<char*>(m);
+    }
+    const std::size_t aligned = (offset + (align - 1)) & ~(align - 1);
+    if (aligned + bytes > reserved) {
+        LogPrintf("blockindex arena: reserve exhausted; falling back to heap for further index nodes\n");
+        use_heap = true; return heap_alloc(bytes, align);
+    }
+    void* p = base + aligned;
+    offset = aligned + bytes;
+    return p;
 #else
     static char* base = nullptr;
     static std::size_t offset = 0;
@@ -154,18 +212,28 @@ void* BlockIndexArena::Alloc(std::size_t bytes, std::size_t align)
     if (base == nullptr) {
         const fs::path path = gArgs.GetDataDirNet() / "blockindex.arena";
         const int fd = open(fs::PathToString(path).c_str(), O_RDWR | O_CREAT | O_TRUNC, 0600);
-        if (fd < 0) throw std::runtime_error("blockindex arena: open failed");
+        if (fd < 0) {
+            LogPrintf("blockindex arena: open failed; falling back to heap (no index paging on this run)\n");
+            use_heap = true; return heap_alloc(bytes, align);
+        }
         if (ftruncate(fd, static_cast<off_t>(reserved)) != 0) {
             close(fd);
-            throw std::runtime_error("blockindex arena: ftruncate failed");
+            LogPrintf("blockindex arena: ftruncate failed (datadir volume out of space?); falling back to heap (no index paging on this run)\n");
+            use_heap = true; return heap_alloc(bytes, align);
         }
         void* m = mmap(nullptr, reserved, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         close(fd);
-        if (m == MAP_FAILED) throw std::runtime_error("blockindex arena: mmap failed");
+        if (m == MAP_FAILED) {
+            LogPrintf("blockindex arena: mmap failed; falling back to heap (no index paging on this run)\n");
+            use_heap = true; return heap_alloc(bytes, align);
+        }
         base = static_cast<char*>(m);
     }
     const std::size_t aligned = (offset + (align - 1)) & ~(align - 1);
-    if (aligned + bytes > reserved) throw std::runtime_error("blockindex arena: reserve exhausted");
+    if (aligned + bytes > reserved) {
+        LogPrintf("blockindex arena: reserve exhausted; falling back to heap for further index nodes\n");
+        use_heap = true; return heap_alloc(bytes, align);
+    }
     void* p = base + aligned;
     offset = aligned + bytes;
     return p;

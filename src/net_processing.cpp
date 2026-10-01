@@ -108,6 +108,21 @@ static constexpr auto GETDATA_TX_INTERVAL{60s};
 static const unsigned int MAX_GETDATA_SZ = 1000;
 /** Number of blocks that can be requested at any given time from a single peer. */
 static const int MAX_BLOCKS_IN_TRANSIT_PER_PEER = 4096;
+/** Per-peer in-flight cap used ONLY by the block-download scheduling gate in
+ *  SendMessages. Kept BELOW BLOCK_DOWNLOAD_WINDOW so no single peer holds a deep
+ *  queue with the frontier (tip+1) buried in it — the window still fills across
+ *  the connected peers, but the next-in-order block lands in a shallow queue and
+ *  is delivered fast. Every OTHER use of MAX_BLOCKS_IN_TRANSIT_PER_PEER (inv-size
+ *  sanity, direct/compact-block fetch) is deliberately left at 4096. */
+static const int MAX_BLOCKS_IN_TRANSIT_PER_PEER_DOWNLOAD = 1024;
+/** How many peers we start an initial headers sync from at once during IBD.
+ *  Stock behavior is one (the rest wait until we're within 24h of the tip),
+ *  which leaves every other peer ineligible for block download until that one
+ *  peer finishes the header chain — so the early part of a sync is fed by a
+ *  single peer. Starting the header sync from several peers up front gets them
+ *  all a best-known-block early, so block download spreads across them from the
+ *  beginning instead of after headers complete. Sized for the anchor set. */
+static const int MAX_INITIAL_HEADER_SYNC_PEERS = 5;
 /** Default time during which a peer must stall block download progress before being disconnected.
  * the actual timeout is increased temporarily if peers are disconnected for hitting the timeout */
 static constexpr auto BLOCK_STALLING_TIMEOUT_DEFAULT{2s};
@@ -5743,8 +5758,10 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
         sm_stamp(g_sm_syncstate);
 
         if (!state.fSyncStarted && CanServeBlocks(*peer) && !m_chainman.m_blockman.LoadingBlocks()) {
-            // Only actively request headers from a single peer, unless we're close to today.
-            if ((nSyncStarted == 0 && sync_blocks_and_headers_from_peer) || m_chainman.m_best_header->Time() > GetAdjustedTime() - 24h) {
+            // Request headers from several peers up front (not just one) so they
+            // all get a best-known-block early and block download spreads across
+            // them from the start; also start any peer once we're close to today.
+            if ((nSyncStarted < MAX_INITIAL_HEADER_SYNC_PEERS && sync_blocks_and_headers_from_peer) || m_chainman.m_best_header->Time() > GetAdjustedTime() - 24h) {
                 const CBlockIndex* pindexStart = m_chainman.m_best_header;
                 /* If possible, start at the block preceding the currently
                    best known header.  This ensures that we always get a
@@ -6149,7 +6166,7 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
         //
         std::vector<CInv> vGetData;
         const auto gd_entry = sm_prev;
-        const bool gd_go = CanServeBlocks(*peer) && ((sync_blocks_and_headers_from_peer && !IsLimitedPeer(*peer)) || !m_chainman.ActiveChainstate().IsInitialBlockDownload()) && state.nBlocksInFlight < MAX_BLOCKS_IN_TRANSIT_PER_PEER;
+        const bool gd_go = CanServeBlocks(*peer) && ((sync_blocks_and_headers_from_peer && !IsLimitedPeer(*peer)) || !m_chainman.ActiveChainstate().IsInitialBlockDownload()) && state.nBlocksInFlight < MAX_BLOCKS_IN_TRANSIT_PER_PEER_DOWNLOAD;
         // 80% throttle: run the scan every pass while the in-flight window is low (drain), otherwise on
         // 20% of passes. Caps the candidate-scan cost without starving refill.
         const int bif = g_blocks_in_flight.load(std::memory_order_relaxed);
@@ -6165,7 +6182,7 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
         if (gd_go && gd_run) {
             std::vector<const CBlockIndex*> vToDownload;
             NodeId staller = -1;
-            FindNextBlocksToDownload(*peer, MAX_BLOCKS_IN_TRANSIT_PER_PEER - state.nBlocksInFlight, vToDownload, staller);
+            FindNextBlocksToDownload(*peer, MAX_BLOCKS_IN_TRANSIT_PER_PEER_DOWNLOAD - state.nBlocksInFlight, vToDownload, staller);
             sm_stamp(g_gd_find);
             for (const CBlockIndex *pindex : vToDownload) {
                 uint32_t nFetchFlags = GetFetchFlags(*peer);

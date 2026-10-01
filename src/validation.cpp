@@ -2757,6 +2757,14 @@ LogPrint (BCLog::STORAGE, "is_opreturn_an_authdata from validation.cpp \n");
 		LogPrintf("ERROR: ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)\n", stakeActual, stakeReward);
 		return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-amount");
 	}
+        // A proof-of-stake block's reward is paid through the coinstake (vtx[1]);
+        // the coinbase (vtx[0]) must pay nothing. Enforce this only on new blocks
+        // (not while replaying history during the sync), so no already-accepted
+        // block is retroactively rejected.
+        if (!IsInitialBlockDownload() && block.vtx[0]->GetValueOut() > 0) {
+		LogPrintf("ERROR: ConnectBlock(): proof-of-stake coinbase pays nonzero (actual=%d)\n", block.vtx[0]->GetValueOut());
+		return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-amount");
+	}
     }
 
     bool queue_ok = control.Wait();
@@ -3071,6 +3079,11 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
                 m_chainman.m_best_header ? m_chainman.m_best_header->nHeight : -1,
                 m_chainman.MinimumChainWork().GetHex(), pindexNew->nChainWork.GetHex(),
                 (int)m_cached_finished_ibd.load());
+            // On the IBD->not-IBD transition (sync end), report total sync time.
+            if (!ibd_now && g_sync_start != std::chrono::steady_clock::time_point{}) {
+                const double total_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - g_sync_start).count();
+                LogPrintf("[SYNC] total sync time: %.2fs (%.2f min) at tip height=%d\n", total_s, total_s / 60.0, pindexNew->nHeight);
+            }
         }
         g_ibd_active.store(ibd_now, std::memory_order_relaxed);
     }
