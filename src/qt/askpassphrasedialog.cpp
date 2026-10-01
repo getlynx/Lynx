@@ -56,6 +56,16 @@ AskPassphraseDialog::AskPassphraseDialog(Mode _mode, QWidget *parent, SecureStri
             ui->passEdit3->hide();
             setWindowTitle(tr("Unlock wallet"));
             break;
+        case UnlockStaking: // Ask passphrase
+            ui->warningLabel->setText(tr("Enter your wallet passphrase to unlock the wallet for <b>staking only</b>.<br/>"
+                                         "Sending coins and other operations that use your private keys will still ask for the passphrase.<br/>"
+                                         "The wallet stays unlocked for staking until you lock it or close the wallet."));
+            ui->passLabel2->hide();
+            ui->passEdit2->hide();
+            ui->passLabel3->hide();
+            ui->passEdit3->hide();
+            setWindowTitle(tr("Unlock wallet for staking"));
+            break;
         case ChangePass: // Ask old passphrase + new passphrase x2
             setWindowTitle(tr("Change passphrase"));
             ui->warningLabel->setText(tr("Enter the old passphrase and new passphrase for the wallet."));
@@ -151,8 +161,11 @@ void AskPassphraseDialog::accept()
         }
         } break;
     case Unlock:
+    case UnlockStaking:
         try {
-            if (!model->setWalletLocked(false, oldpass)) {
+            const bool unlocked = mode == UnlockStaking ? model->setWalletUnlockedStakingOnly(oldpass)
+                                                        : model->setWalletLocked(false, oldpass);
+            if (!unlocked) {
                 // Check if the passphrase has a null character (see #27067 for details)
                 if (oldpass.find('\0') == std::string::npos) {
                     QMessageBox::critical(this, tr("Wallet unlock failed"),
@@ -217,6 +230,7 @@ void AskPassphraseDialog::textChanged()
         acceptable = !ui->passEdit2->text().isEmpty() && !ui->passEdit3->text().isEmpty();
         break;
     case Unlock: // Old passphrase x1
+    case UnlockStaking:
         acceptable = !ui->passEdit1->text().isEmpty();
         break;
     case ChangePass: // Old passphrase x1, new passphrase x2

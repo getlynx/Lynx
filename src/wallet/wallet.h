@@ -442,7 +442,10 @@ public:
 
     int64_t nOrderPosNext GUARDED_BY(cs_wallet) = 0;
 
-    bool fWalletUnlockStakingOnly{false};
+    /** Set when the wallet was unlocked for staking only: the keys are in memory so
+     * the staker can sign coinstakes, but spending and other key operations must still
+     * ask for the passphrase. Cleared by Lock(). Writers hold cs_wallet. */
+    std::atomic<bool> fWalletUnlockStakingOnly{false};
 
     std::map<CTxDestination, CAddressBookData> m_address_book GUARDED_BY(cs_wallet);
     const CAddressBookData* FindAddressBookEntry(const CTxDestination&, bool allow_change = false) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);

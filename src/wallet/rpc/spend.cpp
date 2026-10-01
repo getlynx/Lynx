@@ -252,6 +252,12 @@ static void InterpretFeeEstimationInstructions(const UniValue& conf_target, cons
 
 static UniValue FinishTransaction(const std::shared_ptr<CWallet> pwallet, const UniValue& options, const CMutableTransaction& rawTx)
 {
+    // A locked wallet just returns an unsigned PSBT below, but a staking-only unlock has the keys
+    // in memory and would sign and broadcast, so refuse it here (send and sendall end up here).
+    if (pwallet->fWalletUnlockStakingOnly) {
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
+    }
+
     // Make a blank psbt
     PartiallySignedTransaction psbtx(rawTx);
 

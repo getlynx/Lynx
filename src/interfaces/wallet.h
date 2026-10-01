@@ -69,11 +69,19 @@ public:
     //! Lock wallet.
     virtual bool lock() = 0;
 
-    //! Unlock wallet.
-    virtual bool unlock(const SecureString& wallet_passphrase) = 0;
+    //! Unlock wallet. With staking_only, the staker can use the keys but
+    //! spending still needs the passphrase (same as walletpassphrase's staking_only).
+    virtual bool unlock(const SecureString& wallet_passphrase, bool staking_only) = 0;
 
     //! Return whether wallet is locked.
     virtual bool isLocked() = 0;
+
+    //! Return whether wallet is unlocked for staking only.
+    virtual bool isUnlockedStakingOnly() = 0;
+
+    //! Restrict an unlocked wallet back to staking only, without asking for the
+    //! passphrase again. Returns false if the wallet is locked.
+    virtual bool setUnlockedStakingOnly() = 0;
 
     //! Change wallet passphrase.
     virtual bool changeWalletPassphrase(const SecureString& old_wallet_passphrase,

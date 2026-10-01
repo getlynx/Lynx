@@ -140,9 +140,39 @@ public:
         return m_wallet->EncryptWallet(wallet_passphrase);
     }
     bool isCrypted() override { return m_wallet->IsCrypted(); }
-    bool lock() override { return m_wallet->Lock(); }
-    bool unlock(const SecureString& wallet_passphrase) override { return m_wallet->Unlock(wallet_passphrase); }
+    bool lock() override
+    {
+        // Like walletlock: cancel any relock timer left by a timed walletpassphrase
+        WITH_LOCK(m_wallet->cs_wallet, m_wallet->nRelockTime = 0);
+        return m_wallet->Lock();
+    }
+    bool unlock(const SecureString& wallet_passphrase, bool staking_only) override
+    {
+        // Hold cs_wallet across the unlock and the flag update so nobody sees the
+        // wallet fully unlocked when a staking-only unlock was requested.
+        LOCK(m_wallet->cs_wallet);
+        if (!m_wallet->Unlock(wallet_passphrase)) return false;
+        // The GUI's staking-only unlock has no timeout, so a stale relock timer must not end it.
+        // A temporary full unlock (to send) leaves any pending timer alone.
+        if (staking_only) m_wallet->nRelockTime = 0;
+        m_wallet->fWalletUnlockStakingOnly = staking_only;
+        m_wallet->NotifyStatusChanged(m_wallet.get());
+        return true;
+    }
     bool isLocked() override { return m_wallet->IsLocked(); }
+    bool isUnlockedStakingOnly() override
+    {
+        LOCK(m_wallet->cs_wallet);
+        return !m_wallet->IsLocked() && m_wallet->fWalletUnlockStakingOnly;
+    }
+    bool setUnlockedStakingOnly() override
+    {
+        LOCK(m_wallet->cs_wallet);
+        if (m_wallet->IsLocked()) return false;
+        m_wallet->fWalletUnlockStakingOnly = true;
+        m_wallet->NotifyStatusChanged(m_wallet.get());
+        return true;
+    }
     bool changeWalletPassphrase(const SecureString& old_wallet_passphrase,
         const SecureString& new_wallet_passphrase) override
     {

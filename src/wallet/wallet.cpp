@@ -556,6 +556,8 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
 
     {
         LOCK2(m_relock_mutex, cs_wallet);
+        // Lock() clears the staking-only restriction; restore it below if the wallet stays unlocked
+        const bool was_staking_only = fWalletUnlockStakingOnly;
         Lock();
 
         CCrypter crypter;
@@ -587,8 +589,12 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
                 if (!crypter.Encrypt(_vMasterKey, pMasterKey.second.vchCryptedKey))
                     return false;
                 WalletBatch(GetDatabase()).WriteMasterKey(pMasterKey.first, pMasterKey.second);
-                if (fWasLocked)
+                if (fWasLocked) {
                     Lock();
+                } else if (was_staking_only) {
+                    fWalletUnlockStakingOnly = true;
+                    NotifyStatusChanged(this);
+                }
                 return true;
             }
         }
@@ -3697,6 +3703,7 @@ bool CWallet::Lock()
             memory_cleanse(vMasterKey.data(), vMasterKey.size() * sizeof(decltype(vMasterKey)::value_type));
             vMasterKey.clear();
         }
+        fWalletUnlockStakingOnly = false;
     }
 
     NotifyStatusChanged(this);
