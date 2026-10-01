@@ -3079,6 +3079,11 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
                 m_chainman.m_best_header ? m_chainman.m_best_header->nHeight : -1,
                 m_chainman.MinimumChainWork().GetHex(), pindexNew->nChainWork.GetHex(),
                 (int)m_cached_finished_ibd.load());
+            // On the IBD->not-IBD transition (sync end), report total sync time.
+            if (!ibd_now && g_sync_start != std::chrono::steady_clock::time_point{}) {
+                const double total_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - g_sync_start).count();
+                LogPrintf("[SYNC] total sync time: %.2fs (%.2f min) at tip height=%d\n", total_s, total_s / 60.0, pindexNew->nHeight);
+            }
         }
         g_ibd_active.store(ibd_now, std::memory_order_relaxed);
     }
