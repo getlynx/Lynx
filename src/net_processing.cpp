@@ -115,6 +115,14 @@ static const int MAX_BLOCKS_IN_TRANSIT_PER_PEER = 4096;
  *  is delivered fast. Every OTHER use of MAX_BLOCKS_IN_TRANSIT_PER_PEER (inv-size
  *  sanity, direct/compact-block fetch) is deliberately left at 4096. */
 static const int MAX_BLOCKS_IN_TRANSIT_PER_PEER_DOWNLOAD = 1024;
+/** How many peers we start an initial headers sync from at once during IBD.
+ *  Stock behavior is one (the rest wait until we're within 24h of the tip),
+ *  which leaves every other peer ineligible for block download until that one
+ *  peer finishes the header chain — so the early part of a sync is fed by a
+ *  single peer. Starting the header sync from several peers up front gets them
+ *  all a best-known-block early, so block download spreads across them from the
+ *  beginning instead of after headers complete. Sized for the anchor set. */
+static const int MAX_INITIAL_HEADER_SYNC_PEERS = 5;
 /** Default time during which a peer must stall block download progress before being disconnected.
  * the actual timeout is increased temporarily if peers are disconnected for hitting the timeout */
 static constexpr auto BLOCK_STALLING_TIMEOUT_DEFAULT{2s};
@@ -5750,8 +5758,10 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
         sm_stamp(g_sm_syncstate);
 
         if (!state.fSyncStarted && CanServeBlocks(*peer) && !m_chainman.m_blockman.LoadingBlocks()) {
-            // Only actively request headers from a single peer, unless we're close to today.
-            if ((nSyncStarted == 0 && sync_blocks_and_headers_from_peer) || m_chainman.m_best_header->Time() > GetAdjustedTime() - 24h) {
+            // Request headers from several peers up front (not just one) so they
+            // all get a best-known-block early and block download spreads across
+            // them from the start; also start any peer once we're close to today.
+            if ((nSyncStarted < MAX_INITIAL_HEADER_SYNC_PEERS && sync_blocks_and_headers_from_peer) || m_chainman.m_best_header->Time() > GetAdjustedTime() - 24h) {
                 const CBlockIndex* pindexStart = m_chainman.m_best_header;
                 /* If possible, start at the block preceding the currently
                    best known header.  This ensures that we always get a
