@@ -216,7 +216,6 @@ RPCHelpMan walletlock()
 
     pwallet->Lock();
     pwallet->nRelockTime = 0;
-    pwallet->fWalletUnlockStakingOnly = false;
 
     return UniValue::VNULL;
 },

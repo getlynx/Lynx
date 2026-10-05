@@ -238,13 +238,27 @@ void WalletView::changePassphrase()
 void WalletView::unlockWallet()
 {
     // Unlock wallet when requested by wallet model
-    if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
+    const WalletModel::EncryptionStatus status = walletModel->getEncryptionStatus();
+    if (status == WalletModel::Locked || status == WalletModel::UnlockedStakingOnly) {
         AskPassphraseDialog dlg(AskPassphraseDialog::Unlock, this);
         dlg.setModel(walletModel);
         // A modal dialog must be synchronous here as expected
         // in the WalletModel::requestUnlock() function.
         dlg.exec();
     }
+}
+
+void WalletView::unlockWalletForStaking()
+{
+    if (walletModel->getEncryptionStatus() != WalletModel::Locked) return;
+    auto dlg = new AskPassphraseDialog(AskPassphraseDialog::UnlockStaking, this);
+    dlg->setModel(walletModel);
+    GUIUtil::ShowModalDialogAsynchronously(dlg);
+}
+
+void WalletView::lockWallet()
+{
+    walletModel->setWalletLocked(true);
 }
 
 void WalletView::usedSendingAddresses()

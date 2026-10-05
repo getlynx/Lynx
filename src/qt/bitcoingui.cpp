@@ -328,6 +328,10 @@ void BitcoinGUI::createActions()
     backupWalletAction->setStatusTip(tr("Backup wallet to another location"));
     changePassphraseAction = new QAction(tr("&Change Passphrase…"), this);
     changePassphraseAction->setStatusTip(tr("Change the passphrase used for wallet encryption"));
+    unlockWalletStakingAction = new QAction(tr("&Unlock Wallet for Staking…"), this);
+    unlockWalletStakingAction->setStatusTip(tr("Unlock the encrypted wallet so it can stake, while sending still requires the passphrase"));
+    lockWalletAction = new QAction(tr("&Lock Wallet"), this);
+    lockWalletAction->setStatusTip(tr("Lock the encrypted wallet (staking stops until it is unlocked again)"));
     signMessageAction = new QAction(tr("Sign &message…"), this);
     signMessageAction->setStatusTip(tr("Sign messages with your %1 addresses to prove you own them").arg(GUIUtil::chainName()));
     verifyMessageAction = new QAction(tr("&Verify message…"), this);
@@ -397,6 +401,8 @@ void BitcoinGUI::createActions()
         connect(encryptWalletAction, &QAction::triggered, walletFrame, &WalletFrame::encryptWallet);
         connect(backupWalletAction, &QAction::triggered, walletFrame, &WalletFrame::backupWallet);
         connect(changePassphraseAction, &QAction::triggered, walletFrame, &WalletFrame::changePassphrase);
+        connect(unlockWalletStakingAction, &QAction::triggered, walletFrame, &WalletFrame::unlockWalletForStaking);
+        connect(lockWalletAction, &QAction::triggered, walletFrame, &WalletFrame::lockWallet);
         connect(signMessageAction, &QAction::triggered, [this]{ showNormalIfMinimized(); });
         connect(signMessageAction, &QAction::triggered, [this]{ gotoSignMessageTab(); });
         connect(m_load_psbt_action, &QAction::triggered, [this]{ gotoLoadPSBT(); });
@@ -515,6 +521,8 @@ void BitcoinGUI::createMenuBar()
     {
         settings->addAction(encryptWalletAction);
         settings->addAction(toggleStakingAction);
+        settings->addAction(unlockWalletStakingAction);
+        settings->addAction(lockWalletAction);
         settings->addAction(changePassphraseAction);
         settings->addSeparator();
         settings->addAction(m_mask_values_action);
@@ -809,6 +817,11 @@ void BitcoinGUI::setWalletActionsEnabled(bool enabled)
     encryptWalletAction->setEnabled(enabled);
     backupWalletAction->setEnabled(enabled);
     changePassphraseAction->setEnabled(enabled);
+    if (!enabled) {
+        // Turned on per encryption state by setEncryptionStatus()
+        unlockWalletStakingAction->setEnabled(false);
+        lockWalletAction->setEnabled(false);
+    }
     signMessageAction->setEnabled(enabled);
     verifyMessageAction->setEnabled(enabled);
     usedSendingAddressesAction->setEnabled(enabled);
@@ -1459,6 +1472,15 @@ void BitcoinGUI::setEncryptionStatus(int status)
         changePassphraseAction->setEnabled(true);
         encryptWalletAction->setEnabled(false);
         break;
+    case WalletModel::UnlockedStakingOnly:
+        // Spending is still locked, so show the closed lock; the tooltip tells the two locked states apart
+        labelWalletEncryptionIcon->show();
+        labelWalletEncryptionIcon->setThemedPixmap(QStringLiteral(":/icons/lock_closed"), STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE);
+        labelWalletEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently <b>unlocked for staking only</b>. Sending requires the passphrase."));
+        encryptWalletAction->setChecked(true);
+        changePassphraseAction->setEnabled(true);
+        encryptWalletAction->setEnabled(false);
+        break;
     case WalletModel::Locked:
         labelWalletEncryptionIcon->show();
         labelWalletEncryptionIcon->setThemedPixmap(QStringLiteral(":/icons/lock_closed"), STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE);
@@ -1468,6 +1490,9 @@ void BitcoinGUI::setEncryptionStatus(int status)
         encryptWalletAction->setEnabled(false);
         break;
     }
+    // Unlocking for staking only makes sense from the locked state; locking from any unlocked state
+    unlockWalletStakingAction->setEnabled(status == WalletModel::Locked);
+    lockWalletAction->setEnabled(status == WalletModel::Unlocked || status == WalletModel::UnlockedStakingOnly);
 }
 
 void BitcoinGUI::updateWalletStatus()

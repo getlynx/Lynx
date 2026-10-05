@@ -74,7 +74,8 @@ public:
         NoKeys,       // wallet->IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS)
         Unencrypted,  // !wallet->IsCrypted()
         Locked,       // wallet->IsCrypted() && wallet->IsLocked()
-        Unlocked      // wallet->IsCrypted() && !wallet->IsLocked()
+        Unlocked,     // wallet->IsCrypted() && !wallet->IsLocked()
+        UnlockedStakingOnly // Unlocked for the staker only; spending still needs the passphrase
     };
 
     OptionsModel* getOptionsModel() const;
@@ -109,13 +110,14 @@ public:
     bool setWalletEncrypted(const SecureString& passphrase);
     // Passphrase only needed when unlocking
     bool setWalletLocked(bool locked, const SecureString &passPhrase=SecureString());
+    bool setWalletUnlockedStakingOnly(const SecureString& passPhrase);
     bool changePassphrase(const SecureString &oldPass, const SecureString &newPass);
 
     // RAII object for unlocking wallet, returned by requestUnlock()
     class UnlockContext
     {
     public:
-        UnlockContext(WalletModel *wallet, bool valid, bool relock);
+        UnlockContext(WalletModel *wallet, bool valid, bool relock, bool restore_staking_only);
         ~UnlockContext();
 
         bool isValid() const { return valid; }
@@ -130,6 +132,8 @@ public:
         WalletModel *wallet;
         const bool valid;
         const bool relock;
+        // Return to a staking-only unlock instead of locking, so staking keeps running
+        const bool restore_staking_only;
     };
 
     UnlockContext requestUnlock();

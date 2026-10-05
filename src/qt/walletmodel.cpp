@@ -329,6 +329,10 @@ WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
     {
         return Locked;
     }
+    else if (m_wallet->isUnlockedStakingOnly())
+    {
+        return UnlockedStakingOnly;
+    }
     else
     {
         return Unlocked;
@@ -350,8 +354,13 @@ bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase)
     else
     {
         // Unlock
-        return m_wallet->unlock(passPhrase);
+        return m_wallet->unlock(passPhrase, /*staking_only=*/false);
     }
+}
+
+bool WalletModel::setWalletUnlockedStakingOnly(const SecureString& passPhrase)
+{
+    return m_wallet->unlock(passPhrase, /*staking_only=*/true);
 }
 
 bool WalletModel::changePassphrase(const SecureString &oldPass, const SecureString &newPass)
@@ -449,22 +458,27 @@ void WalletModel::unsubscribeFromCoreSignals()
 // WalletModel::UnlockContext implementation
 WalletModel::UnlockContext WalletModel::requestUnlock()
 {
-    bool was_locked = getEncryptionStatus() == Locked;
+    // A staking-only unlock must not let the GUI spend, so it asks for the passphrase like a locked wallet
+    const EncryptionStatus status = getEncryptionStatus();
+    const bool was_staking_only = status == UnlockedStakingOnly;
+    bool was_locked = status == Locked || was_staking_only;
     if(was_locked)
     {
         // Request UI to unlock wallet
         Q_EMIT requireUnlock();
     }
     // If wallet is still locked, unlock was failed or cancelled, mark context as invalid
-    bool valid = getEncryptionStatus() != Locked;
+    const EncryptionStatus new_status = getEncryptionStatus();
+    bool valid = new_status != Locked && new_status != UnlockedStakingOnly;
 
-    return UnlockContext(this, valid, was_locked);
+    return UnlockContext(this, valid, was_locked, was_staking_only);
 }
 
-WalletModel::UnlockContext::UnlockContext(WalletModel *_wallet, bool _valid, bool _relock):
+WalletModel::UnlockContext::UnlockContext(WalletModel *_wallet, bool _valid, bool _relock, bool _restore_staking_only):
         wallet(_wallet),
         valid(_valid),
-        relock(_relock)
+        relock(_relock),
+        restore_staking_only(_restore_staking_only)
 {
 }
 
@@ -472,7 +486,11 @@ WalletModel::UnlockContext::~UnlockContext()
 {
     if(valid && relock)
     {
-        wallet->setWalletLocked(true);
+        if (restore_staking_only) {
+            wallet->wallet().setUnlockedStakingOnly();
+        } else {
+            wallet->setWalletLocked(true);
+        }
     }
 }
 
