@@ -1443,12 +1443,12 @@ static RPCHelpMan getchaintips()
     std::set<const CBlockIndex*> setOrphans;
     std::set<const CBlockIndex*> setPrevs;
 
-    for (const auto& [_, block_index] : chainman.BlockIndex()) {
-        if (!active_chain.Contains(&block_index)) {
-            setOrphans.insert(&block_index);
-            setPrevs.insert(block_index.pprev);
+    chainman.m_blockman.ForEachBlockIndex([&](const CBlockIndex* block_index) {
+        if (!active_chain.Contains(block_index)) {
+            setOrphans.insert(block_index);
+            setPrevs.insert(block_index->pprev);
         }
-    }
+    });
 
     for (std::set<const CBlockIndex*>::iterator it = setOrphans.begin(); it != setOrphans.end(); ++it) {
         if (setPrevs.erase(*it) == 0) {

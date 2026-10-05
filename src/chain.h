@@ -154,6 +154,11 @@ public:
     //! pointer to the hash of the block, if any. Memory is owned by this CBlockIndex
     const uint256* phashBlock{nullptr};
 
+    //! The block hash, stored in the record itself so the lookup table can hold
+    //! only {pointer, 32-bit hash fragment} per slot instead of the full key.
+    //! Set when the record is inserted into the index; phashBlock points at it.
+    uint256 m_block_hash{};
+
     //! pointer to the index of the predecessor of this block
     CBlockIndex* pprev{nullptr};
 

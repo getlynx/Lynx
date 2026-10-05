@@ -76,15 +76,15 @@ bool CheckStake(ChainstateManager& chainman, const CBlock* pblock)
         LOCK(cs_main);
 
         LogPrint(BCLog::POS, "CheckStake: Looking up previous block: %s\n", pblock->hashPrevBlock.GetHex());
-        node::BlockMap::const_iterator mi = chainman.BlockIndex().find(pblock->hashPrevBlock);
-        if (mi == chainman.BlockIndex().end()) {
+        CBlockIndex* mi = chainman.BlockIndex().find(pblock->hashPrevBlock);
+        if (mi == nullptr) {
             LogPrint(BCLog::POS, "CheckStake: ERROR - Previous block not found in block index\n");
             return error("%s: %s prev block not found: %s.", __func__, hashBlock.GetHex(), pblock->hashPrevBlock.GetHex());
         }
         LogPrint(BCLog::POS, "CheckStake: Previous block found in index\n");
 
         LogPrint(BCLog::POS, "CheckStake: Verifying previous block is in active chain\n");
-        if (!chainman.ActiveChain().Contains(&mi->second)) {
+        if (!chainman.ActiveChain().Contains(mi)) {
             LogPrint(BCLog::POS, "CheckStake: ERROR - Previous block not in active chain (orphaned or on fork)\n");
             return error("%s: %s prev block in active chain: %s.", __func__, hashBlock.GetHex(), pblock->hashPrevBlock.GetHex());
         }
@@ -93,7 +93,7 @@ bool CheckStake(ChainstateManager& chainman, const CBlock* pblock)
         BlockValidationState state;
         LogPrint(BCLog::POS, "CheckStake: Running proof-of-stake validation (checking kernel, target, signature)\n");
         LogPrint(BCLog::POS, "CheckStake: Block time: %d, Bits: %d\n", pblock->nTime, pblock->nBits);
-        if (!blnfncCheckProofOfStake(chainman.ActiveChainstate(), state, &mi->second, *pblock->vtx[1], pblock->nTime, pblock->nBits, proofHash, hashTarget)) {
+        if (!blnfncCheckProofOfStake(chainman.ActiveChainstate(), state, mi, *pblock->vtx[1], pblock->nTime, pblock->nBits, proofHash, hashTarget)) {
             LogPrint(BCLog::POS, "CheckStake: ERROR - Proof-of-stake validation failed (invalid kernel or didn't meet target)\n");
             return error("%s: proof-of-stake checking failed.", __func__);
         }

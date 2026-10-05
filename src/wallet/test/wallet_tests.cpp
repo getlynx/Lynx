@@ -384,12 +384,12 @@ static int64_t AddTx(ChainstateManager& chainman, CWallet& wallet, uint32_t lock
     CBlockIndex* block = nullptr;
     if (blockTime > 0) {
         LOCK(cs_main);
-        auto inserted = chainman.BlockIndex().emplace(std::piecewise_construct, std::make_tuple(GetRandHash()), std::make_tuple());
-        assert(inserted.second);
-        const uint256& hash = inserted.first->first;
-        block = &inserted.first->second;
+        const uint256 hash = GetRandHash();
+        block = node::NewBlockIndex(nullptr);
+        block->m_block_hash = hash;
+        block->phashBlock = &block->m_block_hash;
+        chainman.BlockIndex().insert(block);
         block->nTime = blockTime;
-        block->phashBlock = &hash;
         state = TxStateConfirmed{hash, block->nHeight, /*index=*/0};
     }
     return wallet.AddToWallet(MakeTransactionRef(tx), state, [&](CWalletTx& wtx, bool /* new_tx */) {

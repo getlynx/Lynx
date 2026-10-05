@@ -23,9 +23,12 @@
 #include <util/system.h>
 #include <validation.h>
 
+#include <cassert>
+#include <cstring>
 #include <map>
 #include <mutex>
 #include <stdexcept>
+#include <type_traits>
 #include <unistd.h>
 #include <unordered_map>
 #if !defined(_WIN32)
@@ -118,45 +121,74 @@ std::vector<CBlockIndex*> BlockManager::GetAllBlockIndices()
     AssertLockHeld(cs_main);
     std::vector<CBlockIndex*> rv;
     rv.reserve(m_block_index.size());
-    for (auto& [_, block_index] : m_block_index) {
-        rv.push_back(&block_index);
-    }
+    m_block_index.ForEach([&](CBlockIndex* block_index) { rv.push_back(block_index); });
     return rv;
 }
 
 CBlockIndex* BlockManager::LookupBlockIndex(const uint256& hash)
 {
     AssertLockHeld(cs_main);
-    BlockMap::iterator it = m_block_index.find(hash);
-    return it == m_block_index.end() ? nullptr : &it->second;
+    return m_block_index.find(hash);
 }
 
 const CBlockIndex* BlockManager::LookupBlockIndex(const uint256& hash) const
 {
     AssertLockHeld(cs_main);
-    BlockMap::const_iterator it = m_block_index.find(hash);
-    return it == m_block_index.end() ? nullptr : &it->second;
+    return m_block_index.find(hash);
 }
+
+namespace {
+//! One process-wide file arena, plus an optional in-RAM staging region used only
+//! during the load-time build (before records are copied into the file in height
+//! order). All arena state is guarded by this mutex.
+std::mutex g_arena_mtx;
+const std::size_t ARENA_RESERVED = std::size_t{8} * 1024 * 1024 * 1024;
+
+// Staging region: anonymous, in-RAM, released wholesale by ReleaseStaging so the
+// RAM goes straight back to the OS (unlike per-record heap frees, which glibc
+// tends to retain).
+bool  g_stage_active = false;
+char* g_stage_base = nullptr;
+std::size_t g_stage_offset = 0;
+
+// File-arena bump state (lifted to file scope, guarded by g_arena_mtx, so the
+// records can be walked in arena order by ForEachRecord). g_file_use_heap latches
+// on if the backing file can't be mapped.
+char* g_file_base = nullptr;
+std::size_t g_file_offset = 0;
+bool g_file_use_heap = false;
+
+inline void* ArenaHeapAlloc(std::size_t b, std::size_t a) { return ::operator new(b, std::align_val_t{a}); }
+} // namespace
 
 void* BlockIndexArena::Alloc(std::size_t bytes, std::size_t align)
 {
-    static std::mutex mtx;
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<std::mutex> lock(g_arena_mtx);
 
-    // The arena is an optimization: it lets the cold block index page out to a
-    // backing file instead of pinning RAM. It must NEVER be fatal. If the file
-    // can't be created or mapped (e.g. the datadir volume is short on space), or
-    // if the reserve is ever exhausted, we fall back to the heap for this and all
-    // later allocations — the index simply lives in RAM as it did before the
-    // arena, with no flattening on this box. Failing instead would surface as a
-    // failed block-index load, which makes the daemon force a full reindex.
-    // deallocate is a no-op and the index lives for the whole process, so the
-    // heap allocations are not a meaningful leak (same as the pre-arena path).
-    static bool use_heap = false;
-    auto heap_alloc = [](std::size_t b, std::size_t a) -> void* {
-        return ::operator new(b, std::align_val_t{a});
-    };
-    if (use_heap) return heap_alloc(bytes, align);
+    // While staging, allocate from the anonymous in-RAM region. Random writes
+    // here are cheap (no file writeback); the records are copied into the file in
+    // height order once the build is complete.
+    if (g_stage_active && g_stage_base != nullptr) {
+        const std::size_t aligned = (g_stage_offset + (align - 1)) & ~(align - 1);
+        if (aligned + bytes <= ARENA_RESERVED) {
+            void* p = g_stage_base + aligned;
+            g_stage_offset = aligned + bytes;
+            return p;
+        }
+        // Staging exhausted (should not happen at 8 GiB) — fall through to the file.
+    }
+
+    // File arena. It must NEVER be fatal: if the file can't be created or mapped
+    // (e.g. the datadir volume is short on space), or the reserve is exhausted, we
+    // fall back to the heap for this and all later file allocations — the index
+    // then lives in RAM as before, with no paging. Failing instead would surface
+    // as a failed block-index load, which makes the daemon force a full reindex.
+    const std::size_t reserved = ARENA_RESERVED;
+    if (g_file_use_heap) return ArenaHeapAlloc(bytes, align);
+    char*& base = g_file_base;
+    std::size_t& offset = g_file_offset;
+    bool& use_heap = g_file_use_heap;
+    auto heap_alloc = [](std::size_t b, std::size_t a) -> void* { return ArenaHeapAlloc(b, a); };
 #if defined(_WIN32)
     // Windows equivalent of the POSIX arena below, using the Win32 file-mapping
     // API. A sparse backing file is mapped once as a single fixed view and
@@ -164,9 +196,6 @@ void* BlockIndexArena::Alloc(std::size_t bytes, std::size_t align)
     // the process, so the handles are closed once the view exists. The file MUST
     // be marked sparse (FSCTL_SET_SPARSE) before it is sized by CreateFileMapping,
     // otherwise NTFS materializes the full 8 GiB reserve on disk.
-    static char* base = nullptr;
-    static std::size_t offset = 0;
-    static const std::size_t reserved = std::size_t{8} * 1024 * 1024 * 1024;
     if (base == nullptr) {
         const fs::path path = gArgs.GetDataDirNet() / "blockindex.arena";
         HANDLE hFile = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
@@ -204,11 +233,6 @@ void* BlockIndexArena::Alloc(std::size_t bytes, std::size_t align)
     offset = aligned + bytes;
     return p;
 #else
-    static char* base = nullptr;
-    static std::size_t offset = 0;
-    // Reserved address space for the arena. Sparse: only touched pages consume
-    // disk/RAM. 8 GiB holds well past the current chain length with headroom.
-    static const std::size_t reserved = std::size_t{8} * 1024 * 1024 * 1024;
     if (base == nullptr) {
         const fs::path path = gArgs.GetDataDirNet() / "blockindex.arena";
         const int fd = open(fs::PathToString(path).c_str(), O_RDWR | O_CREAT | O_TRUNC, 0600);
@@ -240,25 +264,95 @@ void* BlockIndexArena::Alloc(std::size_t bytes, std::size_t align)
 #endif
 }
 
+void BlockIndexArena::BeginStaging()
+{
+    std::lock_guard<std::mutex> lock(g_arena_mtx);
+    if (g_stage_base == nullptr) {
+#if defined(_WIN32)
+        g_stage_base = static_cast<char*>(VirtualAlloc(nullptr, ARENA_RESERVED, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+        if (g_stage_base == nullptr) {
+            LogPrintf("blockindex arena: staging VirtualAlloc failed; building the index directly in the file (hash order)\n");
+            return;
+        }
+#else
+        void* m = mmap(nullptr, ARENA_RESERVED, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        if (m == MAP_FAILED) {
+            LogPrintf("blockindex arena: staging mmap failed; building the index directly in the file (hash order)\n");
+            return;
+        }
+        g_stage_base = static_cast<char*>(m);
+#endif
+        g_stage_offset = 0;
+    }
+    g_stage_active = true;
+}
+
+bool BlockIndexArena::StagingActive()
+{
+    std::lock_guard<std::mutex> lock(g_arena_mtx);
+    return g_stage_active;
+}
+
+void BlockIndexArena::EndStaging()
+{
+    std::lock_guard<std::mutex> lock(g_arena_mtx);
+    g_stage_active = false;
+}
+
+void BlockIndexArena::ReleaseStaging()
+{
+    std::lock_guard<std::mutex> lock(g_arena_mtx);
+    g_stage_active = false;
+    if (g_stage_base != nullptr) {
+#if defined(_WIN32)
+        VirtualFree(g_stage_base, 0, MEM_RELEASE);
+#else
+        munmap(g_stage_base, ARENA_RESERVED);
+#endif
+        g_stage_base = nullptr;
+        g_stage_offset = 0;
+    }
+}
+
+bool BlockIndexArena::FileGeometry(char*& base, std::size_t& used_bytes)
+{
+    std::lock_guard<std::mutex> lock(g_arena_mtx);
+    if (g_file_use_heap || g_file_base == nullptr) return false;
+    base = g_file_base;
+    used_bytes = g_file_offset;
+    return true;
+}
+
+// Allocate a CBlockIndex in the arena (staging region while staging is active,
+// else the file) and construct it from a header, or default-construct it.
+CBlockIndex* NewBlockIndex(const CBlockHeader* header)
+{
+    void* mem = BlockIndexArena::Alloc(sizeof(CBlockIndex), alignof(CBlockIndex));
+    return header ? new (mem) CBlockIndex(*header) : new (mem) CBlockIndex();
+}
+
 CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block, CBlockIndex*& best_header)
 {
     AssertLockHeld(cs_main);
 
-    auto [mi, inserted] = m_block_index.try_emplace(block.GetHash(), block);
-    if (!inserted) {
-        return &mi->second;
+    const uint256 hash = block.GetHash();
+    if (CBlockIndex* existing = m_block_index.find(hash)) {
+        return existing;
     }
-    CBlockIndex* pindexNew = &(*mi).second;
+    // Build the record first (with its hash set, so the table can place it by
+    // that hash), then insert the pointer.
+    CBlockIndex* pindexNew = NewBlockIndex(&block);
+    pindexNew->m_block_hash = hash;
+    pindexNew->phashBlock = &pindexNew->m_block_hash;
+    m_block_index.insert(pindexNew);
 
     // We assign the sequence id to blocks only when the full data is available,
     // to avoid miners withholding blocks but broadcasting headers, to get a
     // competitive advantage.
     pindexNew->nSequenceId = 0;
 
-    pindexNew->phashBlock = &((*mi).first);
-    BlockMap::iterator miPrev = m_block_index.find(block.hashPrevBlock);
-    if (miPrev != m_block_index.end()) {
-        pindexNew->pprev = &(*miPrev).second;
+    if (CBlockIndex* pprev = m_block_index.find(block.hashPrevBlock)) {
+        pindexNew->pprev = pprev;
         pindexNew->nHeight = pindexNew->pprev->nHeight + 1;
         pindexNew->BuildSkip();
     }
@@ -279,8 +373,7 @@ void BlockManager::PruneOneBlockFile(const int fileNumber)
     AssertLockHeld(cs_main);
     LOCK(cs_LastBlockFile);
 
-    for (auto& entry : m_block_index) {
-        CBlockIndex* pindex = &entry.second;
+    ForEachBlockIndex([&](CBlockIndex* pindex) {
         if (pindex->nFile == fileNumber) {
             pindex->nStatus &= ~BLOCK_HAVE_DATA;
             pindex->nStatus &= ~BLOCK_HAVE_UNDO;
@@ -302,7 +395,7 @@ void BlockManager::PruneOneBlockFile(const int fileNumber)
                 }
             }
         }
-    }
+    });
 
     m_blockfile_info[fileNumber].SetNull();
     m_dirty_fileinfo.insert(fileNumber);
@@ -403,22 +496,75 @@ CBlockIndex* BlockManager::InsertBlockIndex(const uint256& hash)
         return nullptr;
     }
 
-    const auto [mi, inserted]{m_block_index.try_emplace(hash)};
-    CBlockIndex* pindex = &(*mi).second;
-    if (inserted) {
-        pindex->phashBlock = &((*mi).first);
+    if (CBlockIndex* existing = m_block_index.find(hash)) {
+        return existing;
     }
+    CBlockIndex* pindex = NewBlockIndex(nullptr);
+    pindex->m_block_hash = hash;
+    pindex->phashBlock = &pindex->m_block_hash;
+    m_block_index.insert(pindex);
     return pindex;
 }
 
 bool BlockManager::LoadBlockIndex()
 {
-    // Size the bucket array once, up front, so it is allocated a single time at
-    // its final size rather than reallocated on repeated rehashes (which would
-    // strand dead bucket arrays in the bump arena).
+    // Pre-size the RAM lookup map's bucket array once, so the genesis->tip inserts
+    // don't rehash repeatedly (each rehash re-buckets every entry, and that cost
+    // lands in header processing). This is 80 MB on the RAM map and is independent
+    // of the arena holding the records.
     m_block_index.reserve(10000000);
+
+    // Build the index into an in-RAM staging region first (random writes there
+    // are cheap, no file writeback), then copy every record into the file arena
+    // in height order so the file is written start-to-finish exactly once and
+    // the cold old-history pages evict cleanly. If staging can't be created the
+    // records build directly in the file (hash order), as before.
+    BlockIndexArena::BeginStaging();
+    const bool staged = BlockIndexArena::StagingActive();
+
     if (!m_block_tree_db->LoadBlockIndexGuts(GetConsensus(), [this](const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertBlockIndex(hash); })) {
+        if (staged) BlockIndexArena::ReleaseStaging();
         return false;
+    }
+
+    if (staged) {
+        // Copy staging -> file arena in height order. pskip is still null for
+        // every record (BuildSkip runs in the chain-work loop below), so it
+        // doubles as a temporary forwarding pointer old->new. Parents have a
+        // lower height, so they are copied before their children and the pprev
+        // fixup finds the parent's forwarding pointer already set. phashBlock
+        // points into the (stable) map key, so it stays valid across the copy.
+        // We relocate each record with memcpy. CBlockIndex has deleted copy/move
+        // assignment (so it is not "trivially copyable" by the trait), but it has
+        // no virtual functions and only trivial, self-contained members (integers,
+        // uint256, arith_uint256, COutPoint, raw pointers) — no std::string/vector
+        // or other types with internal pointers — so a byte copy reproduces it
+        // faithfully. The one thing a raw relocation cannot tolerate is a vtable,
+        // which this asserts against.
+        static_assert(!std::is_polymorphic_v<CBlockIndex>,
+                      "height-order arena copy memcpy's CBlockIndex: no vtable allowed");
+        assert(m_blocks_unlinked.empty());
+        assert(m_dirty_blockindex.empty());
+
+        std::vector<std::pair<int, CBlockIndex*>> keyed;
+        keyed.reserve(m_block_index.size());
+        m_block_index.ForEach([&](CBlockIndex* ptr) { keyed.emplace_back(ptr->nHeight, ptr); });
+        std::sort(keyed.begin(), keyed.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        BlockIndexArena::EndStaging(); // copy allocations now land in the file arena
+        for (const auto& [height, old_ptr] : keyed) {
+            void* mem = BlockIndexArena::Alloc(sizeof(CBlockIndex), alignof(CBlockIndex));
+            std::memcpy(mem, static_cast<const void*>(old_ptr), sizeof(CBlockIndex));
+            CBlockIndex* moved = static_cast<CBlockIndex*>(mem);
+            moved->phashBlock = &moved->m_block_hash;             // point at the moved record's own hash
+            if (moved->pprev) moved->pprev = moved->pprev->pskip; // parent already moved (lower height)
+            old_ptr->pskip = moved;                               // forwarding pointer old->new
+        }
+        // Repoint the table at the moved records (hashes unchanged, so slot
+        // positions and fragments are unchanged — only the pointers move).
+        m_block_index.RemapPointers([](CBlockIndex* old) { return old->pskip; });
+        // every moved record still has pskip == nullptr; BuildSkip sets it below.
+        BlockIndexArena::ReleaseStaging();
     }
 
     // Calculate nChainWork
@@ -506,11 +652,11 @@ bool BlockManager::LoadBlockIndexDB()
     // Check presence of blk files
     LogPrint(BCLog::STARTUP, "Checking all blk files are present...\n");
     std::set<int> setBlkDataFiles;
-    for (const auto& [_, block_index] : m_block_index) {
-        if (block_index.nStatus & BLOCK_HAVE_DATA) {
-            setBlkDataFiles.insert(block_index.nFile);
+    ForEachBlockIndex([&](const CBlockIndex* block_index) {
+        if (block_index->nStatus & BLOCK_HAVE_DATA) {
+            setBlkDataFiles.insert(block_index->nFile);
         }
-    }
+    });
     for (std::set<int>::iterator it = setBlkDataFiles.begin(); it != setBlkDataFiles.end(); it++) {
         FlatFilePos pos(*it, 0);
         if (AutoFile{OpenBlockFile(pos, true)}.IsNull()) {

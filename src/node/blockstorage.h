@@ -61,8 +61,28 @@ class BlockIndexArena
 {
 public:
     //! Allocate `bytes` from the arena, aligned to `align`. Opens/resets the
-    //! backing file on first use.
+    //! backing file on first use. While staging is active (see BeginStaging),
+    //! allocations come from an anonymous in-RAM region instead of the file.
     static void* Alloc(std::size_t bytes, std::size_t align);
+
+    //! Route subsequent Alloc calls into an anonymous in-RAM staging region.
+    //! Used to build the index cheaply before copying it into the file in
+    //! height order. If the staging region can't be created, staging stays
+    //! inactive and the index builds directly in the file (hash order).
+    static void BeginStaging();
+    //! Whether staging is currently active (BeginStaging succeeded).
+    static bool StagingActive();
+    //! Stop routing to staging; subsequent Alloc calls hit the file arena.
+    //! The staging region stays mapped so its records can still be read/copied.
+    static void EndStaging();
+    //! Release the anonymous staging region back to the OS.
+    static void ReleaseStaging();
+
+    //! If the records live contiguously in the file arena (not heap fallback),
+    //! report the arena base and the number of bytes used, so callers can walk
+    //! the records in arena order (sequential reads) with stride sizeof(CBlockIndex).
+    //! Returns false when records are on the heap and must be visited via the map.
+    static bool FileGeometry(char*& base, std::size_t& used_bytes);
 };
 
 template <class T>
@@ -83,11 +103,97 @@ struct MmapAllocator {
     template <class U> bool operator!=(const MmapAllocator<U>&) const noexcept { return false; }
 };
 
-// Because validation code takes pointers to the map's CBlockIndex objects, if
-// we ever switch to another associative container, we need to either use a
-// container that has stable addressing (true of all std associative
-// containers), or make the key a `std::unique_ptr<CBlockIndex>`
-using BlockMap = std::unordered_map<uint256, CBlockIndex, BlockHasher, std::equal_to<uint256>, MmapAllocator<std::pair<const uint256, CBlockIndex>>>;
+// Lookup table from block hash to its CBlockIndex*, living in ordinary RAM while
+// the records live in the file-backed arena. It is a flat open-addressing table:
+// two parallel arrays (a 32-bit hash fragment and the record pointer) so each
+// slot costs 12 bytes instead of an std::unordered_map node's ~56-64 B — ~0.2 GB
+// for an 8.6M chain instead of ~0.6 GB. The full key is NOT stored per slot; it
+// lives in the record (CBlockIndex::m_block_hash), read only to verify a fragment
+// match. Records are never erased, so there are no tombstones. Pre-size with
+// reserve() once before load so no rehashing happens during a sync.
+class CBlockIndexMap
+{
+    std::vector<uint32_t> m_frag;   // 0 == empty slot marker is NOT used; see m_ptr
+    std::vector<CBlockIndex*> m_ptr; // nullptr == empty slot
+    std::size_t m_mask{0};
+    std::size_t m_count{0};
+
+    static uint32_t Frag(const uint256& h) { return static_cast<uint32_t>(h.GetUint64(0) >> 32); }
+    std::size_t Home(const uint256& h) const { return static_cast<std::size_t>(h.GetUint64(0)) & m_mask; }
+
+    void Allocate(std::size_t slots)
+    {
+        m_frag.assign(slots, 0);
+        m_ptr.assign(slots, nullptr);
+        m_mask = slots - 1;
+    }
+    void PlaceNoGrow(CBlockIndex* p)
+    {
+        const uint256& h = p->m_block_hash;
+        std::size_t i = Home(h);
+        while (m_ptr[i]) i = (i + 1) & m_mask;
+        m_ptr[i] = p;
+        m_frag[i] = Frag(h);
+    }
+    void Grow(std::size_t slots)
+    {
+        std::vector<CBlockIndex*> old = std::move(m_ptr);
+        Allocate(slots);
+        for (CBlockIndex* p : old) if (p) PlaceNoGrow(p);
+    }
+
+public:
+    CBlockIndexMap() { Allocate(1u << 16); } // tiny start; reserve() sizes it before load
+
+    // Size the table so n entries fit at <=~60% load, rounded up to a power of two.
+    void reserve(std::size_t n)
+    {
+        std::size_t want = 1;
+        while (want < n + n / 2) want <<= 1; // n * 1.5 headroom
+        if (want > m_ptr.size()) Grow(want);
+    }
+
+    // Insert a fully-formed record (its m_block_hash must already be set).
+    void insert(CBlockIndex* p)
+    {
+        if ((m_count + 1) * 4 > m_ptr.size() * 3) Grow(m_ptr.size() << 1); // keep load < 0.75
+        PlaceNoGrow(p);
+        ++m_count;
+    }
+
+    CBlockIndex* find(const uint256& h) const
+    {
+        std::size_t i = Home(h);
+        const uint32_t f = Frag(h);
+        while (CBlockIndex* p = m_ptr[i]) {
+            if (m_frag[i] == f && p->m_block_hash == h) return p;
+            i = (i + 1) & m_mask;
+        }
+        return nullptr;
+    }
+    CBlockIndex* operator[](const uint256& h) const { return find(h); }
+    std::size_t count(const uint256& h) const { return find(h) ? 1 : 0; }
+    std::size_t size() const { return m_count; }
+    bool empty() const { return m_count == 0; }
+    std::size_t bucket_count() const { return m_ptr.size(); }
+
+    // Visit every record (unspecified order).
+    template <typename Fn> void ForEach(Fn&& fn) const
+    {
+        for (CBlockIndex* p : m_ptr) if (p) fn(p);
+    }
+    // Remap every slot's pointer to fn(old) — used by the load-time height-order
+    // copy to repoint the table at the moved records (the hashes, hence slot
+    // positions and fragments, are unchanged).
+    template <typename Fn> void RemapPointers(Fn&& fn)
+    {
+        for (CBlockIndex*& p : m_ptr) if (p) p = fn(p);
+    }
+};
+using BlockMap = CBlockIndexMap;
+
+// Allocate a CBlockIndex in the arena and construct it (from a header, or default).
+CBlockIndex* NewBlockIndex(const CBlockHeader* header);
 
 struct CBlockIndexWorkComparator {
     bool operator()(const CBlockIndex* pa, const CBlockIndex* pb) const;
@@ -206,6 +312,24 @@ public:
     BlockMap m_block_index GUARDED_BY(cs_main);
 
     std::vector<CBlockIndex*> GetAllBlockIndices() EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
+
+    //! Visit every block index record. When the records are contiguous in the
+    //! file arena this walks them in arena order (sequential disk reads, cheap on
+    //! a cold index); otherwise it falls back to iterating the lookup map. Visit
+    //! order is unspecified — use only where order doesn't matter.
+    template <typename Fn>
+    void ForEachBlockIndex(Fn&& fn) EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
+    {
+        char* base = nullptr;
+        std::size_t used = 0;
+        if (BlockIndexArena::FileGeometry(base, used)) {
+            for (std::size_t off = 0; off + sizeof(CBlockIndex) <= used; off += sizeof(CBlockIndex)) {
+                fn(reinterpret_cast<CBlockIndex*>(base + off));
+            }
+        } else {
+            m_block_index.ForEach([&](CBlockIndex* bi) { fn(bi); });
+        }
+    }
 
     /**
      * All pairs A->B, where A (or one of its ancestors) misses transactions, but B has transactions.
