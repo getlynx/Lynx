@@ -559,6 +559,19 @@ run_build_phase() {
         [ "$arch" = "x86_64-pc-linux-gnu" ] && apt install -qq -y build-essential make automake curl htop git libtool binutils bsdextrautils pkg-config python3 patch bison zip openssl >/dev/null 2>&1
         [ "$arch" = "arm-linux-gnueabihf" ] && apt install -qq -y build-essential make automake curl htop git libtool g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf gperf pkg-config bison byacc zip openssl >/dev/null 2>&1
         [ "$arch" = "aarch64-linux-gnu" ] && apt install -qq -y build-essential make automake curl htop git libtool g++-aarch64-linux-gnu binutils-aarch64-linux-gnu gperf pkg-config bison byacc zip openssl >/dev/null 2>&1
+        # jemalloc replaces glibc malloc in the Linux binaries (see JEMALLOC_LIBS in build_chain).
+        # The package is requested for the TARGET's Debian architecture, so the library always
+        # matches the binaries being linked. On a native build (ARM binaries built on an ARM
+        # device, x86_64 on x86_64) that is simply the host's own package. A cross build only
+        # gets it if the host already has that foreign architecture enabled in dpkg; otherwise
+        # the install fails quietly and build_chain falls back to glibc malloc with a warning.
+        local jemalloc_debarch
+        case "$arch" in
+            x86_64-pc-linux-gnu)  jemalloc_debarch="amd64" ;;
+            aarch64-linux-gnu)    jemalloc_debarch="arm64" ;;
+            arm-linux-gnueabihf)  jemalloc_debarch="armhf" ;;
+        esac
+        apt install -qq -y "libjemalloc-dev:${jemalloc_debarch}" >/dev/null 2>&1
         # The mingw-w64 cross-toolchain, only when the Windows gate opened (Debian 12 x86_64).
         # The -posix variant matters: depends/hosts/mingw32.mk auto-selects
         # x86_64-w64-mingw32-g++-posix when it is on PATH, which is how the POSIX threading
@@ -707,6 +720,27 @@ run_build_phase() {
         fi
         cd "$WORKDIR/depends"
 
+        # Discard depends (and the compiled source tree) built by older versions of this script,
+        # which lost -O2 and compiled everything at -O0 (see the depends make call below). Every
+        # depends build that keeps its optimization has -O2 in config.site, so its absence marks
+        # a stale one. Removing config.site alone is not enough: depends caches each package in
+        # built/<host> keyed by a build id that does NOT include CFLAGS, so the -O0 packages
+        # would be reused. Their work/ leftovers go too; downloaded sources/ are kept.
+        #
+        # The source tree's objects must be recompiled as well, since a CXXFLAGS change in the
+        # Makefile does not make make rebuild existing objects. They are deleted directly rather
+        # than via 'make clean': after the git reset above, a changed Makefile.am or configure.ac
+        # makes any make target re-run automake/config.status first, without CONFIG_SITE, and
+        # fail. Deleting them now, before depends rebuilds, means a run interrupted mid-depends
+        # still leaves no -O0 object behind for the next run to reuse.
+        if [ -f "$WORKDIR/depends/$BUILD_HOST/share/config.site" ] \
+           && ! grep -q -- '-O2' "$WORKDIR/depends/$BUILD_HOST/share/config.site"; then
+            echo "🧽 Existing depends for $BUILD_HOST were built without -O2; rebuilding depends and recompiling the source tree from scratch..."
+            rm -rf "$WORKDIR/depends/$BUILD_HOST" "$WORKDIR/depends/built/$BUILD_HOST" \
+                   "$WORKDIR/depends/work/build/$BUILD_HOST" "$WORKDIR/depends/work/staging/$BUILD_HOST"
+            find "$WORKDIR/src" -type f \( -name '*.o' -o -name '*.lo' -o -name '*.a' -o -name '*.la' \) -delete
+        fi
+
         # Build depends only when they haven't been built yet (config.site absent); an existing
         # depends build is reused to keep recompiles fast.
         if [ ! -f "$WORKDIR/depends/$BUILD_HOST/share/config.site" ]; then
@@ -775,10 +809,17 @@ IMPSHIM
             # mingw: -fPIC is meaningless on Windows (configure skips it there outright) and
             # _GNU_SOURCE is a glibc concept. depends/hosts/mingw32.mk already supplies the
             # right flags for the Windows host, so pass it nothing and let it do its job.
+            #
+            # -O2 must be spelled out here. A CFLAGS/CXXFLAGS given on the depends command line
+            # REPLACES the host's flags rather than adding to them (add_host_flags_func in
+            # depends/hosts/default.mk), so the release -O2 from depends/hosts/linux.mk is lost.
+            # These flags also land in config.site, where they become the CXXFLAGS for the whole
+            # Lynx build — and because CXXFLAGS is then already set, configure skips autoconf's
+            # "-g -O2" default too. Without -O2 here, every Linux/ARM binary compiles at -O0.
             if [ "$TARGET" = "windows" ]; then
                 make -j8 HOST=$BUILD_HOST
             else
-                make -j8 HOST=$BUILD_HOST CFLAGS="-fPIC -D_GNU_SOURCE" CXXFLAGS="-fPIC -D_GNU_SOURCE"
+                make -j8 HOST=$BUILD_HOST CFLAGS="-O2 -fPIC -D_GNU_SOURCE" CXXFLAGS="-O2 -fPIC -D_GNU_SOURCE"
             fi
         else
             echo "♻️  Reusing existing depends for $BUILD_HOST (no make)."
@@ -799,7 +840,26 @@ IMPSHIM
             # so no Qt host packages are needed; libqrencode is auto-detected from depends too.
             # Benches and tests are left out to speed up the build.
             # --enable-reduce-exports hides internal symbols (-fvisibility=hidden) to trim binary size.
-            CONFIG_SITE=$PWD/depends/$BUILD_HOST/share/config.site ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports
+            #
+            # Linux targets link jemalloc statically in place of glibc malloc. The _pic archive
+            # is used because the binaries are PIE, and linking it statically keeps the shipped
+            # zips free of a runtime libjemalloc dependency. Debian's multiarch directory is the
+            # GNU triplet minus the vendor, so x86_64-pc-linux-gnu looks in x86_64-linux-gnu.
+            # -ldl/-lpthread cover jemalloc's own dependencies on glibc < 2.34 (no-ops after).
+            # Windows never gets it; mingw has its own allocator and this is a Linux archive.
+            local JEMALLOC_LIBS=""
+            if [ "$TARGET" != "windows" ]; then
+                local jemalloc_a="/usr/lib/${BUILD_HOST/-pc-/-}/libjemalloc_pic.a"
+                if [ -f "$jemalloc_a" ]; then
+                    JEMALLOC_LIBS="$jemalloc_a -ldl -lpthread"
+                    echo "🧠 Linking jemalloc statically: $jemalloc_a"
+                else
+                    echo "⚠️  $jemalloc_a not found; building $BUILD_HOST with the default glibc malloc."
+                fi
+            fi
+            #CONFIG_SITE=$PWD/depends/$BUILD_HOST/share/config.site ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports
+            CONFIG_SITE=$PWD/depends/$BUILD_HOST/share/config.site CFLAGS="-O2" CXXFLAGS="-O2" LIBS="$JEMALLOC_LIBS" ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports
+
         #else
             #echo "♻️  Reusing existing configure output (skipping ./configure)."
         #fi
