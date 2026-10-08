@@ -1823,7 +1823,7 @@ node.scheduler->scheduleEvery([&node] {
     // node that needs to sync seeds true and draws blocks only from the 5 manual
     // anchors until IBD latches off. Remove to revert.
     const bool anchor_seed_ibd = chainman.ActiveChainstate().IsInitialBlockDownload();
-    LogPrintf("[ANCHOR-DIAG] seed g_ibd_active=%d (1=disallow non-anchor outbound, 0=allow)\n", (int)anchor_seed_ibd);
+    LogPrint(BCLog::NET, "[ANCHOR-DIAG] seed g_ibd_active=%d (1=disallow non-anchor outbound, 0=allow)\n", (int)anchor_seed_ibd);
     g_ibd_active.store(anchor_seed_ibd, std::memory_order_relaxed);
 
     assert(!node.peerman);
@@ -2185,7 +2185,7 @@ LogPrint (BCLog::STORAGE, "MAX_PROTOCOL_MESSAGE_LENGTH %d\n", MAX_PROTOCOL_MESSA
 gblnDisableStaking = disablestaking;
 
         if (disablestaking) {
-            LogPrintf("-disablestaking is enabled\n");
+            LogPrint(BCLog::POS, "-disablestaking is enabled\n");
         } else {
             stakeman = std::thread(&stakeman_handler, std::ref(*node.wallet_loader->context()), std::ref(chainman), node.connman.get());
             stakeman.detach();

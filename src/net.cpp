@@ -1674,6 +1674,11 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect)
     }
 
     ConnectToStaticLynxNodes(*this);
+    // [ANCHOR-ONLY SYNC] While in IBD the anchors are the only outbound peers,
+    // so re-dial any that dropped (e.g. an anchor restart) once a minute.
+    // Connected anchors are skipped by OpenNetworkConnection. After IBD the
+    // anchors are not pinned; normal outbound peers take over.
+    auto next_anchor_retry = start + std::chrono::seconds{60};
 
     while (!interruptNet)
     {
@@ -1681,6 +1686,12 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect)
 
         if (!interruptNet.sleep_for(std::chrono::milliseconds(500)))
             return;
+
+        if (g_ibd_active.load(std::memory_order_relaxed) &&
+            GetTime<std::chrono::microseconds>() >= next_anchor_retry) {
+            ConnectToStaticLynxNodes(*this);
+            next_anchor_retry = GetTime<std::chrono::microseconds>() + std::chrono::seconds{60};
+        }
 
         CSemaphoreGrant grant(*semOutbound);
         if (interruptNet)

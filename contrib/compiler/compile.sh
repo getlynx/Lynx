@@ -553,12 +553,30 @@ run_build_phase() {
         dnf -y groupinstall "Development Tools" >/dev/null 2>&1 || dnf -y group install "Development Tools" >/dev/null 2>&1
         dnf -y --allowerasing install make automake curl git libtool binutils util-linux \
             pkgconf-pkg-config python3 patch bison zip openssl >/dev/null 2>&1
+        # ccache (EPEL) lets chains reuse each other's compiled objects; optional, so a
+        # missing EPEL only costs speed. See the ccache block below.
+        dnf -y install ccache >/dev/null 2>&1 || true
     else
         # Debian/Ubuntu: native build tools for x86_64, cross-toolchains for ARM targets.
         # bsdextrautils provides hexdump on Debian 12+/Ubuntu (it replaced bsdmainutils).
         [ "$arch" = "x86_64-pc-linux-gnu" ] && apt install -qq -y build-essential make automake curl htop git libtool binutils bsdextrautils pkg-config python3 patch bison zip openssl >/dev/null 2>&1
         [ "$arch" = "arm-linux-gnueabihf" ] && apt install -qq -y build-essential make automake curl htop git libtool g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf gperf pkg-config bison byacc zip openssl >/dev/null 2>&1
         [ "$arch" = "aarch64-linux-gnu" ] && apt install -qq -y build-essential make automake curl htop git libtool g++-aarch64-linux-gnu binutils-aarch64-linux-gnu gperf pkg-config bison byacc zip openssl >/dev/null 2>&1
+        # jemalloc replaces glibc malloc in the Linux binaries (see JEMALLOC_LIBS in build_chain).
+        # The package is requested for the TARGET's Debian architecture, so the library always
+        # matches the binaries being linked. On a native build (ARM binaries built on an ARM
+        # device, x86_64 on x86_64) that is simply the host's own package. A cross build only
+        # gets it if the host already has that foreign architecture enabled in dpkg; otherwise
+        # the install fails quietly and build_chain falls back to glibc malloc with a warning.
+        local jemalloc_debarch
+        case "$arch" in
+            x86_64-pc-linux-gnu)  jemalloc_debarch="amd64" ;;
+            aarch64-linux-gnu)    jemalloc_debarch="arm64" ;;
+            arm-linux-gnueabihf)  jemalloc_debarch="armhf" ;;
+        esac
+        apt install -qq -y "libjemalloc-dev:${jemalloc_debarch}" >/dev/null 2>&1
+        # ccache lets chains reuse each other's compiled objects (see the ccache block below).
+        apt install -qq -y ccache >/dev/null 2>&1 || true
         # The mingw-w64 cross-toolchain, only when the Windows gate opened (Debian 12 x86_64).
         # The -posix variant matters: depends/hosts/mingw32.mk auto-selects
         # x86_64-w64-mingw32-g++-posix when it is on PATH, which is how the POSIX threading
@@ -583,6 +601,49 @@ run_build_phase() {
             [ "$BUILD_WINDOWS" -eq 1 ] && echo "✅ mingw-w64 cross-toolchain ready."
         fi
     fi
+
+    # ── Caches shared by every chain ────────────────────────────────────────────────
+    # All chains build the same source with only the chain spec differing, so most of
+    # the work is identical from one chain to the next. Two caches carry it across.
+    #
+    # depends: nothing in depends is chain-specific. Every chain's depends make points
+    # at one SOURCES_PATH (downloaded tarballs) and one BASE_CACHE (finished packages,
+    # under built/<host>/). The first chain for a host builds each package; later chains
+    # find it there and only unpack it. Each cached package is keyed by a build id
+    # derived from its recipe and toolchain, so a recipe change rebuilds just that
+    # package. This cache only ever holds -O2 packages: it is filled exclusively by
+    # this version of the script, which always passes -O2 (see the depends make call).
+    DEPENDS_CACHE="/root/.depends-cache"
+    mkdir -p "$DEPENDS_CACHE/sources" "$DEPENDS_CACHE/built"
+
+    # ccache: configure enables it on its own when it is on PATH (use_ccache=auto). One
+    # cache directory serves every chain. CCACHE_BASEDIR=/root rewrites absolute paths
+    # under /root to relative ones, so /root/lynx/src/... and /root/digitalcoin/src/...
+    # hash the same. -DCURRENT_CHAIN differs per chain, but ccache's preprocessor mode
+    # leaves -D options out of the hash and compares the preprocessed source instead, so
+    # every file that never expands CURRENT_CHAIN (leveldb, secp256k1, crc32c, univalue,
+    # most of crypto/ and util/, ...) is compiled once and reused by every later chain.
+    # Same-chain rebuilds benefit too. NOHASHDIR keeps the build directory out of the
+    # hash should debug info (-g) ever be enabled.
+    if command -v ccache >/dev/null 2>&1; then
+        export CCACHE_DIR="/root/.ccache-lynx"
+        export CCACHE_BASEDIR="/root"
+        export CCACHE_NOHASHDIR=1
+        export CCACHE_MAXSIZE="20G"
+        mkdir -p "$CCACHE_DIR"
+        echo "🗃️  ccache enabled (shared across chains): $CCACHE_DIR, max $CCACHE_MAXSIZE"
+    else
+        echo "⚠️  ccache not found; every chain will compile src/ from scratch."
+    fi
+
+    # Parallel jobs for the main make. Each compiler process can need 1-1.5 GB (the Qt
+    # and validation units are the heaviest), so jobs are capped by RAM as well as by
+    # core count: 1.5 GB per job, never fewer than one. MEM_KB was read at startup.
+    MAKE_JOBS=$(nproc 2>/dev/null || echo 1)
+    MAX_JOBS_BY_RAM=$(( MEM_KB / 1572864 ))
+    [ "$MAX_JOBS_BY_RAM" -lt 1 ] && MAX_JOBS_BY_RAM=1
+    [ "$MAKE_JOBS" -gt "$MAX_JOBS_BY_RAM" ] && MAKE_JOBS=$MAX_JOBS_BY_RAM
+    echo "⚙️  Compiling with make -j${MAKE_JOBS} ($(nproc 2>/dev/null || echo 1) cores, $(( MEM_KB / 1048576 )) GB RAM)."
 
     # ── Per-chain build ─────────────────────────────────────────────────────────────
     # Everything chain-specific lives here: checkout, depends, configure, make, install,
@@ -707,10 +768,44 @@ run_build_phase() {
         fi
         cd "$WORKDIR/depends"
 
+        # Discard depends (and the compiled source tree) built by older versions of this script,
+        # which lost -O2 and compiled everything at -O0 (see the depends make call below). Every
+        # depends build that keeps its optimization has -O2 in config.site, so its absence marks
+        # a stale one. Removing config.site alone is not enough: depends caches each package in
+        # built/<host> keyed by a build id that does NOT include CFLAGS, so the -O0 packages
+        # would be reused. Their work/ leftovers go too; downloaded sources/ are kept.
+        # The shared $DEPENDS_CACHE is deliberately left alone: only this script version
+        # fills it, always at -O2, so it never holds an -O0 package.
+        #
+        # The source tree's objects must be recompiled as well, since a CXXFLAGS change in the
+        # Makefile does not make make rebuild existing objects. They are deleted directly rather
+        # than via 'make clean': after the git reset above, a changed Makefile.am or configure.ac
+        # makes any make target re-run automake/config.status first, without CONFIG_SITE, and
+        # fail. Deleting them now, before depends rebuilds, means a run interrupted mid-depends
+        # still leaves no -O0 object behind for the next run to reuse.
+        if [ -f "$WORKDIR/depends/$BUILD_HOST/share/config.site" ] \
+           && ! grep -q -- '-O2' "$WORKDIR/depends/$BUILD_HOST/share/config.site"; then
+            echo "🧽 Existing depends for $BUILD_HOST were built without -O2; rebuilding depends and recompiling the source tree from scratch..."
+            rm -rf "$WORKDIR/depends/$BUILD_HOST" "$WORKDIR/depends/built/$BUILD_HOST" \
+                   "$WORKDIR/depends/work/build/$BUILD_HOST" "$WORKDIR/depends/work/staging/$BUILD_HOST"
+            find "$WORKDIR/src" -type f \( -name '*.o' -o -name '*.lo' -o -name '*.a' -o -name '*.la' \) -delete
+        fi
+
         # Build depends only when they haven't been built yet (config.site absent); an existing
         # depends build is reused to keep recompiles fast.
         if [ ! -f "$WORKDIR/depends/$BUILD_HOST/share/config.site" ]; then
             echo "🧰 Building depends for $BUILD_HOST ..."
+
+            # Seed the shared cache from depends that other chains on this host built before
+            # the cache existed, so the first chain after upgrading this script doesn't redo
+            # work already on disk. Only trees whose config.site has -O2 qualify (anything
+            # else is a stale -O0 build). cp -n never overwrites, and the tarball names carry
+            # the build id, so a package from an older recipe is simply never matched.
+            for other_cs in /root/*/depends/"$BUILD_HOST"/share/config.site; do
+                [ -f "$other_cs" ] && grep -q -- '-O2' "$other_cs" || continue
+                other_built="${other_cs%/"$BUILD_HOST"/share/config.site}/built/$BUILD_HOST"
+                [ -d "$other_built" ] && cp -rn "$other_built" "$DEPENDS_CACHE/built/" 2>/dev/null || true
+            done
 
             # Clear stale "configured" stamps before building depends.
             #
@@ -775,10 +870,21 @@ IMPSHIM
             # mingw: -fPIC is meaningless on Windows (configure skips it there outright) and
             # _GNU_SOURCE is a glibc concept. depends/hosts/mingw32.mk already supplies the
             # right flags for the Windows host, so pass it nothing and let it do its job.
+            #
+            # -O2 must be spelled out here. A CFLAGS/CXXFLAGS given on the depends command line
+            # REPLACES the host's flags rather than adding to them (add_host_flags_func in
+            # depends/hosts/default.mk), so the release -O2 from depends/hosts/linux.mk is lost.
+            # These flags also land in config.site, where they become the CXXFLAGS for the whole
+            # Lynx build — and because CXXFLAGS is then already set, configure skips autoconf's
+            # "-g -O2" default too. Without -O2 here, every Linux/ARM binary compiles at -O0.
+            #
+            # SOURCES_PATH/BASE_CACHE point at the cache shared by every chain (see
+            # DEPENDS_CACHE above), so only the first chain per host actually compiles.
             if [ "$TARGET" = "windows" ]; then
-                make -j8 HOST=$BUILD_HOST
+                make -j8 HOST=$BUILD_HOST SOURCES_PATH="$DEPENDS_CACHE/sources" BASE_CACHE="$DEPENDS_CACHE/built"
             else
-                make -j8 HOST=$BUILD_HOST CFLAGS="-fPIC -D_GNU_SOURCE" CXXFLAGS="-fPIC -D_GNU_SOURCE"
+                make -j8 HOST=$BUILD_HOST SOURCES_PATH="$DEPENDS_CACHE/sources" BASE_CACHE="$DEPENDS_CACHE/built" \
+                    CFLAGS="-O2 -fPIC -D_GNU_SOURCE" CXXFLAGS="-O2 -fPIC -D_GNU_SOURCE"
             fi
         else
             echo "♻️  Reusing existing depends for $BUILD_HOST (no make)."
@@ -799,7 +905,47 @@ IMPSHIM
             # so no Qt host packages are needed; libqrencode is auto-detected from depends too.
             # Benches and tests are left out to speed up the build.
             # --enable-reduce-exports hides internal symbols (-fvisibility=hidden) to trim binary size.
-            CONFIG_SITE=$PWD/depends/$BUILD_HOST/share/config.site ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports
+            #
+            # Linux targets link jemalloc statically in place of glibc malloc. The _pic archive
+            # is used because the binaries are PIE, and linking it statically keeps the shipped
+            # zips free of a runtime libjemalloc dependency. Debian's multiarch directory is the
+            # GNU triplet minus the vendor, so x86_64-pc-linux-gnu looks in x86_64-linux-gnu.
+            # -ldl/-lpthread cover jemalloc's own dependencies on glibc < 2.34 (no-ops after).
+            # Windows never gets it; mingw has its own allocator and this is a Linux archive.
+            #
+            # The archive's OBJECTS are linked, never the .a itself. --enable-reduce-exports adds
+            # -Wl,--exclude-libs,ALL, which hides every symbol pulled from a static archive, so
+            # linking the .a left malloc/free out of the dynamic symbol table: libc and
+            # libstdc++ kept allocating with glibc while our code freed with jemalloc, and
+            # every binary segfaulted at startup (even -version) inside jemalloc's rtree
+            # lookup. --exclude-libs does not touch plain object files, so linking the members
+            # directly exports malloc/free and the whole process shares one allocator. Verify
+            # with: objdump -T <binary> | grep -w malloc   (must print a defined symbol).
+            #
+            # --with-libs=no skips libbitcoinconsensus.so (never shipped by this script), since
+            # LIBS reaches every link and an allocator must not be baked into a shared library.
+            local JEMALLOC_LIBS="" JEMALLOC_CONFIGURE_ARGS=""
+            if [ "$TARGET" != "windows" ]; then
+                local jemalloc_a="/usr/lib/${BUILD_HOST/-pc-/-}/libjemalloc_pic.a"
+                if [ -f "$jemalloc_a" ]; then
+                    local jemalloc_objs="$WORKDIR/.jemalloc-objs"
+                    rm -rf "$jemalloc_objs" && mkdir -p "$jemalloc_objs"
+                    (cd "$jemalloc_objs" && ar x "$jemalloc_a")
+                    # LIBS also reaches C-only sub-configures (src/secp256k1), whose "C compiler
+                    # works" test links it. jemalloc_cpp.o is C++ (its operator new/delete) and
+                    # fails a C link, so it is dropped: libstdc++'s own operator new calls malloc,
+                    # which already resolves to jemalloc's. -lm covers jemalloc's log/exp/round.
+                    rm -f "$jemalloc_objs"/jemalloc_cpp*.o
+                    JEMALLOC_LIBS="$(ls "$jemalloc_objs"/*.o | tr '\n' ' ')-ldl -lpthread -lm"
+                    JEMALLOC_CONFIGURE_ARGS="--with-libs=no"
+                    echo "🧠 Linking jemalloc statically (as objects) from: $jemalloc_a"
+                else
+                    echo "⚠️  $jemalloc_a not found; building $BUILD_HOST with the default glibc malloc."
+                fi
+            fi
+            #CONFIG_SITE=$PWD/depends/$BUILD_HOST/share/config.site ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports
+            CONFIG_SITE=$PWD/depends/$BUILD_HOST/share/config.site CFLAGS="-O2" CXXFLAGS="-O2" LIBS="$JEMALLOC_LIBS" ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports $JEMALLOC_CONFIGURE_ARGS
+
         #else
             #echo "♻️  Reusing existing configure output (skipping ./configure)."
         #fi
@@ -809,7 +955,19 @@ IMPSHIM
         # row out of the spec table in chainparams.cpp and names its .conf file. Every chain
         # passes it, lynx included — omitting it compiles CURRENT_CHAIN as "", which looks up
         # an empty spec and trips the genesis assert at startup.
-        make NAME="$BIN_BASE" V=1
+        # Link flags (LIBS, e.g. jemalloc) are not make prerequisites, so a reconfigure alone never
+        # relinks binaries whose objects are unchanged. Removing them forces a fresh link; it costs
+        # seconds and guarantees the shipped binaries match this run's configure. The linked files
+        # are always the lynx* ones; autogen.sh's 'all:' rules then copy them to the ${BIN_BASE}*
+        # names, so both sets go.
+        rm -f src/lynxd${EXEEXT} src/lynx-cli${EXEEXT} src/lynx-tx${EXEEXT} src/qt/lynx-qt${EXEEXT} \
+              "src/${BIN_BASE}d${EXEEXT}" "src/${BIN_BASE}-cli${EXEEXT}" "src/${BIN_BASE}-tx${EXEEXT}" "src/${BIN_BASE}-qt${EXEEXT}"
+        command -v ccache >/dev/null 2>&1 && ccache -z >/dev/null 2>&1   # per-chain hit stats
+        make -j"$MAKE_JOBS" NAME="$BIN_BASE" V=1
+        if command -v ccache >/dev/null 2>&1; then
+            echo "🗃️  ccache for ${BLOCKCHAIN} (${TARGET}):"
+            ccache -s 2>/dev/null | grep -iE 'hits|misses|cache size' | sed 's/^/    /' || true
+        fi
 
         # Install the four binaries (daemon, CLI, tx tool, Qt wallet); they are stripped and
         # archived further below.
@@ -837,6 +995,18 @@ IMPSHIM
                 exit 1
             fi
         done
+
+        # A jemalloc build must export malloc/free, or the process ends up with two allocators
+        # and crashes at startup (see JEMALLOC_LIBS above). Catch that here rather than on a node.
+        if [ -n "$JEMALLOC_LIBS" ]; then
+            for bin_path in "${BINARIES[@]}"; do
+                if ! objdump -T "$bin_path" | grep -qE '\.text.*[[:space:]]malloc$'; then
+                    echo "❗ $(basename "$bin_path") links jemalloc but does not export malloc; it would segfault at startup."
+                    exit 1
+                fi
+            done
+            echo "✅ jemalloc's malloc/free are exported by all binaries."
+        fi
 
         # Stage the four binaries next to the script so they can be stripped without
         # touching the build tree's copies (which keep their symbols for debugging). They
