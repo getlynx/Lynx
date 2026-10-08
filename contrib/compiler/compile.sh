@@ -866,7 +866,12 @@ IMPSHIM
                     local jemalloc_objs="$WORKDIR/.jemalloc-objs"
                     rm -rf "$jemalloc_objs" && mkdir -p "$jemalloc_objs"
                     (cd "$jemalloc_objs" && ar x "$jemalloc_a")
-                    JEMALLOC_LIBS="$(ls "$jemalloc_objs"/*.o | tr '\n' ' ')-ldl -lpthread"
+                    # LIBS also reaches C-only sub-configures (src/secp256k1), whose "C compiler
+                    # works" test links it. jemalloc_cpp.o is C++ (its operator new/delete) and
+                    # fails a C link, so it is dropped: libstdc++'s own operator new calls malloc,
+                    # which already resolves to jemalloc's. -lm covers jemalloc's log/exp/round.
+                    rm -f "$jemalloc_objs"/jemalloc_cpp*.o
+                    JEMALLOC_LIBS="$(ls "$jemalloc_objs"/*.o | tr '\n' ' ')-ldl -lpthread -lm"
                     JEMALLOC_CONFIGURE_ARGS="--with-libs=no"
                     echo "🧠 Linking jemalloc statically (as objects) from: $jemalloc_a"
                 else
