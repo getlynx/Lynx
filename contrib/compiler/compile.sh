@@ -553,6 +553,9 @@ run_build_phase() {
         dnf -y groupinstall "Development Tools" >/dev/null 2>&1 || dnf -y group install "Development Tools" >/dev/null 2>&1
         dnf -y --allowerasing install make automake curl git libtool binutils util-linux \
             pkgconf-pkg-config python3 patch bison zip openssl >/dev/null 2>&1
+        # ccache (EPEL) lets chains reuse each other's compiled objects; optional, so a
+        # missing EPEL only costs speed. See the ccache block below.
+        dnf -y install ccache >/dev/null 2>&1 || true
     else
         # Debian/Ubuntu: native build tools for x86_64, cross-toolchains for ARM targets.
         # bsdextrautils provides hexdump on Debian 12+/Ubuntu (it replaced bsdmainutils).
@@ -572,6 +575,8 @@ run_build_phase() {
             arm-linux-gnueabihf)  jemalloc_debarch="armhf" ;;
         esac
         apt install -qq -y "libjemalloc-dev:${jemalloc_debarch}" >/dev/null 2>&1
+        # ccache lets chains reuse each other's compiled objects (see the ccache block below).
+        apt install -qq -y ccache >/dev/null 2>&1 || true
         # The mingw-w64 cross-toolchain, only when the Windows gate opened (Debian 12 x86_64).
         # The -posix variant matters: depends/hosts/mingw32.mk auto-selects
         # x86_64-w64-mingw32-g++-posix when it is on PATH, which is how the POSIX threading
@@ -596,6 +601,49 @@ run_build_phase() {
             [ "$BUILD_WINDOWS" -eq 1 ] && echo "✅ mingw-w64 cross-toolchain ready."
         fi
     fi
+
+    # ── Caches shared by every chain ────────────────────────────────────────────────
+    # All chains build the same source with only the chain spec differing, so most of
+    # the work is identical from one chain to the next. Two caches carry it across.
+    #
+    # depends: nothing in depends is chain-specific. Every chain's depends make points
+    # at one SOURCES_PATH (downloaded tarballs) and one BASE_CACHE (finished packages,
+    # under built/<host>/). The first chain for a host builds each package; later chains
+    # find it there and only unpack it. Each cached package is keyed by a build id
+    # derived from its recipe and toolchain, so a recipe change rebuilds just that
+    # package. This cache only ever holds -O2 packages: it is filled exclusively by
+    # this version of the script, which always passes -O2 (see the depends make call).
+    DEPENDS_CACHE="/root/.depends-cache"
+    mkdir -p "$DEPENDS_CACHE/sources" "$DEPENDS_CACHE/built"
+
+    # ccache: configure enables it on its own when it is on PATH (use_ccache=auto). One
+    # cache directory serves every chain. CCACHE_BASEDIR=/root rewrites absolute paths
+    # under /root to relative ones, so /root/lynx/src/... and /root/digitalcoin/src/...
+    # hash the same. -DCURRENT_CHAIN differs per chain, but ccache's preprocessor mode
+    # leaves -D options out of the hash and compares the preprocessed source instead, so
+    # every file that never expands CURRENT_CHAIN (leveldb, secp256k1, crc32c, univalue,
+    # most of crypto/ and util/, ...) is compiled once and reused by every later chain.
+    # Same-chain rebuilds benefit too. NOHASHDIR keeps the build directory out of the
+    # hash should debug info (-g) ever be enabled.
+    if command -v ccache >/dev/null 2>&1; then
+        export CCACHE_DIR="/root/.ccache-lynx"
+        export CCACHE_BASEDIR="/root"
+        export CCACHE_NOHASHDIR=1
+        export CCACHE_MAXSIZE="20G"
+        mkdir -p "$CCACHE_DIR"
+        echo "🗃️  ccache enabled (shared across chains): $CCACHE_DIR, max $CCACHE_MAXSIZE"
+    else
+        echo "⚠️  ccache not found; every chain will compile src/ from scratch."
+    fi
+
+    # Parallel jobs for the main make. Each compiler process can need 1-1.5 GB (the Qt
+    # and validation units are the heaviest), so jobs are capped by RAM as well as by
+    # core count: 1.5 GB per job, never fewer than one. MEM_KB was read at startup.
+    MAKE_JOBS=$(nproc 2>/dev/null || echo 1)
+    MAX_JOBS_BY_RAM=$(( MEM_KB / 1572864 ))
+    [ "$MAX_JOBS_BY_RAM" -lt 1 ] && MAX_JOBS_BY_RAM=1
+    [ "$MAKE_JOBS" -gt "$MAX_JOBS_BY_RAM" ] && MAKE_JOBS=$MAX_JOBS_BY_RAM
+    echo "⚙️  Compiling with make -j${MAKE_JOBS} ($(nproc 2>/dev/null || echo 1) cores, $(( MEM_KB / 1048576 )) GB RAM)."
 
     # ── Per-chain build ─────────────────────────────────────────────────────────────
     # Everything chain-specific lives here: checkout, depends, configure, make, install,
@@ -726,6 +774,8 @@ run_build_phase() {
         # a stale one. Removing config.site alone is not enough: depends caches each package in
         # built/<host> keyed by a build id that does NOT include CFLAGS, so the -O0 packages
         # would be reused. Their work/ leftovers go too; downloaded sources/ are kept.
+        # The shared $DEPENDS_CACHE is deliberately left alone: only this script version
+        # fills it, always at -O2, so it never holds an -O0 package.
         #
         # The source tree's objects must be recompiled as well, since a CXXFLAGS change in the
         # Makefile does not make make rebuild existing objects. They are deleted directly rather
@@ -745,6 +795,17 @@ run_build_phase() {
         # depends build is reused to keep recompiles fast.
         if [ ! -f "$WORKDIR/depends/$BUILD_HOST/share/config.site" ]; then
             echo "🧰 Building depends for $BUILD_HOST ..."
+
+            # Seed the shared cache from depends that other chains on this host built before
+            # the cache existed, so the first chain after upgrading this script doesn't redo
+            # work already on disk. Only trees whose config.site has -O2 qualify (anything
+            # else is a stale -O0 build). cp -n never overwrites, and the tarball names carry
+            # the build id, so a package from an older recipe is simply never matched.
+            for other_cs in /root/*/depends/"$BUILD_HOST"/share/config.site; do
+                [ -f "$other_cs" ] && grep -q -- '-O2' "$other_cs" || continue
+                other_built="${other_cs%/"$BUILD_HOST"/share/config.site}/built/$BUILD_HOST"
+                [ -d "$other_built" ] && cp -rn "$other_built" "$DEPENDS_CACHE/built/" 2>/dev/null || true
+            done
 
             # Clear stale "configured" stamps before building depends.
             #
@@ -816,10 +877,14 @@ IMPSHIM
             # These flags also land in config.site, where they become the CXXFLAGS for the whole
             # Lynx build — and because CXXFLAGS is then already set, configure skips autoconf's
             # "-g -O2" default too. Without -O2 here, every Linux/ARM binary compiles at -O0.
+            #
+            # SOURCES_PATH/BASE_CACHE point at the cache shared by every chain (see
+            # DEPENDS_CACHE above), so only the first chain per host actually compiles.
             if [ "$TARGET" = "windows" ]; then
-                make -j8 HOST=$BUILD_HOST
+                make -j8 HOST=$BUILD_HOST SOURCES_PATH="$DEPENDS_CACHE/sources" BASE_CACHE="$DEPENDS_CACHE/built"
             else
-                make -j8 HOST=$BUILD_HOST CFLAGS="-O2 -fPIC -D_GNU_SOURCE" CXXFLAGS="-O2 -fPIC -D_GNU_SOURCE"
+                make -j8 HOST=$BUILD_HOST SOURCES_PATH="$DEPENDS_CACHE/sources" BASE_CACHE="$DEPENDS_CACHE/built" \
+                    CFLAGS="-O2 -fPIC -D_GNU_SOURCE" CXXFLAGS="-O2 -fPIC -D_GNU_SOURCE"
             fi
         else
             echo "♻️  Reusing existing depends for $BUILD_HOST (no make)."
@@ -897,7 +962,12 @@ IMPSHIM
         # names, so both sets go.
         rm -f src/lynxd${EXEEXT} src/lynx-cli${EXEEXT} src/lynx-tx${EXEEXT} src/qt/lynx-qt${EXEEXT} \
               "src/${BIN_BASE}d${EXEEXT}" "src/${BIN_BASE}-cli${EXEEXT}" "src/${BIN_BASE}-tx${EXEEXT}" "src/${BIN_BASE}-qt${EXEEXT}"
-        make NAME="$BIN_BASE" V=1
+        command -v ccache >/dev/null 2>&1 && ccache -z >/dev/null 2>&1   # per-chain hit stats
+        make -j"$MAKE_JOBS" NAME="$BIN_BASE" V=1
+        if command -v ccache >/dev/null 2>&1; then
+            echo "🗃️  ccache for ${BLOCKCHAIN} (${TARGET}):"
+            ccache -s 2>/dev/null | grep -iE 'hits|misses|cache size' | sed 's/^/    /' || true
+        fi
 
         # Install the four binaries (daemon, CLI, tx tool, Qt wallet); they are stripped and
         # archived further below.
