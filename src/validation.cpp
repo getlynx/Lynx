@@ -1818,7 +1818,7 @@ bool Chainstate::IsInitialBlockDownload() const
     if (m_chain.Tip()->Time() < Now<NodeSeconds>() - m_chainman.m_options.max_tip_age) {
         return true;
     }
-    LogPrintf("[ANCHOR-DIAG] LATCH FALSE at tip h=%d time=%d (%s) now=%d maxage=%ds minwork=%s tipwork=%s\n",
+    LogPrint(BCLog::NET, "[ANCHOR-DIAG] LATCH FALSE at tip h=%d time=%d (%s) now=%d maxage=%ds minwork=%s tipwork=%s\n",
         m_chain.Tip()->nHeight, m_chain.Tip()->GetBlockTime(), FormatISO8601DateTime(m_chain.Tip()->GetBlockTime()),
         (int64_t)GetTime(), (int64_t)m_chainman.m_options.max_tip_age.count(),
         m_chainman.MinimumChainWork().GetHex(), m_chain.Tip()->nChainWork.GetHex());
@@ -3071,7 +3071,7 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             s_last_ibd = ibd_int;
             const int64_t now = GetTime();
             const int64_t maxage = (int64_t)m_chainman.m_options.max_tip_age.count();
-            LogPrintf("[ANCHOR-DIAG] IsInitialBlockDownload -> %s | tip height=%d tipTime=%d (%s) now=%d cutoff=now-maxtipage=%d | bestHeader=%d | minwork=%s tipwork=%s | cachedFinishedIBD=%d\n",
+            LogPrint(BCLog::NET, "[ANCHOR-DIAG] IsInitialBlockDownload -> %s | tip height=%d tipTime=%d (%s) now=%d cutoff=now-maxtipage=%d | bestHeader=%d | minwork=%s tipwork=%s | cachedFinishedIBD=%d\n",
                 ibd_now ? "TRUE (in-sync, anchors-only)" : "FALSE (sync-over, outbound reopens)",
                 pindexNew->nHeight,
                 pindexNew->GetBlockTime(), FormatISO8601DateTime(pindexNew->GetBlockTime()),
@@ -3082,7 +3082,7 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             // On the IBD->not-IBD transition (sync end), report total sync time.
             if (!ibd_now && g_sync_start != std::chrono::steady_clock::time_point{}) {
                 const double total_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - g_sync_start).count();
-                LogPrintf("[SYNC] total sync time: %.2fs (%.2f min) at tip height=%d\n", total_s, total_s / 60.0, pindexNew->nHeight);
+                LogPrint(BCLog::STARTUP, "[SYNC] total sync time: %.2fs (%.2f min) at tip height=%d\n", total_s, total_s / 60.0, pindexNew->nHeight);
             }
         }
         g_ibd_active.store(ibd_now, std::memory_order_relaxed);
@@ -3120,7 +3120,8 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
     // the sync it fires every 1M blocks, and every 100K above height 8,000,000.
     // Once the sync is done it fires on every new block that arrives (the first
     // such block is the sync-done reading), including blocks this node stakes.
-    {
+    // Logged under -debug=bench; the measurements are skipped when it is off.
+    if (LogAcceptCategory(BCLog::BENCH, BCLog::Level::Debug)) {
         const bool ibd = this->IsInitialBlockDownload();
         bool do_log = false;
         if (ibd) {
@@ -3133,7 +3134,7 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             const size_t n_index = m_chainman.m_blockman.m_block_index.size();
             const double block_records_mib = (double)n_index * (double)sizeof(CBlockIndex) / (1024.0 * 1024.0);
             const double coins_mib = (double)coins_tip.DynamicMemoryUsage() / (1024.0 * 1024.0);
-            LogPrintf("[RAM] height=%d | block records: %d x %u B = %.1f MiB | unspent coins in memory: %.1f MiB\n",
+            LogPrint(BCLog::BENCH, "[RAM] height=%d | block records: %d x %u B = %.1f MiB | unspent coins in memory: %.1f MiB\n",
                 pindexNew->nHeight, (int)n_index, (unsigned)sizeof(CBlockIndex), block_records_mib, coins_mib);
             // Accounting for the steady-state footprint beyond block records + coins.
             // The lookup table is now an ordinary RAM map of hash -> CBlockIndex*
@@ -3147,7 +3148,7 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             const double coinsdb_mib = (double)this->CoinsDB().DynamicMemoryUsage() / (1024.0 * 1024.0);
             const double blocktreedb_mib = (double)m_chainman.m_blockman.m_block_tree_db->DynamicMemoryUsage() / (1024.0 * 1024.0);
             const double mempool_mib = m_mempool ? (double)m_mempool->DynamicMemoryUsage() / (1024.0 * 1024.0) : 0.0;
-            LogPrintf("[RAM] height=%d | block record lookup bookkeeping: %.1f MiB | coins leveldb: %.1f MiB | block leveldb: %.1f MiB | mempool: %.1f MiB\n",
+            LogPrint(BCLog::BENCH, "[RAM] height=%d | block record lookup bookkeeping: %.1f MiB | coins leveldb: %.1f MiB | block leveldb: %.1f MiB | mempool: %.1f MiB\n",
                 pindexNew->nHeight, block_lookup_mib, coinsdb_mib, blocktreedb_mib, mempool_mib);
             // The newly named categories. Six are reachable from here and measured;
             // signature cache, addrman, net buffers, and wallet live in other link
@@ -3172,7 +3173,7 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
                 std::fclose(tf);
             }
             const double threadstacks_mib = (double)thread_count * 8.0; // 8 MiB reserved stack per thread
-            LogPrintf("[RAM] height=%d | txindex leveldb: %.1f MiB | signature cache: n/a | script exec cache: %.1f MiB | storage/auth index: %.1f MiB | addrman: n/a | net buffers: n/a | wallet: n/a | coinstatsindex: %.1f MiB | malloc fragmentation: %.1f MiB | thread stacks(reserved): %.1f MiB\n",
+            LogPrint(BCLog::BENCH, "[RAM] height=%d | txindex leveldb: %.1f MiB | signature cache: n/a | script exec cache: %.1f MiB | storage/auth index: %.1f MiB | addrman: n/a | net buffers: n/a | wallet: n/a | coinstatsindex: %.1f MiB | malloc fragmentation: %.1f MiB | thread stacks(reserved): %.1f MiB\n",
                 pindexNew->nHeight, txindex_mib, scriptcache_mib, storageauth_mib, coinstats_mib, malloc_frag_mib, threadstacks_mib);
             // Fourth line: more named categories. active chain vector, block index
             // aux sets, versionbits/warning caches, and block filter index are
@@ -3188,7 +3189,7 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             size_t filterindex_bytes = 0;
             ForEachBlockFilterIndex([&](BlockFilterIndex& idx){ filterindex_bytes += idx.DynamicMemoryUsage(); });
             const double filterindex_mib = (double)filterindex_bytes / (1024.0 * 1024.0);
-            LogPrintf("[RAM] height=%d | active chain vector: %.1f MiB | block index aux sets: %.1f MiB | rolling bloom filters: n/a | orphan tx pool: n/a | versionbits/warning caches: %.1f MiB | block filter index: %.1f MiB | checkqueue scratch: n/a\n",
+            LogPrint(BCLog::BENCH, "[RAM] height=%d | active chain vector: %.1f MiB | block index aux sets: %.1f MiB | rolling bloom filters: n/a | orphan tx pool: n/a | versionbits/warning caches: %.1f MiB | block filter index: %.1f MiB | checkqueue scratch: n/a\n",
                 pindexNew->nHeight, activechain_mib, blockindexaux_mib, warncache_mib, filterindex_mib);
         }
     }

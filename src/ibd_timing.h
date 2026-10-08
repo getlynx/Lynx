@@ -32,11 +32,12 @@ inline std::atomic<int> g_network_tip_height{0};
 // before the connect thread starts) and kept current thereafter by
 // Chainstate::UpdateTip. Read on the connect thread (net.cpp
 // ThreadOpenConnections) to suppress auto-outbound peer dialing during the sync,
-// leaving only the 5 manual anchor connections (whose staking state we control).
+// leaving only the 5 manual anchor connections (whose staking state we control),
+// which the same thread re-dials once a minute while this is true.
 // A synced node seeds false and is never restricted; a syncing node seeds true
 // and reopens to normal peer selection when IBD latches off. To revert, remove
-// this symbol and the four [ANCHOR-ONLY SYNC] blocks (init.cpp, validation.cpp,
-// net.cpp).
+// this symbol and the [ANCHOR-ONLY SYNC] blocks (init.cpp, validation.cpp,
+// net.cpp x2).
 inline std::atomic<bool> g_ibd_active{true};
 
 inline std::chrono::steady_clock::time_point ibd_now()

@@ -3470,7 +3470,7 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         // Disconnect if we connected to ourself
         if (pfrom.IsInboundConn() && !m_connman.CheckIncomingNonce(nNonce))
         {
-            LogPrintf("connected to self at %s, disconnecting\n", pfrom.addr.ToStringAddrPort());
+            LogPrint(BCLog::NET, "connected to self at %s, disconnecting\n", pfrom.addr.ToStringAddrPort());
             pfrom.fDisconnect = true;
             return;
         }
