@@ -94,6 +94,11 @@ Install on a server that is already running other services — leaves the existi
 bash <(curl -sL install.getlynx.io) --chain=lynx --shared-host
 ```
 
+Install or update from a pre-release build (for testing a release before it is promoted; see [The --prerelease Parameter](#the---prerelease-parameter))
+```bash
+bash <(curl -sL install.getlynx.io) --chain=digitalcoin --prerelease
+```
+
 > **Note:** If `curl` is not available, you can use `wget` as a fallback:
 > ```bash
 > wget -qO- install.getlynx.io | bash
@@ -247,6 +252,22 @@ With `--shared-host`, Spark no longer manages the host's network rules, so:
 
 - **Open the chain's P2P port yourself** if the host has its own firewall or a cloud security group in front of it. Without inbound access the daemon still syncs over outbound connections, but it will not accept incoming peers.
 - **The RPC interface needs no action** — it binds to `127.0.0.1` on a per-chain port (`main.rpcport` in `{chain}.conf`) and is never exposed, regardless of firewall state.
+
+## The --prerelease Parameter
+
+By default Spark only installs binaries from full GitHub Releases. It asks GitHub for the latest release, which never includes releases marked **pre-release**. That lets a build be published as a pre-release and tested on a few nodes before every Spark node picks it up.
+
+`--prerelease` opts a chain into pre-releases. Spark then looks through the ten most recent releases, newest first, and installs from the first one that has a build for this chain, OS and architecture. If the newest pre-release doesn't include this chain, it falls back to the next release down, so a full release can still be chosen.
+
+```bash
+bash <(curl -sL install.getlynx.io) --chain=digitalcoin --prerelease   # follow pre-releases
+bash <(curl -sL install.getlynx.io) --chain=digitalcoin --stable       # back to full releases
+```
+
+- **Per chain.** The choice is stored in `/etc/spark/prerelease-<chain>`, so one chain can test a pre-release while the others stay on full releases.
+- **Persistent.** The maintenance timer and `reb` keep following the chosen channel; there is no need to pass the flag again.
+- **From the console.** `upd --prerelease` updates the selected chain to the newest pre-release and opts it in. Plain `upd` always means full releases: it passes `--stable`, which clears the opt-in and reinstalls from the latest full release.
+- **Switching back without updating.** `--stable` on the installer removes the marker; the running binary is replaced on the next update.
 
 ## Spark vs Beacon
 

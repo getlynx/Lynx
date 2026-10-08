@@ -6,7 +6,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 set -euo pipefail
 
 # Installer version (x.x.x format)
-SPARK_INSTALLER_VERSION="2.17.0"
+SPARK_INSTALLER_VERSION="2.19.0"
 
 # ── Per-chain footer links (edit this table over time) ────────────────────────
 # Controls the two chain-specific links at the bottom of the 'h' console:
@@ -36,12 +36,18 @@ force_update=""
 # pre-existing services (web servers, existing SSH/user setup, an existing host
 # firewall) without clobbering them. Not advertised in the help/usage text.
 skip_hardening=""
+# release_channel_arg is set by --prerelease / --stable. Default installs use only
+# full GitHub Releases; --prerelease also considers releases marked "pre-release",
+# for operators testing a build before it is promoted. Persisted per chain below.
+release_channel_arg=""
 for arg in "$@"; do
     case "$arg" in
         --chain=*)     chain_name="${arg#--chain=}" ;;
         update)        update_mode="update"; force_update="yes" ;;
         rebuild)       rebuild_mode="rebuild" ;;
         --shared-host) skip_hardening="yes" ;;
+        --prerelease)  release_channel_arg="prerelease" ;;
+        --stable)      release_channel_arg="stable" ;;
     esac
 done
 
@@ -67,6 +73,24 @@ cli_name="${chain_lower}-cli"
 tx_name="${chain_lower}-tx"
 service_name="${chain_lower}.service"
 conf_name="${chain_lower}.conf"
+
+# Release channel, persisted per chain for the same reason as the shared-host
+# marker: the maintenance timer and 'reb' re-invoke this script without the
+# flag, and must keep following the channel the operator chose ('upd' always
+# passes one: --stable by default, or --prerelease when asked). Per chain,
+# so one chain can test a pre-release while the others stay on full releases.
+# --stable removes the marker and returns the chain to the default.
+PRERELEASE_MARKER="/etc/spark/prerelease-${chain_lower}"
+release_channel="stable"
+if [ "$release_channel_arg" = "prerelease" ]; then
+    mkdir -p /etc/spark
+    touch "$PRERELEASE_MARKER"
+    release_channel="prerelease"
+elif [ "$release_channel_arg" = "stable" ]; then
+    rm -f "$PRERELEASE_MARKER"
+elif [ -f "$PRERELEASE_MARKER" ]; then
+    release_channel="prerelease"
+fi
 
 # Base URL for fetching external helper scripts at runtime
 SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/installer"
@@ -148,7 +172,7 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 #   SYSTEM COMMANDS:
 #     lss    - Check daemon service status
 #     jou    - View install logs (default 30 lines, -f for follow)
-#     upd    - Install or update daemon to latest release
+#     upd    - Install or update daemon to latest full release (upd --prerelease: newest pre-release)
 #     reb    - Update services, timers, firewall, and aliases
 #     usp    - Change SSH port
 #     ipt    - List iptables rules (verbose)
@@ -499,7 +523,10 @@ jou() { if [ "$1" = "-f" ]; then journalctl -t install.sh -f; elif [ "${2:-}" = 
 jo() { jou "$@"; }
 shh() { _spark_shared_host_blocked && return 1; nano /root/.ssh/authorized_keys && read -p "Restart SSH daemon to apply changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null && echo "SSH daemon restarted successfully"; else echo "SSH daemon not restarted. Changes will take effect after manual restart."; fi; }
 pas() { _spark_shared_host_blocked && return 1; local ssh_config="/etc/ssh/sshd_config"; local new_setting; if [ "$1" = "off" ]; then if grep -v "^#" /root/.ssh/authorized_keys | grep -q "ssh-"; then new_setting="PasswordAuthentication no"; else echo "ERROR: Cannot disable password auth - no authorized keys found"; return 1; fi; elif [ "$1" = "on" ]; then new_setting="PasswordAuthentication yes"; else grep "^#*PasswordAuthentication" "$ssh_config"; return 0; fi; sed -i '/^#*PasswordAuthentication/d' "$ssh_config"; echo "$new_setting" >> "$ssh_config"; if [ "$1" = "off" ]; then echo "Password authentication disabled"; else echo "Password authentication enabled"; fi; systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null; }
-upd() { _spark_require_chain && bash <(curl -sL install.getlynx.io) update --chain=$SPARK_CHAIN; }
+# upd follows full releases unless told otherwise: plain 'upd' passes --stable (which
+# also clears a chain's pre-release opt-in), 'upd --prerelease' opts in. The timer and
+# 'reb' never pass a channel, so they keep whichever one 'upd' last chose.
+upd() { _spark_require_chain || return 1; local ch="--stable"; case "${1:-}" in "") ;; --stable|--prerelease) ch="$1" ;; *) echo "Usage: upd [--prerelease|--stable]"; return 1 ;; esac; bash <(curl -sL install.getlynx.io) update --chain=$SPARK_CHAIN "$ch"; }
 reb() { _spark_require_chain && bash <(curl -sL install.getlynx.io) rebuild --chain=$SPARK_CHAIN; }
 #
 h() { executeHelpCommand; }
@@ -720,7 +747,8 @@ executeHelpCommand() {
     echo "  SYSTEM COMMANDS:"
     echo "    lss                    - Check systemd service status"
     echo "    jou [lines] [-f]       - View install logs (default 30)"
-    echo "    upd                    - Install or update daemon to latest release"
+    echo "    upd                    - Install or update daemon to latest full release"
+    echo "    upd --prerelease       - Install or update daemon to newest pre-release"
     echo "    reb                    - Update services, timers, firewall, and aliases"
     # On shared-host installs (Spark's SSH/firewall management is disabled) hide
     # the commands that would touch the host's SSH or firewall configuration, so
@@ -2096,10 +2124,29 @@ findCompatibleBinary() {
     # Download latest release info from GitHub. Use -f so HTTP errors
     # (404/5xx/rate-limit) don't yield a JSON error body we'd then try to
     # grep for asset URLs.
-    log "Querying GitHub API for latest ${effective_chain} release..."
-    if ! release_info=$(curl -sfL --max-time 10 --retry 2 https://api.github.com/repos/getlynx/Lynx/releases/latest); then
+    #
+    # The stable channel asks /releases/latest, which by definition never returns
+    # a pre-release or draft. The prerelease channel lists recent releases instead
+    # (newest first, pre-releases included, drafts never visible without auth).
+    # Every release's assets then sit in one stream in that order, so the asset
+    # filtering below — which keeps the first match — selects the NEWEST release
+    # that has a build for this chain/OS/arch, falling back to older releases
+    # (full ones included) when the newest pre-release didn't build this chain.
+    local release_api="https://api.github.com/repos/getlynx/Lynx/releases/latest"
+    local api_timeout=10
+    if [ "$release_channel" = "prerelease" ]; then
+        release_api="https://api.github.com/repos/getlynx/Lynx/releases?per_page=10"
+        api_timeout=30   # ten releases' worth of asset JSON, not one
+        log "Querying GitHub API for the newest ${effective_chain} release, pre-releases included (--prerelease)..."
+    else
+        log "Querying GitHub API for latest ${effective_chain} release..."
+    fi
+    if ! release_info=$(curl -sfL --max-time "$api_timeout" --retry 2 "$release_api"); then
         log "Failed to fetch release information from GitHub API (network error, rate limit, or 5xx)."
         return 1
+    fi
+    if [ "$release_channel" = "prerelease" ]; then
+        log "Pre-release channel is on for ${effective_chain}. Return to full releases with: --chain=${chain_lower} --stable"
     fi
     if [ -z "$release_info" ]; then
         log "GitHub API returned an empty response for the latest release."
