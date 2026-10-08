@@ -847,18 +847,34 @@ IMPSHIM
             # GNU triplet minus the vendor, so x86_64-pc-linux-gnu looks in x86_64-linux-gnu.
             # -ldl/-lpthread cover jemalloc's own dependencies on glibc < 2.34 (no-ops after).
             # Windows never gets it; mingw has its own allocator and this is a Linux archive.
-            local JEMALLOC_LIBS=""
+            #
+            # The archive's OBJECTS are linked, never the .a itself. --enable-reduce-exports adds
+            # -Wl,--exclude-libs,ALL, which hides every symbol pulled from a static archive, so
+            # linking the .a left malloc/free out of the dynamic symbol table: libc and
+            # libstdc++ kept allocating with glibc while our code freed with jemalloc, and
+            # every binary segfaulted at startup (even -version) inside jemalloc's rtree
+            # lookup. --exclude-libs does not touch plain object files, so linking the members
+            # directly exports malloc/free and the whole process shares one allocator. Verify
+            # with: objdump -T <binary> | grep -w malloc   (must print a defined symbol).
+            #
+            # --with-libs=no skips libbitcoinconsensus.so (never shipped by this script), since
+            # LIBS reaches every link and an allocator must not be baked into a shared library.
+            local JEMALLOC_LIBS="" JEMALLOC_CONFIGURE_ARGS=""
             if [ "$TARGET" != "windows" ]; then
                 local jemalloc_a="/usr/lib/${BUILD_HOST/-pc-/-}/libjemalloc_pic.a"
                 if [ -f "$jemalloc_a" ]; then
-                    JEMALLOC_LIBS="$jemalloc_a -ldl -lpthread"
-                    echo "🧠 Linking jemalloc statically: $jemalloc_a"
+                    local jemalloc_objs="$WORKDIR/.jemalloc-objs"
+                    rm -rf "$jemalloc_objs" && mkdir -p "$jemalloc_objs"
+                    (cd "$jemalloc_objs" && ar x "$jemalloc_a")
+                    JEMALLOC_LIBS="$(ls "$jemalloc_objs"/*.o | tr '\n' ' ')-ldl -lpthread"
+                    JEMALLOC_CONFIGURE_ARGS="--with-libs=no"
+                    echo "🧠 Linking jemalloc statically (as objects) from: $jemalloc_a"
                 else
                     echo "⚠️  $jemalloc_a not found; building $BUILD_HOST with the default glibc malloc."
                 fi
             fi
             #CONFIG_SITE=$PWD/depends/$BUILD_HOST/share/config.site ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports
-            CONFIG_SITE=$PWD/depends/$BUILD_HOST/share/config.site CFLAGS="-O2" CXXFLAGS="-O2" LIBS="$JEMALLOC_LIBS" ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports
+            CONFIG_SITE=$PWD/depends/$BUILD_HOST/share/config.site CFLAGS="-O2" CXXFLAGS="-O2" LIBS="$JEMALLOC_LIBS" ./configure --with-gui=qt5 --enable-bench=no --enable-tests=no --enable-reduce-exports $JEMALLOC_CONFIGURE_ARGS
 
         #else
             #echo "♻️  Reusing existing configure output (skipping ./configure)."
@@ -869,6 +885,13 @@ IMPSHIM
         # row out of the spec table in chainparams.cpp and names its .conf file. Every chain
         # passes it, lynx included — omitting it compiles CURRENT_CHAIN as "", which looks up
         # an empty spec and trips the genesis assert at startup.
+        # Link flags (LIBS, e.g. jemalloc) are not make prerequisites, so a reconfigure alone never
+        # relinks binaries whose objects are unchanged. Removing them forces a fresh link; it costs
+        # seconds and guarantees the shipped binaries match this run's configure. The linked files
+        # are always the lynx* ones; autogen.sh's 'all:' rules then copy them to the ${BIN_BASE}*
+        # names, so both sets go.
+        rm -f src/lynxd${EXEEXT} src/lynx-cli${EXEEXT} src/lynx-tx${EXEEXT} src/qt/lynx-qt${EXEEXT} \
+              "src/${BIN_BASE}d${EXEEXT}" "src/${BIN_BASE}-cli${EXEEXT}" "src/${BIN_BASE}-tx${EXEEXT}" "src/${BIN_BASE}-qt${EXEEXT}"
         make NAME="$BIN_BASE" V=1
 
         # Install the four binaries (daemon, CLI, tx tool, Qt wallet); they are stripped and
@@ -897,6 +920,18 @@ IMPSHIM
                 exit 1
             fi
         done
+
+        # A jemalloc build must export malloc/free, or the process ends up with two allocators
+        # and crashes at startup (see JEMALLOC_LIBS above). Catch that here rather than on a node.
+        if [ -n "$JEMALLOC_LIBS" ]; then
+            for bin_path in "${BINARIES[@]}"; do
+                if ! objdump -T "$bin_path" | grep -qE '\.text.*[[:space:]]malloc$'; then
+                    echo "❗ $(basename "$bin_path") links jemalloc but does not export malloc; it would segfault at startup."
+                    exit 1
+                fi
+            done
+            echo "✅ jemalloc's malloc/free are exported by all binaries."
+        fi
 
         # Stage the four binaries next to the script so they can be stripped without
         # touching the build tree's copies (which keep their symbols for debugging). They
