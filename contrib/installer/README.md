@@ -59,6 +59,9 @@ bash <(curl -sL install.getlynx.io) --chain=cassiopeia
 bash <(curl -sL install.getlynx.io) --chain=delphinus
 ```
 ```bash
+bash <(curl -sL install.getlynx.io) --chain=digitalcoin
+```
+```bash
 bash <(curl -sL install.getlynx.io) --chain=enceladus
 ```
 ```bash
@@ -75,6 +78,9 @@ bash <(curl -sL install.getlynx.io) --chain=indus
 ```
 ```bash
 bash <(curl -sL install.getlynx.io) --chain=infiniloop
+```
+```bash
+bash <(curl -sL install.getlynx.io) --chain=lynx
 ```
 
 Explicitly update an existing Spark daemon
