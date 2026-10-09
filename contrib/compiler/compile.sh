@@ -154,14 +154,90 @@ detect_os_arch() {
     esac
 }
 
+# Runs a package-manager command with its output suppressed, but on failure prints the
+# tail of that output, so a failed install says why instead of the build phase just
+# stopping under 'set -e' with nothing in the log.
+pkg_quiet() {
+    local out rc
+    out=$(mktemp)
+    "$@" >"$out" 2>&1 && rc=0 || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo "   ↳ '$*' failed (exit $rc). Last lines of its output:"
+        tail -n 15 "$out" | sed 's/^/     /'
+    fi
+    rm -f "$out"
+    return "$rc"
+}
+
+# Debian 11 (bullseye) is past end of life, but legacy users who can't yet upgrade still
+# need binaries for it. A bullseye host's installed libc6 normally comes from
+# bullseye-security, and build-essential needs the libc6-dev of exactly that version:
+#   libc6-dev : Depends: libc6 (= 2.31-13+deb11u11) but 2.31-13+deb11u14 is to be installed
+# That fails two ways: the host has no bullseye-security source at all (some VPS images
+# ship without one), or it has the security.debian.org one, which during bullseye's
+# retirement still serves the index but 404s the packages themselves. So rather than
+# trust an index, fetch-test the libc6-dev .deb matching the installed libc6 on the live
+# security mirror, then on archive.debian.org, and make sure an active apt source points
+# at whichever actually serves it. A source pointing at the other, dead host is commented
+# out (backup kept as *.lynx-bak), otherwise apt keeps picking it and 404s. Archived
+# Release files are past their Valid-Until date, so the archive entry skips that check.
+ensure_bullseye_security() {
+    if [ "$DETECTED_DISTRO" != "debian" ] || [ "$DETECTED_DISTRO_VERSION" != "11" ]; then
+        return 0
+    fi
+    local libc_ver debarch deb host base found_host="" found_base=""
+    libc_ver=$(dpkg-query -W -f='${Version}' libc6 2>/dev/null) || return 0
+    debarch=$(dpkg --print-architecture)
+    deb="pool/updates/main/g/glibc/libc6-dev_${libc_ver//+/%2b}_${debarch}.deb"
+    for host in security.debian.org archive.debian.org; do
+        base="http://${host}/debian-security"
+        if curl -fsS --max-time 20 -o /dev/null -r 0-0 "$base/$deb" 2>/dev/null; then
+            found_host="$host"; found_base="$base"
+            break
+        fi
+    done
+    if [ -z "$found_host" ]; then
+        # Not a security build (e.g. a point-release libc6): the main bullseye mirror
+        # carries the matching libc6-dev, so there is nothing to fix.
+        return 0
+    fi
+
+    local f
+    if [ "$found_host" = "archive.debian.org" ]; then
+        for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
+            [ -f "$f" ] || continue
+            if grep -qE '^[^#]*security\.debian\.org[^#]*bullseye-security' "$f"; then
+                sed -i.lynx-bak -E 's|^([^#]*security\.debian\.org[^#]*bullseye-security.*)$|# disabled by Lynx compile.sh (packages moved to archive.debian.org): \1|' "$f"
+                echo "🧩 Debian 11: disabled the retired security.debian.org bullseye-security source in $f."
+            fi
+        done
+    fi
+    local host_re="${found_host//./\\.}"
+    if ! grep -rhsqE "^[^#]*${host_re}[^#]*bullseye-security" /etc/apt/sources.list /etc/apt/sources.list.d/; then
+        local opts=""
+        [ "$found_host" = "archive.debian.org" ] && opts="[check-valid-until=no] "
+        echo "deb ${opts}${found_base} bullseye-security main" > /etc/apt/sources.list.d/lynx-bullseye-security.list
+        echo "🧩 Debian 11: added a bullseye-security apt source on ${found_host} (libc6-dev ${libc_ver})."
+    fi
+}
+
 # Install essential packages required by this script
 init_packages() {
     echo "📦 Installing essential packages (curl, git, zip; htop if available)..."
 
     case "$DISTRO_FAMILY" in
         debian)
-            apt-get update -qq >/dev/null 2>&1
-            apt-get install -qq -y curl git zip >/dev/null 2>&1
+            # Repair Debian 11's security source before the first apt call; with a dead
+            # one even this install can fail. It probes with curl, which bullseye images
+            # ship; without curl it runs again in the build phase, once curl is installed.
+            if command -v curl >/dev/null 2>&1; then
+                ensure_bullseye_security
+            fi
+            pkg_quiet apt-get update -qq || echo "⚠️  apt-get update reported errors; trying the install anyway."
+            if ! pkg_quiet apt-get install -qq -y curl git zip; then
+                echo "❌ Could not install curl, git and zip (see apt's output above). Exiting."
+                exit 1
+            fi
             apt-get install -qq -y htop >/dev/null 2>&1 || true   # non-essential
             ;;
         rhel)
@@ -542,7 +618,13 @@ run_build_phase() {
     if [ "$DISTRO_FAMILY" = "rhel" ]; then
         dnf -y upgrade >/dev/null 2>&1 && dnf -y autoremove >/dev/null 2>&1
     else
-        apt-get update -y >/dev/null 2>&1 && apt-get upgrade -y >/dev/null 2>&1 && apt-get dist-upgrade -y >/dev/null 2>&1 && apt-get autoremove -y >/dev/null 2>&1
+        ensure_bullseye_security
+        # Not fatal, as before: one broken third-party repo shouldn't stop the build. But
+        # the reason is now logged, since the dependency install below fails if it matters.
+        if ! { pkg_quiet apt-get update -y && pkg_quiet apt-get upgrade -y \
+               && pkg_quiet apt-get dist-upgrade -y && pkg_quiet apt-get autoremove -y; }; then
+            echo "⚠️  System update did not complete; continuing with the dependency install."
+        fi
     fi
     sleep 2
     echo "🧰 Installing build dependencies for $arch (output suppressed)..."
@@ -559,9 +641,17 @@ run_build_phase() {
     else
         # Debian/Ubuntu: native build tools for x86_64, cross-toolchains for ARM targets.
         # bsdextrautils provides hexdump on Debian 12+/Ubuntu (it replaced bsdmainutils).
-        [ "$arch" = "x86_64-pc-linux-gnu" ] && apt install -qq -y build-essential make automake curl htop git libtool binutils bsdextrautils pkg-config python3 patch bison zip openssl >/dev/null 2>&1
-        [ "$arch" = "arm-linux-gnueabihf" ] && apt install -qq -y build-essential make automake curl htop git libtool g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf gperf pkg-config bison byacc zip openssl >/dev/null 2>&1
-        [ "$arch" = "aarch64-linux-gnu" ] && apt install -qq -y build-essential make automake curl htop git libtool g++-aarch64-linux-gnu binutils-aarch64-linux-gnu gperf pkg-config bison byacc zip openssl >/dev/null 2>&1
+        local build_deps
+        case "$arch" in
+            x86_64-pc-linux-gnu) build_deps="build-essential make automake curl htop git libtool binutils bsdextrautils pkg-config python3 patch bison zip openssl" ;;
+            arm-linux-gnueabihf) build_deps="build-essential make automake curl htop git libtool g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf gperf pkg-config bison byacc zip openssl" ;;
+            aarch64-linux-gnu)   build_deps="build-essential make automake curl htop git libtool g++-aarch64-linux-gnu binutils-aarch64-linux-gnu gperf pkg-config bison byacc zip openssl" ;;
+        esac
+        # shellcheck disable=SC2086
+        if ! pkg_quiet apt install -qq -y $build_deps; then
+            echo "❌ Build dependencies for $arch could not be installed (see apt's output above). Exiting."
+            exit 1
+        fi
         # jemalloc replaces glibc malloc in the Linux binaries (see JEMALLOC_LIBS in build_chain).
         # The package is requested for the TARGET's Debian architecture, so the library always
         # matches the binaries being linked. On a native build (ARM binaries built on an ARM
@@ -574,7 +664,7 @@ run_build_phase() {
             aarch64-linux-gnu)    jemalloc_debarch="arm64" ;;
             arm-linux-gnueabihf)  jemalloc_debarch="armhf" ;;
         esac
-        apt install -qq -y "libjemalloc-dev:${jemalloc_debarch}" >/dev/null 2>&1
+        apt install -qq -y "libjemalloc-dev:${jemalloc_debarch}" >/dev/null 2>&1 || true
         # ccache lets chains reuse each other's compiled objects (see the ccache block below).
         apt install -qq -y ccache >/dev/null 2>&1 || true
         # The mingw-w64 cross-toolchain, only when the Windows gate opened (Debian 12 x86_64).
