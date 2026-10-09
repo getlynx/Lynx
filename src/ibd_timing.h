@@ -8,6 +8,8 @@
 #include <atomic>
 #include <chrono>
 
+inline std::chrono::steady_clock::time_point g_daemon_start{};
+
 // Compile-time switch for the sync-timing instrumentation. When false, every
 // stamp folds away: `IBD_TIMING && g_sync_active` is a constant-false condition
 // so the accumulation is dead-code-eliminated, and ibd_now() returns a zero

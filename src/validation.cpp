@@ -1825,6 +1825,7 @@ bool Chainstate::IsInitialBlockDownload() const
     LogPrint(BCLog::STARTUP, "Leaving InitialBlockDownload (latching to false)\n");
     // TEMP: final dump suppressed; single dump fires at height 2,800,800 in UpdateTip. Restore this line to revert.
     // LogIBDComponentTimes();
+
     m_cached_finished_ibd.store(true, std::memory_order_relaxed);
     return false;
 }
@@ -3164,7 +3165,7 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
                 + memusage::DynamicUsage(blocktenantList)) / (1024.0 * 1024.0);
             double malloc_frag_mib = 0.0;
 #if defined(__GLIBC__)
-            malloc_frag_mib = (double)mallinfo2().fordblks / (1024.0 * 1024.0);
+            // malloc_frag_mib = (double)mallinfo2().fordblks / (1024.0 * 1024.0);
 #endif
             int thread_count = 0;
             if (std::FILE* tf = std::fopen("/proc/self/status", "r")) {

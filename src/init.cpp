@@ -2210,6 +2210,12 @@ gblnDisableStaking = disablestaking;
     RPCNotifyBlockChange(WITH_LOCK(chainman.GetMutex(), return chainman.ActiveTip()));
     SetRPCWarmupFinished();
 
+    if (g_daemon_start != std::chrono::steady_clock::time_point{}) {
+        const double startup_s = std::chrono::duration<double> (std::chrono::steady_clock::now() - g_daemon_start).count();
+        LogPrintf("[STARTUP] daemon startup time: %.2fs (%.2f min)\n", startup_s, startup_s / 60.0);
+        g_daemon_start = std::chrono::steady_clock::time_point{};
+    }
+
     uiInterface.InitMessage(_("Done loading").translated);
 
     for (const auto& client : node.chain_clients) {
