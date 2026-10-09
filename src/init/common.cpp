@@ -19,6 +19,8 @@
 #include <util/time.h>
 #include <util/translation.h>
 
+#include <ibd_timing.h>
+
 #include <algorithm>
 #include <sstream>
 #include <string>
@@ -153,6 +155,9 @@ void LogPackageVersion()
     // Same identity line as the -version banner in bitcoind.cpp: display name,
     // ticker, then version.
     LogPrintf("%s (%s) version %s\n", CurrentChainDisplayName(), CurrentCoinSymbol(), version_string);
+
+    g_daemon_start = std::chrono::steady_clock::now();
+
     LogPrintf("\n");
     // The network description lives in NetworkInfo() (src/clientversion.cpp) so this log
     // banner and the GUI's About dialog always show the same copy. It is stored unwrapped,
