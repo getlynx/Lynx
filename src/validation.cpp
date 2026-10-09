@@ -3165,7 +3165,7 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
                 + memusage::DynamicUsage(blocktenantList)) / (1024.0 * 1024.0);
             double malloc_frag_mib = 0.0;
 #if defined(__GLIBC__)
-            malloc_frag_mib = (double)mallinfo2().fordblks / (1024.0 * 1024.0);
+            // malloc_frag_mib = (double)mallinfo2().fordblks / (1024.0 * 1024.0);
 #endif
             int thread_count = 0;
             if (std::FILE* tf = std::fopen("/proc/self/status", "r")) {
