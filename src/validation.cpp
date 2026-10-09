@@ -1826,12 +1826,6 @@ bool Chainstate::IsInitialBlockDownload() const
     // TEMP: final dump suppressed; single dump fires at height 2,800,800 in UpdateTip. Restore this line to revert.
     // LogIBDComponentTimes();
 
-    if (g_daemon_start != std::chrono::steady_clock::time_point{}) {
-        const double startup_s = std::chrono::duration<double> (std::chrono::steady_clock::now() - g_daemon_start).count();
-        LogPrintf("[STARTUP] daemon startup time: %.2fs (%.2f min)\n", startup_s, startup_s / 60.0);
-        g_daemon_start = std::chrono::steady_clock::time_point{};
-    }
-
     m_cached_finished_ibd.store(true, std::memory_order_relaxed);
     return false;
 }
