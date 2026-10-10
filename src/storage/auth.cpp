@@ -1938,6 +1938,7 @@ bool scan_blocks_for_specific_authdata (ChainstateManager& chainman, uint160 has
 }
 
 bool generate_auth_payload(std::string& payload, int& type, uint32_t& time, std::string& hash)
+
 {
     payload.clear();
 
@@ -2087,7 +2088,10 @@ bool generate_blocktenant_payload(std::string& payload, int& type, uint32_t& tim
     return true;
 }
 
-bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload)
+// bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload)
+
+bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload, std::string& error)
+
 {
 
     LogPrint (BCLog::STORAGE, "BUILD ADDAUTH TRANSACTION (generate_auth_transaction)\n");
@@ -2102,16 +2106,19 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
     auto vpwallets = GetWallets(wallet_context);
     size_t nWallets = vpwallets.size();
     if (nWallets < 1) {
+        error = "no coin source to fund auth tx";
         return false;
     }
 
     CAmount setValue;
     std::set<std::pair<const CWalletTx*, unsigned int>> setCoins;
     if (!select_coins_for_opreturn(vpwallets.front().get(), setCoins, setValue)) {
+        error = "coin selection failed";
         return false;
     }
 
     if (setCoins.size() == 0) {
+        error = "no coin selected";
         return false;
     }
  
@@ -2134,6 +2141,7 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
     // Flag error and exit gracefully if attempt is made to create transaction with empty scriptPubKey
     if (receiver.size() == 0) {
         LogPrint (BCLog::POS, "%s: attempt to create transaction with empty scriptPubKey. scriptPubKeyOut: %s\n", __func__, HexStr(receiver).substr(0, 30));
+        error = "selected coin has empty scriptPubKey";
         return false;
     }
 
@@ -2150,6 +2158,7 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
         //! sign tx once to get complete size
         LOCK(vpwallets[0]->cs_wallet);
         if (!vpwallets[0]->SignTransaction(tx)) {
+            error = "signing failed (fee pass)";
             return false;
         }
 
@@ -2168,6 +2177,7 @@ bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransactio
 
         //! sign tx again with correct fee in place
         if (!vpwallets[0]->SignTransaction(tx)) {
+            error = "signing failed (final pass)";
             return false;
         }
 
