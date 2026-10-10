@@ -70,6 +70,8 @@
 #include <validationinterface.h>
 #include <warnings.h>
 
+#include <jemalloc/jemalloc.h>
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -3163,10 +3165,18 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             const double storageauth_mib = (double)(memusage::DynamicUsage(authList)
                 + memusage::DynamicUsage(blockuuidList)
                 + memusage::DynamicUsage(blocktenantList)) / (1024.0 * 1024.0);
+
             double malloc_frag_mib = 0.0;
-#if defined(__GLIBC__)
-            // malloc_frag_mib = (double)mallinfo2().fordblks / (1024.0 * 1024.0);
-#endif
+            {
+                uint64_t epoch = 1;
+                size_t esz = sizeof(epoch);
+                mallctl("epoch", &epoch, &esz, &epoch, esz);
+                size_t allocated = 0, resident = 0, sz = sizeof(size_t);
+                mallctl("stats.allocated", &allocated, &sz, NULL, 0);
+                mallctl("stats.resident",  &resident, &sz, NULL, 0);
+                malloc_frag_mib = (double)(resident - allocated) / (1024.0 * 1024.0);
+            }
+
             int thread_count = 0;
             if (std::FILE* tf = std::fopen("/proc/self/status", "r")) {
                 char sline[256];
