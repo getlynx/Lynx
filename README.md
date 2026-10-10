@@ -2,12 +2,12 @@
 
 **Permanent, low-cost data storage on a public blockchain — built to outlive us.**
 
-[Documentation](https://docs.getlynx.io/) · [Block Explorer](https://explorer.getlynx.io/) · [Store a File (Clevver)](https://clevver.org/) · [Discord](https://discord.getlynx.io/) · [Bluesky](https://bsky.app/profile/getlynx.io)
+[Website](https://getlynx.io/) · [Documentation](https://docs.getlynx.io/) · [Block Explorer](https://explorer.getlynx.io/) · [Store a File (Clevver)](https://clevver.org/) · [Discord](https://discord.getlynx.io/) · [Bluesky](https://bsky.app/profile/getlynx.io)
 
 ---
 
 <p align="center">
-  <img src="https://get.clevver.org/be9e1a4af03b57d1720cf37f3c044de59157d993626c44d10183b1c8bd0f41a4.png" alt="Lynx logo" width="300">
+  <a href="https://getlynx.io/"><img src="https://get.clevver.org/be9e1a4af03b57d1720cf37f3c044de59157d993626c44d10183b1c8bd0f41a4.png" alt="Lynx logo" width="300"></a>
 </p>
 
 ## What is Lynx?
@@ -17,6 +17,8 @@ Lynx is a blockchain designed to do one thing exceptionally well: store your mos
 When you store a file on Lynx, the **entire file** is written directly onto the blockchain — not a hash, not a pointer to a server or an IPFS node that someone has to keep paying for and maintaining. The file itself lives on-chain. That means no monthly fees, no subscriptions, and no single company whose survival your data depends on. As long as the network exists, your file is there, unchanged and independently verifiable by anyone.
 
 Lynx is a fork of Bitcoin Core, hardened by more than a decade of real-world operation, but re-engineered around storage and sustainability rather than payments.
+
+New to Lynx? **[getlynx.io](https://getlynx.io/)** is the best place to start.
 
 ## Why it matters
 
@@ -75,13 +77,38 @@ Across the crypto landscape are countless dead and orphaned chains: projects tha
 
 Each recycled chain becomes another storage utility chain running on the same technology, and each one adds meaningful capacity to the network. It's a sustainability story on two levels — reusing what already exists, and doing it without the energy cost of Proof of Work.
 
+### Chains on the network
+
+All chains below are public and run on Lynx Core. Each one is built from this repository as its own daemon.
+
+| Chain | Ticker | | Chain | Ticker |
+|---|---|---|---|---|
+| Lynx | LYNX | | Enceladus | ENCE |
+| Digitalcoin | DGC | | Fenrir | FENR |
+| InfiniLooP | IL8P | | Galatea | GALA |
+| Alioth | ALIO | | Halley | HALL |
+| Borrelly | BORR | | Indus | INDU |
+| Cassiopeia | CASS | | | |
+| Delphinus | DELP | | | |
+
 ## A Short History
 
 - **2013** — The Lynx blockchain begins. Its history now stretches back over a decade, fully intact and preserved through every upgrade since.
 - **Early years** — Lynx operates as a lightweight, low-fee cryptocurrency with an emphasis on accessibility and running on modest hardware.
 - **2016–2024** — Lynx pivots decisively toward its true purpose: permanent, on-chain data storage. The storage architecture moves from an early API-based system to an advanced on-chain RPC design, with file sharding, authentication, and authorization all handled directly on the blockchain. Clevver launches as the consumer- and enterprise-facing storage platform.
 - **2024** — A landmark release transitions Lynx from Hybrid Proof of Work to **LWMA Proof of Stake**, dramatically cutting energy use, and rebases the codebase on **Bitcoin Core v26**.
-- **2025–2026** — The storage network expands from a single chain into a coordinated multi-chain network through the blockchain recycling strategy, unified deployment tooling arrives, and staking becomes possible from encrypted wallets.
+- **2025–2026** — The storage network expands from a single chain into a coordinated multi-chain network through the blockchain recycling strategy, unified deployment tooling arrives, and staking becomes possible from encrypted wallets. Digitalcoin and InfiniLooP join the network on Proof of Stake, and a desktop wallet returns for Linux and Windows.
+
+## What's New (v27 → v28.4, mid–late 2026)
+
+- **Digitalcoin joins the network** — Digitalcoin (DGC), running since 2013, is the newest recycled chain. It switched to Lynx Proof of Stake at block 8,725,000 with its full history intact, and now supports on-chain storage.
+- **InfiniLooP on Proof of Stake** — InfiniLooP (IL8P) has moved from mining to Lynx's energy-efficient Proof of Stake.
+- **Desktop wallet is back** — A Qt graphical wallet for Linux and Windows, branded for each chain, with staking from encrypted wallets.
+- **Much faster sync and startup** — Faster initial block download, a fix for startup delays that could reach hours on slow storage, a leaner memory allocator, and lower RAM use on Windows.
+- **More reliable peer discovery** — One list of built-in anchor nodes, automatic reconnects to dropped anchors during sync, and updated checkpoints.
+- **Staking insight** — The `getblockrate` RPC can now estimate the time until your next block win.
+- **Spark installer upgrades** — A check that the downloaded binary runs before anything on the system is changed, `--shared-host` mode for machines that run other services, a chain selector showing balance, height and staking state, win-time estimates, and opt-in prerelease builds.
+- **Easier builds** — One compile script for every chain, Windows cross-compiles from Debian 12, cached dependencies shared across chains, and continued Debian 11 support.
 
 ## Two Years of Progress at a Glance
 
@@ -93,14 +120,17 @@ A summary of what the last two years of development delivered:
 - **Multi-chain storage network** — Grew from a single chain to a coordinated network of storage chains via blockchain recycling, multiplying total annual storage capacity available to Clevver and direct integrators.
 - **Larger file support** — Increased the maximum single-asset upload size to accommodate bigger files in one operation.
 - **Unified deployment** — Shipped the **Spark** one-line installer and the **Beacon** management console, covering the entire chain family across AMD and ARM hardware, plus a plug-and-play Raspberry Pi ISO.
-- **Staking improvements** — Delivered staking from locked, encrypted wallets; a runtime staking toggle; and a critical fix to the stake-weighting math that ensures large holdings receive their correct staking weight.
+- **Staking improvements** — Delivered staking from locked, encrypted wallets and a runtime staking toggle.
 - **Wallet accuracy** — Resolved long-standing balance-reporting issues tied to orphaned blocks and phantom UTXOs, so balances stay accurate through extended staking.
+- **Desktop wallet** — Brought back the Qt graphical wallet for Linux and Windows, with per-chain branding and encrypted-wallet staking.
+- **Sync & startup performance** — Cut initial sync and daemon startup times substantially, especially on low-power hardware such as Raspberry Pis.
 - **Reliability & diagnostics** — Hardcoded network seed nodes for faster, more dependable cold starts, and expanded logging and diagnostics for node operators.
 
 For the full, version-by-version history, see the **[Releases page](https://github.com/getlynx/Lynx/releases)**.
 
 ## Get Involved
 
+- **Learn about Lynx:** [getlynx.io](https://getlynx.io/)
 - **Store a file:** [clevver.org](https://clevver.org/)
 - **Read the docs:** [docs.getlynx.io](https://docs.getlynx.io/)
 - **Explore the chain:** [explorer.getlynx.io](https://explorer.getlynx.io/)
@@ -110,7 +140,13 @@ For the full, version-by-version history, see the **[Releases page](https://gith
 
 ## Interface
 
-Lynx Core is designed for command-line (CLI) operation. The Qt graphical interface is not included in current releases.
+Lynx Core runs as a command-line daemon (`lynxd` and `lynx-cli`, or the matching binaries for each chain) and as a Qt desktop wallet for Linux and Windows. Downloads for both are on the **[Releases page](https://github.com/getlynx/Lynx/releases)**.
+
+Lynx release numbers (v27, v28, …) are Lynx's own and don't match Bitcoin Core's. The codebase is currently based on Bitcoin Core v26.
+
+## Build from Source
+
+Most operators should use Spark, Beacon or a prebuilt release. To compile a chain yourself, use the unified compile script in [`contrib/compiler/`](contrib/compiler/compile.sh). It builds any chain on the network for Linux (AMD and ARM) and cross-compiles for Windows. See [`contrib/installer/README.md`](contrib/installer/README.md) for installer details.
 
 ## License
 
