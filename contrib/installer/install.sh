@@ -503,7 +503,7 @@ gi() { gbi; }
 lyl() { _spark_require_chain || return 1; if [ "$1" = "-f" ]; then tail -f "$SPARK_DATADIR/debug.log"; elif [ "${2:-}" = "-f" ]; then tail -n ${1:-30} -f "$SPARK_DATADIR/debug.log"; else tail -n ${1:-30} "$SPARK_DATADIR/debug.log"; fi; }
 lyc() { _spark_require_chain || return 1; if [ "$1" = "-e" ]; then nano "$SPARK_CONF" && read -p "Restart daemon to apply config changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then lyr; else echo "Daemon not restarted."; fi; else cat "$SPARK_CONF"; fi; }
 lc() { lyc "$@"; }
-lyr() { _spark_require_chain || return 1; if [ "$1" = "-d" ]; then echo "This will permanently delete the debug log and restart the daemon. Node Status staking stats are unaffected."; read -p "Do you want to continue? (y/N): " confirm; if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl stop $SPARK_CHAIN && rm -rf "$SPARK_DATADIR/debug.log" && systemctl daemon-reload 2>/dev/null && systemctl start $SPARK_CHAIN; else echo "Operation cancelled."; fi; else systemctl daemon-reload 2>/dev/null; systemctl restart $SPARK_CHAIN; fi; }
+lyr() { _spark_require_chain || return 1; if [ "$1" = "-d" ]; then echo "This will permanently delete the debug log and restart the daemon. Node Status staking stats are unaffected."; read -p "Do you want to continue? (y/N): " confirm; if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl stop $SPARK_CHAIN && rm -rf "$SPARK_DATADIR/debug.log" && systemctl daemon-reload 2>/dev/null && systemctl start --no-block $SPARK_CHAIN && echo "Start queued. Check progress with: lss"; else echo "Operation cancelled."; fi; else systemctl daemon-reload 2>/dev/null; systemctl restart --no-block $SPARK_CHAIN && echo "Restart queued. Check progress with: lss"; fi; }
 lr() { lyr "$@"; }
 s() { _spark_require_chain || return 1; local cur; cur=$($SPARK_CLI setstaking 2>/dev/null); case "$cur" in true) $SPARK_CLI setstaking false >/dev/null 2>&1 ;; false) $SPARK_CLI setstaking true >/dev/null 2>&1 ;; *) echo "  Could not read staking state for $SPARK_CHAIN"; return 1 ;; esac; c; }
 hel() { _spark_require_chain || return 1; if [ -n "$1" ]; then $SPARK_CLI help | grep -i "$1"; else $SPARK_CLI help; fi; }
@@ -2315,7 +2315,7 @@ getCompatibleBinary() {
     # Restart the service if it exists
     if [ -f "/etc/systemd/system/$service_name" ]; then
         log "Restarting $service_name..."
-        systemctl restart $service_name || log "Failed to restart $service_name"
+        systemctl restart --no-block $service_name || log "Failed to restart $service_name"
     else
         log "Service $service_name not yet created. Skipping restart."
     fi
@@ -2332,17 +2332,31 @@ Description=${effective_chain} Cryptocurrency Daemon
 Documentation=https://docs.getlynx.io/
 After=network.target network-online.target
 Wants=network-online.target
+# Give up after 30 failed starts within 3 hours (about 2.5 hours of
+# back-to-back failures at RestartSec=300).
+StartLimitIntervalSec=3h
+StartLimitBurst=30
 
 [Service]
 Type=forking
 ExecStartPre=/bin/mkdir -p $WorkingDirectory
 ExecStartPre=/bin/chown root:root $WorkingDirectory
-ExecStart=/usr/local/bin/$daemon_name -datadir=$WorkingDirectory
+# Staggered startup: all chain daemons on this host share one lock, so only
+# one is in its startup phase (block index load, verification) at a time.
+# -daemonwait keeps the launching process alive until initialization is
+# finished, and flock releases the lock when it exits. -o keeps the
+# backgrounded daemon from inheriting (and holding) the lock. Waiting order
+# between chains is arbitrary.
+ExecStart=/usr/bin/flock -o /run/spark-startup.lock /usr/local/bin/$daemon_name -datadir=$WorkingDirectory -daemonwait
 ExecStop=/usr/local/bin/$cli_name -datadir=$WorkingDirectory stop
+PIDFile=$WorkingDirectory/bitcoind.pid
 Restart=on-failure
-RestartSec=30
+RestartSec=300
 User=root
-TimeoutStartSec=300
+# Covers time waiting for the startup lock plus this daemon's own startup.
+# A timeout kills the attempt and counts as a failure (retried after
+# RestartSec).
+TimeoutStartSec=4h
 TimeoutStopSec=60
 WorkingDirectory=$WorkingDirectory
 
@@ -2391,7 +2405,7 @@ startDaemon() {
         log "${effective_chain} daemon is not running. Attempting to start."
         systemctl enable $service_name >/dev/null 2>&1
         sleep 5
-        systemctl start $service_name 2>/dev/null
+        systemctl start --no-block $service_name 2>/dev/null
         log "${effective_chain} daemon started."
         if [ -f /etc/rc.local ]; then
             log "Disabling rc.local to prevent future install.sh downloads"
