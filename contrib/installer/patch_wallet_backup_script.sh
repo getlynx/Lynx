@@ -1,5 +1,8 @@
 #!/bin/bash
-# patch_wallet_backup_script.sh - Install /usr/local/bin/{chain}-backup.sh if missing
+# patch_wallet_backup_script.sh - Install /usr/local/bin/{chain}-backup.sh
+#
+# Always overwrites any existing copy, so a rebuild replaces scripts written by
+# older installers with the current version.
 #
 # Called by the {chain}-patch-wallet-backup-script.timer systemd unit. Expects
 # these environment variables to be set by the service unit:
@@ -21,21 +24,16 @@ for var in CHAIN_LOWER EFFECTIVE_CHAIN CLI_NAME CLI_FLAGS CONF_NAME WORKING_DIRE
     fi
 done
 
-# If the backup script is already installed, disable the timer and exit
-if [ -f "/usr/local/bin/${CHAIN_LOWER}-backup.sh" ]; then
-    logger -t patch_wallet_backup_script "/usr/local/bin/${CHAIN_LOWER}-backup.sh already exists. Disabling timer."
-    systemctl stop "$TIMER_UNIT" 2>/dev/null || true
-    systemctl disable "$TIMER_UNIT" 2>/dev/null || true
-    exit 0
-fi
-
 # Ensure backup directory exists
 mkdir -p "/var/lib/${CHAIN_LOWER}-backup"
 chown root:root "/var/lib/${CHAIN_LOWER}-backup"
 chmod 700 "/var/lib/${CHAIN_LOWER}-backup"
 
-# Install {chain}-backup.sh with chain-specific substitutions
-cat <<'BACKUPEOF' | sed "s|/var/lib/lynx-backup|/var/lib/${CHAIN_LOWER}-backup|g; s|/var/lib/lynx|${WORKING_DIRECTORY}|g; s|lynx-cli|${CLI_NAME} ${CLI_FLAGS}|g; s|lynx\.conf|${CONF_NAME}|g; s|--quiet lynx;|--quiet ${CHAIN_LOWER};|g; s|Lynx|${EFFECTIVE_CHAIN}|g" > "/usr/local/bin/${CHAIN_LOWER}-backup.sh"
+# Install {chain}-backup.sh with chain-specific substitutions. Write to a temp
+# file and rename it into place so a backup run in progress keeps reading the
+# old copy instead of a half-written one.
+backup_script="/usr/local/bin/${CHAIN_LOWER}-backup.sh"
+cat <<'BACKUPEOF' | sed "s|/var/lib/lynx-backup|/var/lib/${CHAIN_LOWER}-backup|g; s|/var/lib/lynx|${WORKING_DIRECTORY}|g; s|lynx-cli|${CLI_NAME} ${CLI_FLAGS}|g; s|lynx\.conf|${CONF_NAME}|g; s|--quiet lynx;|--quiet ${CHAIN_LOWER};|g; s|Lynx|${EFFECTIVE_CHAIN}|g" > "${backup_script}.tmp"
 #!/bin/bash
 
 # Lynx Wallet Backup Script
@@ -68,8 +66,8 @@ fi
 
 # Create the backup
 log "Creating wallet backup: $BACKUP_FILE"
-if ! lynx-cli backupwallet "$BACKUP_FILE" 2>/dev/null; then
-    log "Failed to create wallet backup. Daemon may not be running or ready."
+if ! cli_err=$(lynx-cli backupwallet "$BACKUP_FILE" 2>&1); then
+    log "Failed to create wallet backup: ${cli_err//$'\n'/ }"
     log "Exiting gracefully. Backup will be retried on next scheduled run."
     exit 0
 fi
@@ -129,9 +127,10 @@ else
 fi
 BACKUPEOF
 
-chmod +x "/usr/local/bin/${CHAIN_LOWER}-backup.sh"
-chown root:root "/usr/local/bin/${CHAIN_LOWER}-backup.sh"
-logger -t patch_wallet_backup_script "Installed /usr/local/bin/${CHAIN_LOWER}-backup.sh."
+chmod +x "${backup_script}.tmp"
+chown root:root "${backup_script}.tmp"
+mv -f "${backup_script}.tmp" "$backup_script"
+logger -t patch_wallet_backup_script "Installed $backup_script."
 
 # Self-disable timer
 systemctl stop "$TIMER_UNIT" 2>/dev/null || true
