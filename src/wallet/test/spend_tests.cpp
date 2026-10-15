@@ -25,8 +25,9 @@ BOOST_FIXTURE_TEST_CASE(SubtractFee, TestChain100Setup)
     // be uneconomical to add and spend the output), and make sure it pays the
     // leftover input amount which would have been change to the recipient
     // instead of the miner.
-    auto check_tx = [&wallet](CAmount leftover_input_amount) {
-        CRecipient recipient{GetScriptForRawPubKey({}), 50 * COIN - leftover_input_amount, /*subtract_fee=*/true};
+    const CAmount input_amount = m_coinbase_txns[0]->vout[0].nValue;
+      auto check_tx = [&wallet, input_amount](CAmount leftover_input_amount) {
+        CRecipient recipient{GetScriptForRawPubKey({}), input_amount - leftover_input_amount, /*subtract_fee=*/true};
         constexpr int RANDOM_CHANGE_POSITION = -1;
         CCoinControl coin_control;
         coin_control.m_feerate.emplace(10000);
@@ -129,7 +130,7 @@ BOOST_FIXTURE_TEST_CASE(wallet_duplicated_preset_inputs_test, TestChain100Setup)
     // Try to create a tx that spends more than what preset inputs + wallet selected inputs are covering for.
     // The wallet can cover up to 200 BTC, and the tx target is 299 BTC.
     std::vector<CRecipient> recipients = {{GetScriptForDestination(*Assert(wallet->GetNewDestination(OutputType::BECH32, "dummy"))),
-                                           /*nAmount=*/299 * COIN, /*fSubtractFeeFromAmount=*/true}};
+                                           /*nAmount=*/available_coins.GetTotalAmount() + 1 * COIN, /*fSubtractFeeFromAmount=*/true}};
     CCoinControl coin_control;
     coin_control.m_allow_other_inputs = true;
     for (const auto& outpoint : preset_inputs) {

@@ -22,6 +22,7 @@ BOOST_AUTO_TEST_CASE(unlimited_recv)
 {
     const auto prev_log_level{LogInstance().LogLevel()};
     LogInstance().SetLogLevel(BCLog::Level::Trace);
+    LogInstance().EnableCategory(BCLog::I2P);
     auto CreateSockOrig = CreateSock;
 
     // Mock CreateSock() to create MockSock.

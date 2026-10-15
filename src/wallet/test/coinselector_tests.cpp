@@ -959,8 +959,7 @@ static bool has_coin(const CoinSet& set, CAmount amount)
 
 BOOST_AUTO_TEST_CASE(check_max_weight)
 {
-    const CAmount target = 49.5L * COIN;
-    CCoinControl cc;
+    const CAmount target = 99.0L * COIN; CCoinControl cc;
 
     FastRandomContext rand;
     CoinSelectionParams cs_params{
@@ -988,17 +987,18 @@ BOOST_AUTO_TEST_CASE(check_max_weight)
         const auto result = select_coins(
             target, cs_params, cc, [&](CWallet& wallet) {
                 CoinsResult available_coins;
-                for (int j = 0; j < 1515; ++j) {
+                for (int j = 0; j < 3030; ++j) {
                     add_coin(available_coins, wallet, CAmount(0.033 * COIN), CFeeRate(0), 144, false, 0, true);
                 }
 
-                add_coin(available_coins, wallet, CAmount(50 * COIN), CFeeRate(0), 144, false, 0, true);
+                add_coin(available_coins, wallet, CAmount(100 * COIN), CFeeRate(0), 144, false, 0, true);
+
                 return available_coins;
             },
             chain);
 
         BOOST_CHECK(result);
-        BOOST_CHECK(has_coin(result->GetInputSet(), CAmount(50 * COIN)));
+        BOOST_CHECK(has_coin(result->GetInputSet(), CAmount(100 * COIN)));
     }
 
     {
@@ -1012,10 +1012,10 @@ BOOST_AUTO_TEST_CASE(check_max_weight)
         const auto result = select_coins(
             target, cs_params, cc, [&](CWallet& wallet) {
                 CoinsResult available_coins;
-                for (int j = 0; j < 400; ++j) {
+                for (int j = 0; j < 800; ++j) {
                     add_coin(available_coins, wallet, CAmount(0.0625 * COIN), CFeeRate(0), 144, false, 0, true);
                 }
-                for (int j = 0; j < 2000; ++j) {
+                for (int j = 0; j < 4000; ++j) {
                     add_coin(available_coins, wallet, CAmount(0.025 * COIN), CFeeRate(0), 144, false, 0, true);
                 }
                 return available_coins;
@@ -1036,7 +1036,7 @@ BOOST_AUTO_TEST_CASE(check_max_weight)
         const auto result = select_coins(
             target, cs_params, cc, [&](CWallet& wallet) {
                 CoinsResult available_coins;
-                for (int j = 0; j < 1515; ++j) {
+                for (int j = 0; j < 3030; ++j) {
                     add_coin(available_coins, wallet, CAmount(0.033 * COIN), CFeeRate(0), 144, false, 0, true);
                 }
                 return available_coins;

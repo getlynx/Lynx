@@ -16,8 +16,10 @@ using interfaces::FoundBlock;
 BOOST_FIXTURE_TEST_SUITE(interfaces_tests, TestChain100Setup)
 
 BOOST_AUTO_TEST_CASE(findBlock)
-{
+  {
+    mineBlocks(100 - COINBASE_MATURITY);
     LOCK(Assert(m_node.chainman)->GetMutex());
+
     auto& chain = m_node.chain;
     const CChain& active = Assert(m_node.chainman)->ActiveChain();
 
@@ -126,7 +128,8 @@ BOOST_AUTO_TEST_CASE(findCommonAncestor)
 }
 
 BOOST_AUTO_TEST_CASE(hasBlocks)
-{
+  {
+    mineBlocks(100 - COINBASE_MATURITY);
     LOCK(::cs_main);
     auto& chain = m_node.chain;
     const CChain& active = Assert(m_node.chainman)->ActiveChain();

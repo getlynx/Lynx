@@ -115,7 +115,7 @@ bool CoinStatsIndex::CustomAppend(const interfaces::BlockInfo& block)
 {
     CBlockUndo block_undo;
     const CBlockIndex* pindex = WITH_LOCK(cs_main, return m_chainstate->m_blockman.LookupBlockIndex(block.hash));
-    uint256 prevHash = pindex->pprev->GetBlockHash();
+    uint256 prevHash = pindex->pprev ?  pindex->pprev->GetBlockHash() : uint256{};
     const CAmount block_subsidy{GetBlockSubsidy(block.height, Params().GetConsensus(), prevHash)};
     m_total_subsidy += block_subsidy;
 
