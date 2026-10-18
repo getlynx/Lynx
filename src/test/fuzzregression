@@ -1,0 +1,3 @@
+
+for d in /root/qa-assets/fuzz_corpora/*/; do n=${d#/root/qa-assets/fuzz_corpora/}; n=${n%/}; case " coinselection fee_rate integer utxo_snapshot utxo_total_supply versionbits wallet_notifications " in *" $n "*) continue;; esac; FUZZ="$n" /root/dkdkfjfjdkdk/Lynx/src/test/fuzz/fuzz "$d" >/dev/null 2>&1; c=$?; [ "$c" != 0 ] && [ "$c" != 1 ] && echo "FAIL $n"; done; echo DONE
+
