@@ -318,8 +318,8 @@ void BitcoinGUI::createActions()
     optionsAction->setMenuRole(QAction::PreferencesRole);
     optionsAction->setEnabled(false);
 
-    toggleStakingAction = new QAction(tr("Enable staking…"), this);
-    toggleStakingAction->setStatusTip(tr("Enable staking on current wallet"));
+    toggleStakingAction = new QAction(tr("Enable Staking"), this);
+    toggleStakingAction->setStatusTip(tr("Turn staking on or off for the current wallet"));
     toggleStakingAction->setCheckable(true);
     encryptWalletAction = new QAction(tr("&Encrypt Wallet…"), this);
     encryptWalletAction->setStatusTip(tr("Encrypt the private keys that belong to your wallet"));
@@ -958,8 +958,8 @@ void BitcoinGUI::showHelpMessageClicked()
 #ifdef ENABLE_WALLET
 // Mirrors the setstaking RPC (rpc/mining.cpp): gblnDisableStaking is the daemon's
 // authoritative "user turned staking off" flag, and the stake manager is asked to
-// start or stop. The menu text is not touched here; setStakingStatus() re-reads the
-// real state on its timer, so the label only changes once the manager actually did.
+// start or stop. The checkmark is not touched here; setStakingStatus() re-reads the
+// real state on its timer, so it only changes once the manager actually did.
 extern bool gblnDisableStaking;
 
 void BitcoinGUI::toggleStaking()
@@ -1426,10 +1426,9 @@ void BitcoinGUI::setStakingStatus()
     // must follow the stake manager rather than remember what was last clicked.
     m_is_staking = fStakerRunning;
     if (toggleStakingAction) {
+        // Only the checkmark tracks state; the text stays "Enable Staking" so a checked
+        // box never reads as "disable is on".
         toggleStakingAction->setChecked(m_is_staking);
-        toggleStakingAction->setText(m_is_staking ? tr("Disable staking…") : tr("Enable staking…"));
-        toggleStakingAction->setStatusTip(m_is_staking ? tr("Disable staking on current wallet")
-                                                       : tr("Enable staking on current wallet"));
     }
     if (fStakerRunning) {
         if (!fTryToSync) {
