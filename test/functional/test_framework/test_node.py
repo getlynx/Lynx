@@ -98,11 +98,11 @@ class TestNode():
         self.args = [
             self.binary,
             "-datadir=" + self.datadir,
+            "-conf=bitcoin.conf",
             "-logtimemicros",
             "-debug",
             "-debugexclude=libevent",
             "-debugexclude=leveldb",
-            "-debugexclude=rand",
             "-uacomment=testnode%d" % i,
         ]
         if self.descriptors is None:

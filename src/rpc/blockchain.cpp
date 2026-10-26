@@ -539,7 +539,14 @@ static RPCHelpMan getblockheader()
                             {RPCResult::Type::NUM_TIME, "mediantime", "The median block time expressed in " + UNIX_EPOCH_TIME},
                             {RPCResult::Type::NUM, "nonce", "The nonce"},
                             {RPCResult::Type::STR_HEX, "bits", "The bits"},
-                            {RPCResult::Type::NUM, "difficulty", "The difficulty"},
+                            // {RPCResult::Type::NUM, "difficulty", "The difficulty"},
+
+
+                            {RPCResult::Type::OBJ, "difficulty", "The difficulty", {
+                            {RPCResult::Type::NUM, "proof-of-work", "the difficulty as a multiple of the minimum difficulty of proof of work blocks"},
+                            {RPCResult::Type::NUM, "proof-of-stake", "the difficulty as a multiple of the minimum difficulty of proof of stake blocks"},
+                            }},
+
                             {RPCResult::Type::STR_HEX, "chainwork", "Expected number of hashes required to produce the current chain"},
                             {RPCResult::Type::NUM, "nTx", "The number of transactions in the block"},
                             {RPCResult::Type::STR_HEX, "previousblockhash", /*optional=*/true, "The hash of the previous block (if available)"},
