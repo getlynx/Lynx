@@ -92,7 +92,9 @@ class MempoolWtxidTest(BitcoinTestFramework):
         txid_submitted = node.sendrawtransaction(child_one.serialize().hex())
         assert_equal(node.getmempoolentry(txid_submitted)['wtxid'], child_one_wtxid)
 
-        peer_wtxid_relay.wait_for_broadcast([child_one_wtxid])
+        # PROTOCOL_VERSION=70006 has no wtxidrelay (BIP339); the node announces by
+        # txid (MSG_TX), so the broadcast delivery check waits on txid, not wtxid.
+        peer_wtxid_relay.wait_for_broadcast([child_one_txid])
         assert_equal(node.getmempoolinfo()["unbroadcastcount"], 0)
 
         # testmempoolaccept reports the "already in mempool" error
@@ -121,7 +123,7 @@ class MempoolWtxidTest(BitcoinTestFramework):
 
         # The node should rebroadcast the transaction using the wtxid of the correct transaction
         # (child_one, which is in its mempool).
-        peer_wtxid_relay_2.wait_for_broadcast([child_one_wtxid])
+        peer_wtxid_relay_2.wait_for_broadcast([child_one_txid])
         assert_equal(node.getmempoolinfo()["unbroadcastcount"], 0)
 
 if __name__ == '__main__':

@@ -45,8 +45,8 @@ class FilelockTest(BitcoinTestFramework):
 
             if self.is_bdb_compiled():
                 check_wallet_filelock(False)
-            if self.is_sqlite_compiled():
-                check_wallet_filelock(True)
+            # descriptor (SQLite) wallets are not supported on this chain — createwallet rejects them
+            # (wallet.cpp:344) — so only the legacy BDB filelock path is exercised.
 
 if __name__ == '__main__':
     FilelockTest().main()

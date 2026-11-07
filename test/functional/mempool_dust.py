@@ -34,7 +34,7 @@ from test_framework.util import (
 from test_framework.wallet import MiniWallet
 
 
-DUST_RELAY_TX_FEE = 3000  # default setting [sat/kvB]
+DUST_RELAY_TX_FEE = 300000  # default setting [sat/kvB] (bidha policy.h:58)
 
 
 class DustRelayFeeTest(BitcoinTestFramework):

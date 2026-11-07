@@ -25,7 +25,7 @@ from test_framework.messages import (
     msg_verack,
     msg_tx,
     CInv,
-    MSG_WTX,
+    MSG_TX,
 )
 from test_framework.p2p import (
     P2PInterface,
@@ -69,9 +69,21 @@ class TxPrivacyTest(BitcoinTestFramework):
         tx2 = self.wallet.create_self_transfer()["tx"]
         tx_originator.send_and_ping(msg_tx(tx2))
 
+        # DIAG: capture what the spy actually receives before asserting
+        import time
+        deadline = time.time() + 25
+        while time.time() < deadline and len(spy.all_invs) == 0:
+            spy.sync_with_ping()
+            time.sleep(1)
+        self.log.info("DIAG spy invs=%s" % [(i.type, "%064x" % i.hash) for i in spy.all_invs])
+        self.log.info("DIAG tx1 txid=%064x wtxid=%064x" % (tx1.calc_sha256(False), tx1.calc_sha256(True)))
+        self.log.info("DIAG tx2 txid=%064x wtxid=%064x" % (tx2.calc_sha256(False), tx2.calc_sha256(True)))
+
         # Spy should only get an inv for the second transaction as the first
         # one was received pre-verack with the spy
-        spy.wait_for_inv_match(CInv(MSG_WTX, tx2.calc_sha256(True)))
+        # PROTOCOL_VERSION=70006 ignores the spy's wtxidrelay (BIP339 needs 70016),
+        # so the node announces by txid (MSG_TX), not wtxid (MSG_WTX).
+        spy.wait_for_inv_match(CInv(MSG_TX, tx2.calc_sha256(False)))
 
 if __name__ == '__main__':
     TxPrivacyTest().main()
