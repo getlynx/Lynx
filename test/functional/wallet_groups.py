@@ -26,8 +26,8 @@ class WalletGroupTest(BitcoinTestFramework):
             [],
             [],
             ["-avoidpartialspends"],
-            ["-maxapsfee=0.00002719"],
-            ["-maxapsfee=0.00002720"],
+            ["-maxapsfee=0.00002940"],
+            ["-maxapsfee=0.00005880"],
         ]
 
         for args in self.extra_args:
@@ -121,10 +121,10 @@ class WalletGroupTest(BitcoinTestFramework):
         assert_equal(input_addrs[0], input_addrs[1])
         # Node 2 enforces avoidpartialspends so needs no checking here
 
-        tx4_ungrouped_fee = 2820
-        tx4_grouped_fee = 4160
-        tx5_6_ungrouped_fee = 5520
-        tx5_6_grouped_fee = 8240
+        tx4_ungrouped_fee = 4500
+        tx4_grouped_fee = 7440
+        tx5_6_ungrouped_fee = 10380
+        tx5_6_grouped_fee = 16260
 
         self.log.info("Test wallet option maxapsfee")
         addr_aps = self.nodes[3].getnewaddress()

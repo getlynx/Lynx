@@ -147,8 +147,10 @@ class P2PLeakTest(BitcoinTestFramework):
         assert not no_version_idle_peer.got_sendaddrv2
 
         assert not no_verack_idle_peer.unexpected_msg
-        assert no_verack_idle_peer.got_wtxidrelay
-        assert no_verack_idle_peer.got_sendaddrv2
+        # bidha PROTOCOL_VERSION=70006 < WTXID_RELAY_VERSION(70016), so greatest_common_version never reaches
+        # the gate (net_processing.cpp:3496) — the node sends neither wtxidrelay nor sendaddrv2.
+        assert not no_verack_idle_peer.got_wtxidrelay
+        assert not no_verack_idle_peer.got_sendaddrv2
 
         assert not pre_wtxidrelay_peer.unexpected_msg
         assert not pre_wtxidrelay_peer.got_wtxidrelay

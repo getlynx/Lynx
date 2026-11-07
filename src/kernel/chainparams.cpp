@@ -1275,6 +1275,9 @@ public:
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
         consensus.nSubsidyHalvingInterval = 150;
+        consensus.HardForkHeight = 126250;
+        consensus.HardFork2Height = 1711675;
+        consensus.HardFork3Height = 1838000;
         consensus.BIP34Height = 1; // Always active unless overridden
         consensus.BIP34Hash = uint256();
         consensus.BIP65Height = 1;  // Always active unless overridden
@@ -1283,9 +1286,16 @@ public:
         consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
         consensus.nPowTargetSpacing = 10 * 60;
+        // Regtest omitted the height-gated spacings that GetPowTargetSpacing() returns; left
+        // unset they are indeterminate, which makes GetBlockProofEquivalentTime() (and thus
+        // BlockRequestAllowed() for off-active-chain blocks) read garbage. Tie them to regtest's
+        // own target spacing.
+        consensus.PowTargetSpacingV1 = consensus.nPowTargetSpacing;
+        consensus.PowTargetSpacingV2 = consensus.nPowTargetSpacing;
+        consensus.PowTargetSpacingV3 = consensus.nPowTargetSpacing;
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = true;
-        consensus.lastPoWBlock = 250;
+        consensus.lastPoWBlock = 10000000;
         consensus.posLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPosTargetTimespan = 5 * 60;
         consensus.nPosTargetSpacing = 5 * 60;

@@ -17,6 +17,14 @@ class CreateCache(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 0
 
+    def add_options(self, parser):
+         self.add_wallet_options(parser)
+         # Accept (and ignore) script-specific options so a single parameterized test
+         # (e.g. "wallet_txn_doublespend.py --mineblock") can be driven through
+         # test_runner, which forwards the test's args to this cache builder too.
+         parser.add_argument("--mineblock", action="store_true", help="ignored (test_runner arg pass-through)")
+         parser.add_argument("--segwit", action="store_true", help="ignored (test_runner arg pass-through)")
+
     def setup_network(self):
         pass
 

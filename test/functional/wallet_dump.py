@@ -73,7 +73,7 @@ def read_dump(file_name, addrs, script_addrs, hd_master_addr_old):
                         elif addr.startswith('2'):
                             # P2SH-segwit address
                             found_p2sh_segwit_addr += 1
-                        elif addr.startswith('bcrt1'):
+                        elif addr.startswith('rlynx1'):
                             found_bech32_addr += 1
                         break
                     elif keytype == "change=1":
@@ -110,6 +110,7 @@ class WalletDumpTest(BitcoinTestFramework):
 
     def run_test(self):
         self.nodes[0].createwallet("dump")
+        [self.nodes[0].unloadwallet(w) for w in self.nodes[0].listwallets() if w != "dump"]
 
         wallet_unenc_dump = os.path.join(self.nodes[0].datadir, "wallet.unencrypted.dump")
         wallet_enc_dump = os.path.join(self.nodes[0].datadir, "wallet.encrypted.dump")
@@ -197,6 +198,7 @@ class WalletDumpTest(BitcoinTestFramework):
         # Restart node with new wallet, and test importwallet
         self.restart_node(0)
         self.nodes[0].createwallet("w2")
+        [self.nodes[0].unloadwallet(w) for w in self.nodes[0].listwallets() if w != "w2"]
 
         # Make sure the address is not IsMine before import
         result = self.nodes[0].getaddressinfo(multisig_addr)

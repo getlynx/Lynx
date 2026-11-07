@@ -247,6 +247,9 @@ class P2PConnection(asyncio.Protocol):
                 if checksum != h[:4]:
                     raise ValueError("got bad checksum " + repr(self.recvbuf))
                 self.recvbuf = self.recvbuf[4+12+4+4+msglen:]
+                if msgtype == b"alert":
+                    # bidha relays a legacy alert message on connect; real peers ignore unknown messages, so drop it
+                    continue
                 if msgtype not in MESSAGEMAP:
                     raise ValueError("Received unknown msgtype from %s:%d: '%s' %s" % (self.dstaddr, self.dstport, msgtype, repr(msg)))
                 f = BytesIO(msg)

@@ -49,7 +49,7 @@ class CreateTxWalletTest(BitcoinTestFramework):
 
     def test_tx_size_too_large(self):
         # More than 10kB of outputs, so that we hit -maxtxfee with a high feerate
-        outputs = {self.nodes[0].getnewaddress(address_type='bech32'): 0.000025 for _ in range(400)}
+        outputs = {self.nodes[0].getnewaddress(address_type='bech32'): 0.001 for _ in range(400)}
         raw_tx = self.nodes[0].createrawtransaction(inputs=[], outputs=outputs)
 
         for fee_setting in ['-minrelaytxfee=0.01', '-mintxfee=0.01', '-paytxfee=0.01']:
@@ -88,15 +88,15 @@ class CreateTxWalletTest(BitcoinTestFramework):
         self.nodes[0].createwallet("too_long")
         test_wallet = self.nodes[0].get_wallet_rpc("too_long")
 
-        tx_data = df_wallet.send(outputs=[{test_wallet.getnewaddress(): 25}], options={"change_position": 0})
+        tx_data = df_wallet.send(outputs=[{test_wallet.getnewaddress(): 40}], options={"change_position": 0})
         txid = tx_data['txid']
         vout = 1
 
         self.nodes[0].syncwithvalidationinterfacequeue()
         options = {"change_position": 0, "add_inputs": False}
-        for i in range(1, 25):
+        for i in range(1, 36):
             options['inputs'] = [{'txid': txid, 'vout': vout}]
-            tx_data = test_wallet.send(outputs=[{test_wallet.getnewaddress(): 25 - i}], options=options)
+            tx_data = test_wallet.send(outputs=[{test_wallet.getnewaddress(): 40 - i}], options=options)
             txid = tx_data['txid']
 
         # Sending one more chained transaction will fail

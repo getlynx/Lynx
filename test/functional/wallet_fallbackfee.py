@@ -26,7 +26,9 @@ class WalletRBFTest(BitcoinTestFramework):
         self.nodes[0].sendtoaddress(self.nodes[0].getnewaddress(), 1)
 
         # test sending a tx with disabled fallback fee (must fail)
-        self.restart_node(0, extra_args=["-fallbackfee=0"])
+        # bidha's DEFAULT_PAY_TX_FEE is non-zero (wallet.h:79; stock is 0), so paytxfee must also be
+        # zeroed here or it supplies the fee and estimation is never exercised.
+        self.restart_node(0, extra_args=["-fallbackfee=0", "-paytxfee=0"])
         assert_raises_rpc_error(-6, "Fee estimation failed", lambda: self.nodes[0].sendtoaddress(self.nodes[0].getnewaddress(), 1))
         assert_raises_rpc_error(-4, "Fee estimation failed", lambda: self.nodes[0].fundrawtransaction(self.nodes[0].createrawtransaction([], {self.nodes[0].getnewaddress(): 1})))
         assert_raises_rpc_error(-6, "Fee estimation failed", lambda: self.nodes[0].sendmany("", {self.nodes[0].getnewaddress(): 1}))

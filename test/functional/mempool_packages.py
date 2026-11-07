@@ -49,13 +49,23 @@ class MempoolPackagesTest(BitcoinTestFramework):
 
         if self.is_specified_wallet_compiled():
             self.nodes[0].createwallet("watch_wallet", disable_private_keys=True)
-            self.nodes[0].importaddress(self.wallet.get_address())
+            # bidha auto-loads a default "" wallet at startup (load.cpp:140); with watch_wallet
+            # also loaded the unqualified wallet RPCs below are ambiguous (-19). Unload "" so
+            # watch_wallet is the sole wallet and those RPCs resolve to it.
+            if "" in self.nodes[0].listwallets():
+                self.nodes[0].unloadwallet("")
+            # MiniWallet's default address is bech32m (taproot), which a legacy wallet cannot
+            # import (-5). Import the raw scriptPubKey instead; a legacy watch-only wallet
+            # accepts it and listunspent still tracks the wallet's UTXOs.
+            self.nodes[0].importaddress(self.wallet.get_scriptPubKey().hex())
 
         peer_inv_store = self.nodes[0].add_p2p_connection(P2PTxInvStore()) # keep track of invs
 
         # DEFAULT_ANCESTOR_LIMIT transactions off a confirmed tx should be fine
         chain = self.wallet.create_self_transfer_chain(chain_length=DEFAULT_ANCESTOR_LIMIT)
-        witness_chain = [t["wtxid"] for t in chain]
+        # At PROTOCOL_VERSION=70006 bidha has no wtxid relay, so txs are announced by txid;
+        # P2PTxInvStore records txids, so wait_for_broadcast must be given txids not wtxids.
+        witness_chain = [t["txid"] for t in chain]
         ancestor_vsize = 0
         ancestor_fees = Decimal(0)
 

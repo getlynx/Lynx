@@ -50,7 +50,7 @@ class P2PIBDStallingTest(BitcoinTestFramework):
         self.num_nodes = 1
 
     def run_test(self):
-        NUM_BLOCKS = 1025
+        NUM_BLOCKS = 4097
         NUM_PEERS = 4
         node = self.nodes[0]
         tip = int(node.getbestblockhash(), 16)
@@ -68,19 +68,20 @@ class P2PIBDStallingTest(BitcoinTestFramework):
             block_dict[blocks[-1].sha256] = blocks[-1]
         stall_block = blocks[0].sha256
 
-        headers_message = msg_headers()
-        headers_message.headers = [CBlockHeader(b) for b in blocks[:NUM_BLOCKS-1]]
         peers = []
 
-        self.log.info("Check that a staller does not get disconnected if the 1024 block lookahead buffer is filled")
+        self.log.info("Check that a staller does not get disconnected if the 4096 block lookahead buffer is filled")
         for id in range(NUM_PEERS):
             peers.append(node.add_outbound_p2p_connection(P2PStaller(stall_block), p2p_idx=id, connection_type="outbound-full-relay"))
             peers[-1].block_store = block_dict
-            peers[-1].send_message(headers_message)
+            self.send_header_batches(peers[-1], blocks[:NUM_BLOCKS - 1])
 
-        # Need to wait until 1023 blocks are received - the magic total bytes number is a workaround in lack of an rpc
-        # returning the number of downloaded (but not connected) blocks.
-        self.wait_until(lambda: self.total_bytes_recv_for_blocks() == 172761)
+        # Need to wait until BLOCK_DOWNLOAD_WINDOW-1 (4095) blocks are received - in lack of an rpc returning the
+        # number of downloaded (but not connected) blocks, wait on the exact received byte total. The node accounts
+        # payload + 24-byte message header per block (net.cpp:821/726), so compute it from the blocks actually served
+        # (all but the withheld stall_block, i.e. blocks[1:NUM_BLOCKS-1]).
+        expected_block_bytes = sum(len(b.serialize()) + 24 for b in blocks[1:NUM_BLOCKS - 1])
+        self.wait_until(lambda: self.total_bytes_recv_for_blocks() == expected_block_bytes, timeout=300)
 
         self.all_sync_send_with_ping(peers)
         # If there was a peer marked for stalling, it would get disconnected
@@ -89,11 +90,10 @@ class P2PIBDStallingTest(BitcoinTestFramework):
         self.all_sync_send_with_ping(peers)
         assert_equal(node.num_test_p2p_connections(), NUM_PEERS)
 
-        self.log.info("Check that increasing the window beyond 1024 blocks triggers stalling logic")
-        headers_message.headers = [CBlockHeader(b) for b in blocks]
+        self.log.info("Check that increasing the window beyond 4096 blocks triggers stalling logic")
         with node.assert_debug_log(expected_msgs=['Stall started']):
             for p in peers:
-                p.send_message(headers_message)
+                self.send_header_batches(p, blocks)
             self.all_sync_send_with_ping(peers)
 
         self.log.info("Check that the stalling peer is disconnected after 2 seconds")
@@ -102,9 +102,12 @@ class P2PIBDStallingTest(BitcoinTestFramework):
         peers[0].wait_for_disconnect()
         assert_equal(node.num_test_p2p_connections(), NUM_PEERS - 1)
         self.wait_until(lambda: self.is_block_requested(peers, stall_block))
-        # Make sure that SendMessages() is invoked, which assigns the missing block
-        # to another peer and starts the stalling logic for them
-        self.all_sync_send_with_ping(peers)
+        # Make sure SendMessages() reassigns the missing block to another peer AND re-arms the stall on
+        # it. bidha throttles the IBD block-download candidate scan + staller detection to 1 pass in 100
+        # (net_processing.cpp:6180), so re-arming is not driven by a single ping cycle the way stock
+        # Bitcoin's every-pass scan is. Spin until the node records the next "Stall started", which
+        # stamps m_stalling_since at the current mocktime, before stepping mocktime across the timeout.
+        self.wait_for_new_staller(peers)
 
         self.log.info("Check that the stalling timeout gets doubled to 4 seconds for the next staller")
         # No disconnect after just 3 seconds
@@ -117,7 +120,7 @@ class P2PIBDStallingTest(BitcoinTestFramework):
         node.setmocktime(self.mocktime)
         self.wait_until(lambda: sum(x.is_connected for x in node.p2ps) == NUM_PEERS - 2)
         self.wait_until(lambda: self.is_block_requested(peers, stall_block))
-        self.all_sync_send_with_ping(peers)
+        self.wait_for_new_staller(peers)
 
         self.log.info("Check that the stalling timeout gets doubled to 8 seconds for the next staller")
         # No disconnect after just 7 seconds
@@ -139,7 +142,32 @@ class P2PIBDStallingTest(BitcoinTestFramework):
                     p.send_message(msg_block(block_dict[stall_block]))
 
         self.log.info("Check that all outstanding blocks get connected")
-        self.wait_until(lambda: node.getblockcount() == NUM_BLOCKS)
+        self.wait_until(lambda: node.getblockcount() == NUM_BLOCKS, timeout=300)
+
+    def count_stall_started(self):
+        with open(self.nodes[0].debug_log_path, encoding='utf-8') as dl:
+            return dl.read().count("Stall started peer=")
+
+    def wait_for_new_staller(self, peers):
+        # Spin ping cycles until the node logs one more "Stall started peer=" than it had, i.e. the
+        # throttled IBD candidate scan (net_processing.cpp:6180) has fired and stamped m_stalling_since
+        # on the reassigned peer at the current mocktime. Needed because that scan runs 1 pass in 100.
+        prev = self.count_stall_started()
+
+        def _armed():
+            self.all_sync_send_with_ping(peers)
+            return self.count_stall_started() > prev
+        self.wait_until(_armed, timeout=120)
+
+    def send_header_batches(self, peer, block_list):
+        # A headers message above MAX_HEADERS_RESULTS (2000, net_processing.cpp:133/4753) is rejected and not
+        # processed, so the peer never learns the chain. The 4096 lookahead window needs >2000 headers announced,
+        # so feed them in <=2000-header messages that each connect to the previous batch.
+        MAX_HEADERS_RESULTS = 2000
+        for i in range(0, len(block_list), MAX_HEADERS_RESULTS):
+            m = msg_headers()
+            m.headers = [CBlockHeader(b) for b in block_list[i:i + MAX_HEADERS_RESULTS]]
+            peer.send_message(m)
 
     def total_bytes_recv_for_blocks(self):
         total = 0

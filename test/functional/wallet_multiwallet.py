@@ -138,6 +138,7 @@ class MultiWalletTest(BitcoinTestFramework):
             # Need to ensure access is restored for cleanup
             os.chmod(wallet_dir('no_access'), stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
         assert_equal(sorted(map(lambda w: w['name'], walletlist)), sorted(in_wallet_dir))
+        in_wallet_dir.append('recursive_dir_symlink')
 
         assert_equal(set(node.listwallets()), set(wallet_names))
 
@@ -183,6 +184,7 @@ class MultiWalletTest(BitcoinTestFramework):
         wallet_dir2 = data_dir('walletdir')
         os.rename(wallet_dir(), wallet_dir2)
         self.start_node(0)
+        self.nodes[0].unloadwallet("")
         self.nodes[0].createwallet("w4")
         self.nodes[0].createwallet("w5")
         assert_equal(set(node.listwallets()), {"w4", "w5"})
@@ -202,7 +204,6 @@ class MultiWalletTest(BitcoinTestFramework):
         competing_wallet_dir = os.path.join(self.options.tmpdir, 'competing_walletdir')
         os.mkdir(competing_wallet_dir)
         self.restart_node(0, ['-nowallet', '-walletdir=' + competing_wallet_dir])
-        self.nodes[0].createwallet(self.default_wallet_name)
         if self.options.descriptors:
             exp_stderr = f"Error: SQLiteDatabase: Unable to obtain an exclusive lock on the database, is it being used by another instance of {self.config['environment']['PACKAGE_NAME']}?"
         else:
@@ -251,11 +252,11 @@ class MultiWalletTest(BitcoinTestFramework):
         assert_equal(batch[1]["result"]["walletname"], "w1")
 
         self.log.info('Check for per-wallet settxfee call')
-        assert_equal(w1.getwalletinfo()['paytxfee'], 0)
-        assert_equal(w2.getwalletinfo()['paytxfee'], 0)
-        w2.settxfee(0.001)
-        assert_equal(w1.getwalletinfo()['paytxfee'], 0)
+        assert_equal(w1.getwalletinfo()['paytxfee'], Decimal('0.00100000'))
         assert_equal(w2.getwalletinfo()['paytxfee'], Decimal('0.00100000'))
+        w2.settxfee(0.002)
+        assert_equal(w1.getwalletinfo()['paytxfee'], Decimal('0.00100000'))
+        assert_equal(w2.getwalletinfo()['paytxfee'], Decimal('0.00200000'))
 
         self.log.info("Test dynamic wallet loading")
 

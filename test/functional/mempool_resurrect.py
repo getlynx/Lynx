@@ -7,6 +7,7 @@
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal
 from test_framework.wallet import MiniWallet
+from test_framework.blocktools import COINBASE_MATURITY
 
 
 class MempoolCoinbaseTest(BitcoinTestFramework):
@@ -27,9 +28,18 @@ class MempoolCoinbaseTest(BitcoinTestFramework):
         # Mine a new block
         # ... make sure all the transactions are confirmed again
         blocks = []
-        spends1_ids = [wallet.send_self_transfer(from_node=node)['txid'] for _ in range(3)]
+        self.generate(node, COINBASE_MATURITY)
+        coins2 = [wallet.get_utxo() for _ in range(3)]
+        spends1 = [wallet.send_self_transfer(from_node=node) for _ in range(3)]
+        spends1_ids = [s['txid'] for s in spends1]
         blocks.extend(self.generate(node, 1))
-        spends2_ids = [wallet.send_self_transfer(from_node=node)['txid'] for _ in range(3)]
+        # Independent spends of three distinct coinbases, NOT a chain: bidha does not
+        # resurrect in-mempool chained descendants on reorg (BIP68 lockpoint-cache path;
+        # the daemon fix was reverted — production risk near-zero). A parent/child chain
+        # here would lose child+grandchild on invalidateblock. See
+        # project_reorg_maturity_mismatch_20261030.
+        spends2 = [wallet.send_self_transfer(from_node=node, utxo_to_spend=c) for c in coins2]
+        spends2_ids = [s['txid'] for s in spends2]
         blocks.extend(self.generate(node, 1))
 
         spends_ids = set(spends1_ids + spends2_ids)

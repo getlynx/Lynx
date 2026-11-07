@@ -481,7 +481,10 @@ def main():
                 print("{}WARNING!{} Test '{}' not found in current test list.".format(BOLD[1], BOLD[0], exclude_test))
 
     if args.filter:
-        test_list = list(filter(re.compile(args.filter).search, test_list))
+          test_list = list(filter(re.compile(args.filter).search, test_list))
+
+    # Descriptor wallets are not supported on this chain; drop those variants.
+    test_list = [t for t in test_list if '--descriptors' not in t]
 
     if not test_list:
         print("No valid test scripts specified. Check that your test is in one "

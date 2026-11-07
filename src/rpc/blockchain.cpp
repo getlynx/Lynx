@@ -1061,6 +1061,7 @@ static RPCHelpMan gettxout()
                     {RPCResult::Type::STR, "address", /*optional=*/true, "The Bitcoin address (only if a well-defined address exists)"},
                 }},
                 {RPCResult::Type::BOOL, "coinbase", "Coinbase or not"},
+                {RPCResult::Type::BOOL, "coinstake", "Coinstake or not"},
             }},
         },
         RPCExamples{

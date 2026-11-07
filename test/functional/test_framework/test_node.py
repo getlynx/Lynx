@@ -38,7 +38,7 @@ from .util import (
     EncodeDecimal,
 )
 
-BITCOIND_PROC_WAIT_TIMEOUT = 60
+BITCOIND_PROC_WAIT_TIMEOUT = 300
 
 
 class FailedToStartError(Exception):
@@ -104,6 +104,7 @@ class TestNode():
             "-debugexclude=libevent",
             "-debugexclude=leveldb",
             "-uacomment=testnode%d" % i,
+            "-disablestaking=1",
         ]
         if self.descriptors is None:
             self.args.append("-disablewallet")
@@ -740,7 +741,10 @@ class TestNodeCLI():
         """Run bitcoin-cli command. Deserializes returned string as python object."""
         pos_args = [arg_to_cli(arg) for arg in args]
         named_args = [str(key) + "=" + arg_to_cli(value) for (key, value) in kwargs.items()]
-        p_args = [self.binary, "-datadir=" + self.datadir] + self.options
+        # bidha's default config filename is CURRENT_CHAIN".conf" (e.g. digitalcoin.conf),
+        # not bitcoin.conf, so the cli must be pointed at the framework's conf the same
+        # way the daemon is (test_node start args) or it falls back to the default RPC port.
+        p_args = [self.binary, "-datadir=" + self.datadir, "-conf=bitcoin.conf"] + self.options
         if named_args:
             p_args += ["-named"]
         if command is not None:

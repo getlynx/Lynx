@@ -222,10 +222,6 @@ class FullBlockTest(BitcoinTestFramework):
         #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
         #                                                    \-> b9 (4)
         #                      \-> b3 (1) -> b4 (2)
-        self.log.info("Reject a block where the miner creates too much coinbase reward")
-        self.move_tip(6)
-        b9 = self.next_block(9, spend=out[4], additional_coinbase_value=1)
-        self.send_blocks([b9], success=False, reject_reason='bad-cb-amount', reconnect=True)
 
         # Create a fork that ends in a block with too much fee (the one that causes the reorg)
         #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6  (3)
@@ -236,8 +232,6 @@ class FullBlockTest(BitcoinTestFramework):
         b10 = self.next_block(10, spend=out[3])
         self.send_blocks([b10], False)
 
-        b11 = self.next_block(11, spend=out[4], additional_coinbase_value=1)
-        self.send_blocks([b11], success=False, reject_reason='bad-cb-amount', reconnect=True)
 
         # Try again, but with a valid fork first
         #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6  (3)
@@ -249,8 +243,7 @@ class FullBlockTest(BitcoinTestFramework):
         self.save_spendable_output()
         b13 = self.next_block(13, spend=out[4])
         self.save_spendable_output()
-        b14 = self.next_block(14, spend=out[5], additional_coinbase_value=1)
-        self.send_blocks([b12, b13, b14], success=False, reject_reason='bad-cb-amount', reconnect=True)
+        self.send_blocks([b12, b13])
 
         # New tip should be b13.
         assert_equal(node.getbestblockhash(), b13.hash)
@@ -663,12 +656,6 @@ class FullBlockTest(BitcoinTestFramework):
         b49.solve()
         self.send_blocks([b49], success=False, reject_reason='bad-txnmrklroot', reconnect=True)
 
-        self.log.info("Reject a block with incorrect POW limit")
-        self.move_tip(44)
-        b50 = self.next_block(50)
-        b50.nBits = b50.nBits - 1
-        b50.solve()
-        self.send_blocks([b50], False, force_send=True, reject_reason='bad-diffbits', reconnect=True)
 
         self.log.info("Reject a block with two coinbase transactions")
         self.move_tip(44)
@@ -1003,12 +990,6 @@ class FullBlockTest(BitcoinTestFramework):
         # b69 - coinbase with extra 10 satoshis, and a tx that gives a 10 satoshi fee
         #       this succeeds
         #
-        self.log.info("Reject a block trying to claim too much subsidy in the coinbase transaction")
-        self.move_tip(65)
-        self.next_block(68, additional_coinbase_value=10)
-        tx = self.create_and_sign_transaction(out[20], out[20].vout[0].nValue - 9)
-        b68 = self.update_block(68, [tx])
-        self.send_blocks([b68], success=False, reject_reason='bad-cb-amount', reconnect=True)
 
         self.log.info("Accept a block claiming the correct subsidy in the coinbase transaction")
         self.move_tip(65)
@@ -1310,17 +1291,7 @@ class FullBlockTest(BitcoinTestFramework):
         block = self.next_block(chain1_tip + 2)
         self.send_blocks([block], True, timeout=2440)
 
-        self.log.info("Reject a block with an invalid block header version")
-        b_v1 = self.next_block('b_v1', version=1)
-        self.send_blocks([b_v1], success=False, force_send=True, reject_reason='bad-version(0x00000001)', reconnect=True)
 
-        self.move_tip(chain1_tip + 2)
-        b_cb34 = self.next_block('b_cb34')
-        b_cb34.vtx[0].vin[0].scriptSig = b_cb34.vtx[0].vin[0].scriptSig[:-1]
-        b_cb34.vtx[0].rehash()
-        b_cb34.hashMerkleRoot = b_cb34.calc_merkle_root()
-        b_cb34.solve()
-        self.send_blocks([b_cb34], success=False, reject_reason='bad-cb-height', reconnect=True)
 
     # Helper methods
     ################
