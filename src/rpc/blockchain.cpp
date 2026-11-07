@@ -539,7 +539,14 @@ static RPCHelpMan getblockheader()
                             {RPCResult::Type::NUM_TIME, "mediantime", "The median block time expressed in " + UNIX_EPOCH_TIME},
                             {RPCResult::Type::NUM, "nonce", "The nonce"},
                             {RPCResult::Type::STR_HEX, "bits", "The bits"},
-                            {RPCResult::Type::NUM, "difficulty", "The difficulty"},
+                            // {RPCResult::Type::NUM, "difficulty", "The difficulty"},
+
+
+                            {RPCResult::Type::OBJ, "difficulty", "The difficulty", {
+                            {RPCResult::Type::NUM, "proof-of-work", "the difficulty as a multiple of the minimum difficulty of proof of work blocks"},
+                            {RPCResult::Type::NUM, "proof-of-stake", "the difficulty as a multiple of the minimum difficulty of proof of stake blocks"},
+                            }},
+
                             {RPCResult::Type::STR_HEX, "chainwork", "Expected number of hashes required to produce the current chain"},
                             {RPCResult::Type::NUM, "nTx", "The number of transactions in the block"},
                             {RPCResult::Type::STR_HEX, "previousblockhash", /*optional=*/true, "The hash of the previous block (if available)"},
@@ -1054,6 +1061,7 @@ static RPCHelpMan gettxout()
                     {RPCResult::Type::STR, "address", /*optional=*/true, "The Bitcoin address (only if a well-defined address exists)"},
                 }},
                 {RPCResult::Type::BOOL, "coinbase", "Coinbase or not"},
+                {RPCResult::Type::BOOL, "coinstake", "Coinstake or not"},
             }},
         },
         RPCExamples{
@@ -1165,6 +1173,17 @@ static void SoftForkDescPushBack(const CBlockIndex* blockindex, UniValue& softfo
 
     if (!DeploymentEnabled(chainman, id)) return;
     if (blockindex == nullptr) return;
+
+    // When segwit is height-activated (digitalcoin), report it as a buried fork
+    // instead of BIP9, mirroring the BuriedDeployment overload above.
+    if (id == Consensus::DEPLOYMENT_SEGWIT && chainman.GetConsensus().SegwitHeight != std::numeric_limits<int>::max()) {
+        UniValue rv(UniValue::VOBJ);
+        rv.pushKV("type", "buried");
+        rv.pushKV("active", DeploymentActiveAfter(blockindex, chainman, id));
+        rv.pushKV("height", chainman.GetConsensus().SegwitHeight);
+        softforks.pushKV(DeploymentName(id), rv);
+        return;
+    }
 
     auto get_state_name = [](const ThresholdState state) -> std::string {
         switch (state) {

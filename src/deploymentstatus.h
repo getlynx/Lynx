@@ -20,6 +20,9 @@ inline bool DeploymentActiveAfter(const CBlockIndex* pindexPrev, const Consensus
 inline bool DeploymentActiveAfter(const CBlockIndex* pindexPrev, const Consensus::Params& params, Consensus::DeploymentPos dep, VersionBitsCache& versionbitscache)
 {
     assert(Consensus::ValidDeployment(dep));
+    if (dep == Consensus::DEPLOYMENT_SEGWIT && params.SegwitHeight != std::numeric_limits<int>::max()) {
+        return (pindexPrev == nullptr ? 0 : pindexPrev->nHeight + 1) >= params.SegwitHeight;
+    }
     return ThresholdState::ACTIVE == versionbitscache.State(pindexPrev, params, dep);
 }
 

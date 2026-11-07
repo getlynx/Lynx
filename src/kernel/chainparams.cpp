@@ -769,6 +769,10 @@ public:
             // set to the true cutover height when it is chosen.
             consensus.lastPoWBlock = 8725000;
             consensus.nUUIDBlockStart = 8725000;
+            // Above the transition bidha mints Lynx-native PoS blocks with witness
+            // coinstakes; activate segwit at current-tip+1 (NOT the transition 8725000,
+            // which would force -reindex of the already-validated witness-free tail).
+            consensus.SegwitHeight = 8725643;
         } else {
             consensus.lastPoWBlock = 1500;
             consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");

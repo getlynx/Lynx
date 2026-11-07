@@ -3308,14 +3308,6 @@ std::shared_ptr<CWallet> CWallet::Create(WalletContext& context, const std::stri
         walletInstance->m_default_change_type = parsed.value();
     }
 
-    if (std::string(CURRENT_CHAIN) == "digitalcoin") {
-        // legacy digitalcoin has no SegWit/bech32; force legacy base58 addresses and
-        // non-witness change so getnewaddress and every send are accepted by the
-        // segwit-less network. Code gate, not a conf entry.
-        walletInstance->m_default_address_type = OutputType::LEGACY;
-        walletInstance->m_default_change_type  = OutputType::LEGACY;
-    }
-
     if (args.IsArgSet("-mintxfee")) {
         std::optional<CAmount> min_tx_fee = ParseMoney(args.GetArg("-mintxfee", ""));
         if (!min_tx_fee) {
@@ -3667,8 +3659,16 @@ int CWallet::GetTxBlocksToMaturity(const CWalletTx& wtx) const
     }
     int chain_depth = GetTxDepthInMainChain(wtx);
     if (chain_depth < 0) return 0;
-    return std::max(0, (COINBASE_MATURITY+1) - chain_depth);
+    // Mirror the consensus spend-maturity gate (tx_verify.cpp): a digitalcoin
+    // PoW-era coinbase matures at 5, so the wallet must show/select it at 5 too.
+    int coinbase_maturity = COINBASE_MATURITY;
+    const int coinbase_height = GetLastBlockHeight() - chain_depth + 1;
+    if (std::string(CURRENT_CHAIN) == "digitalcoin" && coinbase_height <= Params().GetConsensus().lastPoWBlock) {
+        coinbase_maturity = 5;
+    }
+    return std::max(0, (coinbase_maturity+1) - chain_depth);
 }
+
 
 bool CWallet::IsTxImmatureCoinBase(const CWalletTx& wtx) const
 {
