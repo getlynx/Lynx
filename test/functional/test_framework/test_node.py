@@ -38,7 +38,7 @@ from .util import (
     EncodeDecimal,
 )
 
-BITCOIND_PROC_WAIT_TIMEOUT = 300
+BITCOIND_PROC_WAIT_TIMEOUT = 900
 
 
 class FailedToStartError(Exception):

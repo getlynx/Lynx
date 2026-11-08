@@ -19,6 +19,12 @@ from test_framework.util import (
 )
 from test_framework.wallet import MiniWallet
 
+# The daemon's datacarrier limit is 640, not Bitcoin's 83 (script/standard.h:39) —
+# Lynx uses large OP_RETURN payloads for its storage model, and the default
+# -datacarriersize equals MAX_OP_RETURN_RELAY. Shadow the framework constant so the
+# data-size relationships below track the node's actual limit.
+MAX_OP_RETURN_RELAY = 640
+
 
 class DataCarrierTest(BitcoinTestFramework):
     def set_test_params(self):
@@ -45,10 +51,13 @@ class DataCarrierTest(BitcoinTestFramework):
     def run_test(self):
         self.wallet = MiniWallet(self.nodes[0])
 
-        # By default, only 80 bytes are used for data (+1 for OP_RETURN, +2 for the pushdata opcodes).
-        default_size_data = random_bytes(MAX_OP_RETURN_RELAY - 3)
-        too_long_data = random_bytes(MAX_OP_RETURN_RELAY - 2)
-        small_data = random_bytes(MAX_OP_RETURN_RELAY - 4)
+        # The datacarrier check is on scriptPubKey size (<= -datacarriersize). At the
+        # daemon's 640-byte limit the data push uses OP_PUSHDATA2, so the OP_RETURN
+        # script overhead is 4 (OP_RETURN + OP_PUSHDATA2 + 2-byte length), not 3.
+        # Size the data so the scripts land at exactly 640 / 641 / 639 bytes.
+        default_size_data = random_bytes(MAX_OP_RETURN_RELAY - 4)
+        too_long_data = random_bytes(MAX_OP_RETURN_RELAY - 3)
+        small_data = random_bytes(MAX_OP_RETURN_RELAY - 5)
 
         self.log.info("Testing null data transaction with default -datacarrier and -datacarriersize values.")
         self.test_null_data_transaction(node=self.nodes[0], data=default_size_data, success=True)

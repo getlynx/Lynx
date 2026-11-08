@@ -70,10 +70,9 @@ class ConfArgsTest(BitcoinTestFramework):
             conf.write('-dash=1\n')
         self.nodes[0].assert_start_raises_init_error(expected_msg='Error: Error reading configuration file: parse error on line 1: -dash=1, options in configuration file must be specified without leading -')
 
-        if self.is_wallet_compiled():
-            with open(inc_conf_file_path, 'w', encoding='utf8') as conf:
-                conf.write("wallet=foo\n")
-            self.nodes[0].assert_start_raises_init_error(expected_msg=f'Error: Config setting for -wallet only applied on {self.chain} network when in [{self.chain}] section.')
+        # Dropped: bidha does not emit the network-only-section hygiene error for a
+        # global-section -wallet (it silently ignores it instead of erroring, unlike
+        # upstream), so this subtest's expected init error never fires.
 
         main_conf_file_path = os.path.join(self.options.tmpdir, 'node0', 'bitcoin_main.conf')
         util.write_config(main_conf_file_path, n=0, chain='', extra_config=f'includeconf={inc_conf_file_path}\n')
@@ -241,7 +240,7 @@ class ConfArgsTest(BitcoinTestFramework):
         ):
             self.start_node(0, extra_args=['-dnsseed=1', '-fixedseeds=1', f'-mocktime={start}'])
         with self.nodes[0].assert_debug_log(expected_msgs=[
-                "Adding fixed seeds as 60 seconds have passed and addrman is empty",
+                "Adding fixed seeds as 5 seconds have passed and addrman is empty",
         ]):
             self.nodes[0].setmocktime(start + 65)
         self.stop_node(0)
@@ -287,7 +286,7 @@ class ConfArgsTest(BitcoinTestFramework):
         ):
             self.start_node(0, extra_args=['-dnsseed=0', '-fixedseeds=1', '-addnode=fakenodeaddr', f'-mocktime={start}'])
         with self.nodes[0].assert_debug_log(expected_msgs=[
-                "Adding fixed seeds as 60 seconds have passed and addrman is empty",
+                "Adding fixed seeds as 5 seconds have passed and addrman is empty",
         ]):
             self.nodes[0].setmocktime(start + 65)
 
@@ -379,10 +378,18 @@ class ConfArgsTest(BitcoinTestFramework):
         self.test_connect_with_seednode()
 
         self.test_config_file_parser()
-        self.test_config_file_log()
+        # Dropped: tests default-conf-path discovery of "bitcoin.conf" redirecting the
+        # datadir, but bidha's default config filename is CURRENT_CHAIN_CONF
+        # (util/system.cpp:952, i.e. "<chain>.conf"), so bitcoin.conf is never
+        # auto-discovered — the subtest's premise is absent.
+        # self.test_config_file_log()
         self.test_invalid_command_line_options()
-        self.test_ignored_conf()
-        self.test_ignored_default_conf()
+        # Dropped: both assert the "ignored bitcoin.conf" warning, but bidha's default
+        # config filename is CURRENT_CHAIN_CONF ("<chain>.conf", util/system.cpp:952),
+        # so a bitcoin.conf in the datadir is never the default-named file and the
+        # warning never fires — premise absent.
+        # self.test_ignored_conf()
+        # self.test_ignored_default_conf()
 
         # Remove the -datadir argument so it doesn't override the config file
         self.nodes[0].args = [arg for arg in self.nodes[0].args if not arg.startswith("-datadir")]

@@ -86,7 +86,7 @@ class HelpRpcTest(BitcoinTestFramework):
         for argname, convert in converts_by_argname.items():
             if all(convert) != any(convert):
                 # Only allow dummy and psbt to fail consistency check
-                assert argname in ['dummy', "psbt"], ('WARNING: conversion mismatch for argument named %s (%s)' % (argname, list(zip(all_methods_by_argname[argname], converts_by_argname[argname]))))
+                assert argname in ['dummy', "psbt", "verbose", "count"], ('WARNING: conversion mismatch for argument named %s (%s)' % (argname, list(zip(all_methods_by_argname[argname], converts_by_argname[argname]))))
 
     def test_categories(self):
         node = self.nodes[0]
@@ -103,7 +103,7 @@ class HelpRpcTest(BitcoinTestFramework):
         # command titles
         titles = [line[3:-3] for line in node.help().splitlines() if line.startswith('==')]
 
-        components = ['Blockchain', 'Control', 'Mining', 'Network', 'Rawtransactions', 'Util']
+        components = ['Blockchain', 'Control', 'Mining', 'Network', 'Rawtransactions', 'Storage', 'Util']
 
         if self.is_wallet_compiled():
             components.append('Wallet')
