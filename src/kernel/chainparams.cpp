@@ -1275,9 +1275,6 @@ public:
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
         consensus.nSubsidyHalvingInterval = 150;
-        consensus.HardForkHeight = 126250;
-        consensus.HardFork2Height = 1711675;
-        consensus.HardFork3Height = 1838000;
         consensus.BIP34Height = 1; // Always active unless overridden
         consensus.BIP34Hash = uint256();
         consensus.BIP65Height = 1;  // Always active unless overridden
@@ -1286,16 +1283,12 @@ public:
         consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
         consensus.nPowTargetSpacing = 10 * 60;
-        // Regtest omitted the height-gated spacings that GetPowTargetSpacing() returns; left
-        // unset they are indeterminate, which makes GetBlockProofEquivalentTime() (and thus
-        // BlockRequestAllowed() for off-active-chain blocks) read garbage. Tie them to regtest's
-        // own target spacing.
-        consensus.PowTargetSpacingV1 = consensus.nPowTargetSpacing;
-        consensus.PowTargetSpacingV2 = consensus.nPowTargetSpacing;
-        consensus.PowTargetSpacingV3 = consensus.nPowTargetSpacing;
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = true;
         consensus.lastPoWBlock = 10000000;
+        consensus.PowTargetSpacingV1 = 30;
+        consensus.PowTargetSpacingV2 = 60;
+        consensus.PowTargetSpacingV3 = 30;
         consensus.posLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPosTargetTimespan = 5 * 60;
         consensus.nPosTargetSpacing = 5 * 60;
@@ -1363,16 +1356,23 @@ public:
         if (std::string(CURRENT_CHAIN) == "lynx") {
             genesis = CreateGenesisBlock(1296688602, 2, 0x207fffff, 1, 50 * COIN);
             consensus.hashGenesisBlock = genesis.GetHash();
+            //assert(consensus.hashGenesisBlock == uint256S("0x0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"));
+            //assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
         } else if (std::string(CURRENT_CHAIN) == "digitalcoin") {
             genesis = CreateGenesisBlock(1685504092, 1, 0x207fffff, 1, 50 * COIN);
             consensus.hashGenesisBlock = genesis.GetHash();
             assert(consensus.hashGenesisBlock == uint256S("0x619f976a00e10f28fea178ca9f43b0e979101b7bafa229967e476dcd993aca60"));
             assert(genesis.hashMerkleRoot == uint256S("0xd421bc2c10f84323e564e4706344029afdc7d3628cddad6d66a795168976ec86"));
         } else {
+            // genesis = CreateGenesisBlock(spec.timestamp, spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
+            // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
             genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
             consensus.hashGenesisBlock = genesis.GetHash();
-            if (std::string(CURRENT_CHAIN) != "infiniloop") {
+            if (std::string(CURRENT_CHAIN) != "infiniloop" && std::string(CURRENT_CHAIN) != "digitalcoin") {
+                // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
+                // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
                 assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
+                // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
                 assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
             }
         }
@@ -1395,7 +1395,7 @@ public:
         m_assumeutxo_data = MapAssumeutxo{
             {
                 110,
-                {AssumeutxoHash{uint256S("0xd731b0c336585b79e32c4bcf8ecd6c43fbb3e513da7401fea27b609e620288e5")}, 110},
+                {AssumeutxoHash{uint256S("0x1ebbf5850204c0bdb15bf030f47c7fe91d45c44c712697e4509ba67adb01c618")}, 110},
             },
             {
                 200,
