@@ -32,17 +32,17 @@ from test_framework.siphash import siphash256
 from test_framework.util import assert_equal
 
 MAX_LOCATOR_SZ = 101
-MAX_BLOCK_WEIGHT = 4000000
+MAX_BLOCK_WEIGHT = 20000000
 MAX_BLOOM_FILTER_SIZE = 36000
 MAX_BLOOM_HASH_FUNCS = 50
 
 COIN = 100000000  # 1 btc in satoshis
-MAX_MONEY = 21000000 * COIN
+MAX_MONEY = 92000000000 * COIN
 
 MAX_BIP125_RBF_SEQUENCE = 0xfffffffd  # Sequence number that is rbf-opt-in (BIP 125) and csv-opt-out (BIP 68)
 SEQUENCE_FINAL = 0xffffffff  # Sequence number that disables nLockTime if set for every input of a tx
 
-MAX_PROTOCOL_MESSAGE_LENGTH = 4000000  # Maximum length of incoming protocol messages
+MAX_PROTOCOL_MESSAGE_LENGTH = 62914560  # 60 MiB, matches daemon net.h MAX_PROTOCOL_MESSAGE_LENGTH
 MAX_HEADERS_RESULTS = 2000  # Number of headers sent in one getheaders result
 MAX_INV_SIZE = 50000  # Maximum number of entries in an 'inv' protocol message
 
@@ -65,8 +65,8 @@ FILTER_TYPE_BASIC = 0
 
 WITNESS_SCALE_FACTOR = 4
 
-DEFAULT_ANCESTOR_LIMIT = 25    # default max number of in-mempool ancestors
-DEFAULT_DESCENDANT_LIMIT = 25  # default max number of in-mempool descendants
+DEFAULT_ANCESTOR_LIMIT = 36    # default max number of in-mempool ancestors (bidha policy.h:63)
+DEFAULT_DESCENDANT_LIMIT = 36  # default max number of in-mempool descendants (bidha policy.h:69)
 
 # Default setting for -datacarriersize. 80 bytes of data, +1 for OP_RETURN, +2 for the pushdata opcodes.
 MAX_OP_RETURN_RELAY = 83

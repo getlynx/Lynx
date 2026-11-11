@@ -119,7 +119,7 @@ class P2PPermissionsTests(BitcoinTestFramework):
             [tx],
             self.nodes[1],
             success=False,
-            reject_reason='{} from peer=0 was not accepted: txn-mempool-conflict'.format(txid)
+            reject_reason='{} from peer=0 was not accepted: bip125-replacement-disallowed'.format(txid)
         )
 
         p2p_rebroadcast_wallet.send_txs_and_test(

@@ -25,7 +25,9 @@ class ReindexTest(BitcoinTestFramework):
         self.generatetoaddress(self.nodes[0], 3, self.nodes[0].get_deterministic_priv_key().address)
         blockcount = self.nodes[0].getblockcount()
         self.stop_nodes()
-        extra_args = [["-reindex-chainstate" if justchainstate else "-reindex"]]
+        # bidha defaults -txindex on (DEFAULT_TXINDEX=true); -reindex-chainstate
+        # refuses to run with txindex enabled, so disable it on that branch only.
+        extra_args = [["-reindex-chainstate", "-txindex=0"] if justchainstate else ["-reindex"]]
         self.start_nodes(extra_args)
         assert_equal(self.nodes[0].getblockcount(), blockcount)  # start_node is blocking on reindex
         self.log.info("Success")

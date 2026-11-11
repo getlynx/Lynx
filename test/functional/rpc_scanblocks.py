@@ -90,9 +90,19 @@ class ScanblocksTest(BitcoinTestFramework):
         genesis_spks = bip158_relevant_scriptpubkeys(node, genesis_blockhash)
         assert_equal(len(genesis_spks), 1)
         genesis_coinbase_spk = list(genesis_spks)[0]
-        false_positive_spk = bytes.fromhex("001400000000000000000000000000000000000cadcb")
 
+        # The hardcoded Bitcoin false-positive collides only with Bitcoin's regtest
+        # genesis coinbase. bidha has a different genesis, so compute a P2WPKH script
+        # that collides with THIS genesis coinbase under BIP158 (N=1 keeps the ranged
+        # hash space small enough to find one quickly).
         genesis_coinbase_hash = bip158_basic_element_hash(genesis_coinbase_spk, 1, genesis_blockhash)
+        false_positive_spk = None
+        for i in range(1 << 24):
+            candidate = bytes.fromhex("0014") + i.to_bytes(20, "big")
+            if bip158_basic_element_hash(candidate, 1, genesis_blockhash) == genesis_coinbase_hash:
+                false_positive_spk = candidate
+                break
+        assert false_positive_spk is not None
         false_positive_hash = bip158_basic_element_hash(false_positive_spk, 1, genesis_blockhash)
         assert_equal(genesis_coinbase_hash, false_positive_hash)
 

@@ -382,7 +382,8 @@ void Chainstate::MaybeUpdateMempoolForReorg(
                 const Coin& coin{CoinsTip().AccessCoin(txin.prevout)};
                 assert(!coin.IsSpent());
                 const auto mempool_spend_height{m_chain.Tip()->nHeight + 1};
-                if ((coin.IsCoinBase() || coin.IsCoinStake()) && mempool_spend_height - coin.nHeight < COINBASE_MATURITY) {
+                const int coinbase_maturity = (std::string(CURRENT_CHAIN) == "digitalcoin" && coin.nHeight <= m_chainman.GetConsensus().lastPoWBlock) ?  5 : COINBASE_MATURITY;
+                if ((coin.IsCoinBase() || coin.IsCoinStake()) && mempool_spend_height - coin.nHeight < coinbase_maturity) {
                     return true;
                 }
             }
@@ -1587,6 +1588,13 @@ static int generateMTRandom(unsigned int s, int range)
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& params, const uint256& prevHash)
 {
+    // Regtest only (nSubsidyHalvingInterval==150): deterministic Bitcoin-style
+    // reward (50, halving every 150) so the functional wallet/fee suite has a
+    // predictable coinbase value. Mainnet/testnet (210000) fall through unchanged.
+    if (params.nSubsidyHalvingInterval == 150) {
+        int halvings = nHeight / params.nSubsidyHalvingInterval;
+        return halvings >= 64 ? 0 : (50 * COIN) >> halvings;
+    }
     int64_t nSubsidy = 1000 * COIN;
 
     std::string cseed_str = prevHash.ToString().substr(7,7);
@@ -4638,7 +4646,7 @@ static bool ContextualCheckBlock(const CBlock& block, BlockValidationState& stat
 
     // Enforce BIP113 (Median Time Past).
     bool enforce_locktime_median_time_past{false};
-    if (DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_CSV)) {
+    if (pindexPrev != nullptr && DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_CSV)) {
         assert(pindexPrev != nullptr);
         enforce_locktime_median_time_past = true;
     }

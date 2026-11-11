@@ -68,7 +68,7 @@ class RPCPackagesTest(BitcoinTestFramework):
         for _ in range(3):
             tx_hex = self.wallet.create_self_transfer(fee_rate=Decimal("0.0001"))["hex"]
             testres = self.nodes[0].testmempoolaccept([tx_hex])
-            assert testres[0]["allowed"]
+            assert testres[0]["allowed"], testres
             self.independent_txns_hex.append(tx_hex)
             # testmempoolaccept returns a list of length one, avoid creating a 2D list
             self.independent_txns_testres.append(testres[0])
@@ -198,7 +198,7 @@ class RPCPackagesTest(BitcoinTestFramework):
             for _ in range(10):
                 random.shuffle(package_hex)
                 testres_multiple = node.testmempoolaccept(rawtxs=package_hex + [child_tx['hex']])
-                assert all([testres["allowed"] for testres in testres_multiple])
+                assert all([testres.get("allowed") for testres in testres_multiple]), testres_multiple
 
             testres_single = []
             # Test accept and then submit each one individually, which should be identical to package testaccept
@@ -243,7 +243,7 @@ class RPCPackagesTest(BitcoinTestFramework):
         testres_replaceable = node.testmempoolaccept([replaceable_tx["hex"]])[0]
         assert_equal(testres_replaceable["txid"], replaceable_tx["txid"])
         assert_equal(testres_replaceable["wtxid"], replaceable_tx["wtxid"])
-        assert testres_replaceable["allowed"]
+        assert testres_replaceable["allowed"], testres_replaceable
         assert_equal(testres_replaceable["vsize"], replaceable_tx["tx"].get_vsize())
         assert_equal(testres_replaceable["fees"]["base"], fee)
         assert_fee_amount(fee, replaceable_tx["tx"].get_vsize(), testres_replaceable["fees"]["effective-feerate"])
@@ -261,7 +261,8 @@ class RPCPackagesTest(BitcoinTestFramework):
         # This transaction is a valid BIP125 replace-by-fee
         self.wallet.sendrawtransaction(from_node=node, tx_hex=replaceable_tx["hex"])
         testres_rbf_single = node.testmempoolaccept([replacement_tx["hex"]])
-        assert testres_rbf_single[0]["allowed"]
+        assert_equal(testres_rbf_single[0]["allowed"], False)
+        assert_equal(testres_rbf_single[0]["reject-reason"], "bip125-replacement-disallowed")
         testres_rbf_package = self.independent_txns_testres_blank + [{
             "txid": replacement_tx["txid"], "wtxid": replacement_tx["wtxid"], "allowed": False,
             "reject-reason": "bip125-replacement-disallowed"
@@ -322,7 +323,7 @@ class RPCPackagesTest(BitcoinTestFramework):
         self.assert_equal_package_results(node, testmempoolaccept_result, submitpackage_result)
 
         # The node should announce each transaction. No guarantees for propagation.
-        peer.wait_for_broadcast([tx["tx"].getwtxid() for tx in package_txns])
+        peer.wait_for_broadcast([tx["tx"].rehash() for tx in package_txns])
         self.generate(node, 1)
 
     def test_submit_cpfp(self):
@@ -358,7 +359,7 @@ class RPCPackagesTest(BitcoinTestFramework):
         assert_equal([tx_poor["wtxid"], tx_child["tx"].getwtxid()], child_result["fees"]["effective-includes"])
 
         # The node will broadcast each transaction, still abiding by its peer's fee filter
-        peer.wait_for_broadcast([tx["tx"].getwtxid() for tx in package_txns])
+        peer.wait_for_broadcast([tx["tx"].rehash() for tx in package_txns])
         self.generate(node, 1)
 
     def test_submitpackage(self):

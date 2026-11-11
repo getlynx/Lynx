@@ -323,7 +323,13 @@ void BaseIndex::ChainStateFlushed(const CBlockLocator& locator)
         return;
     }
 
+
+    if (locator.vHave.empty()) {
+        return;
+    }
     const uint256& locator_tip_hash = locator.vHave.front();
+
+
     const CBlockIndex* locator_tip_index;
     {
         LOCK(cs_main);
@@ -341,8 +347,13 @@ void BaseIndex::ChainStateFlushed(const CBlockLocator& locator)
     // there is a reorg and the blocks on the stale branch are in the ValidationInterface queue
     // backlog even after the sync thread has caught up to the new chain tip. In this unlikely
     // event, log a warning and let the queue clear.
+
     const CBlockIndex* best_block_index = m_best_block_index.load();
+    if (!best_block_index) {
+        return;
+    }
     if (best_block_index->GetAncestor(locator_tip_index->nHeight) != locator_tip_index) {
+
         LogPrintf("%s: WARNING: Locator contains block (hash=%s) not on known best " /* Continued */
                   "chain (tip=%s); not writing index locator\n",
                   __func__, locator_tip_hash.ToString(),

@@ -24,11 +24,13 @@ from test_framework.util import (
 
 class GetBlockFromPeerTest(BitcoinTestFramework):
     def set_test_params(self):
-        self.num_nodes = 3
+        # Node 2 was a pruned node; -prune is unregistered on bidha (blockmanager_args.cpp:20)
+        # so it aborts at startup. Pruning is removed on bidha, so the pruned-fetch scenarios
+        # (old lines 95-151) are dropped and node 2 with them.
+        self.num_nodes = 2
         self.extra_args = [
             [],
             [],
-            ["-fastprune", "-prune=1"]
         ]
 
     def setup_network(self):
@@ -92,63 +94,7 @@ class GetBlockFromPeerTest(BitcoinTestFramework):
         self.log.info("Don't fetch blocks we already have")
         assert_raises_rpc_error(-1, "Block already downloaded", self.nodes[0].getblockfrompeer, short_tip, peer_0_peer_1_id)
 
-        self.log.info("Don't fetch blocks while the node has not synced past it yet")
-        # For this test we need node 1 in prune mode and as a side effect this also disconnects
-        # the nodes which is also necessary for the rest of the test.
-        self.restart_node(1, ["-prune=550"])
-
-        # Generate a block on the disconnected node that the pruning node is not connected to
-        blockhash = self.generate(self.nodes[0], 1, sync_fun=self.no_op)[0]
-        block_hex = self.nodes[0].getblock(blockhash=blockhash, verbosity=0)
-        block = from_hex(CBlock(), block_hex)
-
-        # Connect a P2PInterface to the pruning node and have it submit only the header of the
-        # block that the pruning node has not seen
-        node1_interface = self.nodes[1].add_p2p_connection(P2PInterface())
-        node1_interface.send_and_ping(msg_headers([block]))
-
-        # Get the peer id of the P2PInterface from the pruning node
-        node1_peers = self.nodes[1].getpeerinfo()
-        assert_equal(len(node1_peers), 1)
-        node1_interface_id = node1_peers[0]["id"]
-
-        # Trying to fetch this block from the P2PInterface should not be possible
-        error_msg = "In prune mode, only blocks that the node has already synced previously can be fetched from a peer"
-        assert_raises_rpc_error(-1, error_msg, self.nodes[1].getblockfrompeer, blockhash, node1_interface_id)
-
-        self.log.info("Connect pruned node")
-        # We need to generate more blocks to be able to prune
-        self.connect_nodes(0, 2)
-        pruned_node = self.nodes[2]
-        self.generate(self.nodes[0], 400, sync_fun=self.no_op)
-        self.sync_blocks([self.nodes[0], pruned_node])
-        pruneheight = pruned_node.pruneblockchain(300)
-        assert_equal(pruneheight, 248)
-        # Ensure the block is actually pruned
-        pruned_block = self.nodes[0].getblockhash(2)
-        assert_raises_rpc_error(-1, "Block not available (pruned data)", pruned_node.getblock, pruned_block)
-
-        self.log.info("Fetch pruned block")
-        peers = pruned_node.getpeerinfo()
-        assert_equal(len(peers), 1)
-        pruned_node_peer_0_id = peers[0]["id"]
-        result = pruned_node.getblockfrompeer(pruned_block, pruned_node_peer_0_id)
-        self.wait_until(lambda: self.check_for_block(node=2, hash=pruned_block), timeout=1)
-        assert_equal(result, {})
-
-        self.log.info("Fetched block persists after next pruning event")
-        self.generate(self.nodes[0], 250, sync_fun=self.no_op)
-        self.sync_blocks([self.nodes[0], pruned_node])
-        pruneheight += 251
-        assert_equal(pruned_node.pruneblockchain(700), pruneheight)
-        assert_equal(pruned_node.getblock(pruned_block)["hash"], "36c56c5b5ebbaf90d76b0d1a074dcb32d42abab75b7ec6fa0ffd9b4fbce8f0f7")
-
-        self.log.info("Fetched block can be pruned again when prune height exceeds the height of the tip at the time when the block was fetched")
-        self.generate(self.nodes[0], 250, sync_fun=self.no_op)
-        self.sync_blocks([self.nodes[0], pruned_node])
-        pruneheight += 250
-        assert_equal(pruned_node.pruneblockchain(1000), pruneheight)
-        assert_raises_rpc_error(-1, "Block not available (pruned data)", pruned_node.getblock, pruned_block)
+        # Pruned-node scenarios removed: pruning (-prune/pruneblockchain) is unregistered on bidha.
 
 
 if __name__ == '__main__':

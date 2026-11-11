@@ -90,7 +90,7 @@ class MiningTest(BitcoinTestFramework):
         assert_equal(mining_info['chain'], self.chain)
         assert 'currentblocktx' not in mining_info
         assert 'currentblockweight' not in mining_info
-        assert_equal(mining_info['difficulty'], Decimal('4.656542373906925E-10'))
+        assert_equal(mining_info['difficulty']['proof-of-work'], Decimal('4.656542373906925E-10'))
         assert_equal(mining_info['networkhashps'], Decimal('0.003333333333333334'))
         assert_equal(mining_info['pooledtx'], 0)
 
@@ -188,10 +188,9 @@ class MiningTest(BitcoinTestFramework):
             'rules': ['segwit'],
         })
 
-        self.log.info("getblocktemplate: Test bad bits")
-        bad_block = copy.deepcopy(block)
-        bad_block.nBits = 469762303  # impossible in the real world
-        assert_template(node, bad_block, 'bad-diffbits')
+        # NOTE: "Test bad bits" dropped — bidha skips the difficulty-bits (bad-diffbits) check below the
+        # transition height to assimilate legacy digitalcoin's varying nBits, and regtest is all
+        # pre-transition, so a proposal with wrong nBits is accepted rather than rejected.
 
         self.log.info("getblocktemplate: Test bad merkle root")
         bad_block = copy.deepcopy(block)

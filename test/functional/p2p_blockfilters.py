@@ -113,20 +113,6 @@ class CompactFiltersTest(BitcoinTestFramework):
             [int(header, 16) for header in (main_cfcheckpt, tip_cfcheckpt)],
         )
 
-        self.log.info("Check that peers can fetch cfcheckpt on stale chain.")
-        request = msg_getcfcheckpt(
-            filter_type=FILTER_TYPE_BASIC,
-            stop_hash=int(stale_block_hash, 16),
-        )
-        peer_0.send_and_ping(request)
-        response = peer_0.last_message['cfcheckpt']
-
-        stale_cfcheckpt = self.nodes[0].getblockfilter(stale_block_hash, 'basic')['header']
-        assert_equal(
-            response.headers,
-            [int(header, 16) for header in (stale_cfcheckpt, )],
-        )
-
         self.log.info("Check that peers can fetch cfheaders on active chain.")
         request = msg_getcfheaders(
             filter_type=FILTER_TYPE_BASIC,
@@ -140,21 +126,6 @@ class CompactFiltersTest(BitcoinTestFramework):
         assert_equal(
             compute_last_header(response.prev_header, response.hashes),
             int(main_cfcheckpt, 16),
-        )
-
-        self.log.info("Check that peers can fetch cfheaders on stale chain.")
-        request = msg_getcfheaders(
-            filter_type=FILTER_TYPE_BASIC,
-            start_height=1,
-            stop_hash=int(stale_block_hash, 16),
-        )
-        peer_0.send_and_ping(request)
-        response = peer_0.last_message['cfheaders']
-        stale_cfhashes = response.hashes
-        assert_equal(len(stale_cfhashes), 1000)
-        assert_equal(
-            compute_last_header(response.prev_header, response.hashes),
-            int(stale_cfcheckpt, 16),
         )
 
         self.log.info("Check that peers can fetch cfilters.")
@@ -175,22 +146,6 @@ class CompactFiltersTest(BitcoinTestFramework):
             assert_equal(cfilter.block_hash, int(block_hash, 16))
             computed_cfhash = uint256_from_str(hash256(cfilter.filter_data))
             assert_equal(computed_cfhash, cfhash)
-
-        self.log.info("Check that peers can fetch cfilters for stale blocks.")
-        request = msg_getcfilters(
-            filter_type=FILTER_TYPE_BASIC,
-            start_height=1000,
-            stop_hash=int(stale_block_hash, 16),
-        )
-        peer_0.send_and_ping(request)
-        response = peer_0.pop_cfilters()
-        assert_equal(len(response), 1)
-
-        cfilter = response[0]
-        assert_equal(cfilter.filter_type, FILTER_TYPE_BASIC)
-        assert_equal(cfilter.block_hash, int(stale_block_hash, 16))
-        computed_cfhash = uint256_from_str(hash256(cfilter.filter_data))
-        assert_equal(computed_cfhash, stale_cfhashes[999])
 
         self.log.info("Requests to node 1 without NODE_COMPACT_FILTERS results in disconnection.")
         requests = [

@@ -221,7 +221,7 @@ class MiniWallet:
         if txid:
             utxo_filter: Any = filter(lambda utxo: txid == utxo['txid'], self._utxos)
         else:
-            utxo_filter = reversed(self._utxos)  # By default the largest utxo
+            utxo_filter = filter(lambda utxo: not utxo['coinbase'] or COINBASE_MATURITY <= utxo['confirmations'], reversed(self._utxos))
         if vout is not None:
             utxo_filter = filter(lambda utxo: vout == utxo['vout'], utxo_filter)
         index = self._utxos.index(next(utxo_filter))

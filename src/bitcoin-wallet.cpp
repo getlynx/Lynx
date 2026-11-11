@@ -91,6 +91,12 @@ static std::optional<int> WalletAppInit(ArgsManager& args, int argc, char* argv[
         return EXIT_FAILURE;
     }
     // Check for chain settings (Params() calls are only valid after this clause)
+    // Construct mainnet params first so the CMainParams ctor runs LoadHardcodedChainSpecs()
+    // and populates the global `spec`, which the non-main genesis (CreateGenesisBlock reads
+    // spec.psztimestamp[CURRENT_CHAIN]) depends on. init.cpp builds all four for the daemon;
+    // the wallet tool selects a single chain, so without this a regtest-only run leaves `spec`
+    // empty and the genesis hash mismatches its assert. Discarded; built only for the side effect.
+    CreateChainParams(args, ChainType::MAIN);
     SelectParams(args.GetChainType());
 
     return std::nullopt;

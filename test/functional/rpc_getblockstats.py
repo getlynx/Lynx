@@ -20,10 +20,11 @@ TESTSDIR = os.path.dirname(os.path.realpath(__file__))
 
 class GetblockstatsTest(BitcoinTestFramework):
 
-    start_height = 101
+    start_height = COINBASE_MATURITY + 1
     max_stat_pos = 2
 
     def add_options(self, parser):
+        self.add_wallet_options(parser)
         parser.add_argument('--gen-test-data', dest='gen_test_data',
                             default=False, action='store_true',
                             help='Generate test data')
@@ -41,9 +42,12 @@ class GetblockstatsTest(BitcoinTestFramework):
         return [self.nodes[0].getblockstats(hash_or_height=self.start_height + i) for i in range(self.max_stat_pos+1)]
 
     def generate_test_data(self, filename):
-        mocktime = 1525107225
+        mocktime = 1685520000  # after the digitalcoin regtest genesis nTime 1685504092
         self.nodes[0].setmocktime(mocktime)
         self.nodes[0].createwallet(wallet_name='test')
+        for w in self.nodes[0].listwallets():
+            if w != 'test':
+                self.nodes[0].unloadwallet(w)
         privkey = self.nodes[0].get_deterministic_priv_key().key
         self.nodes[0].importprivkey(privkey)
 
@@ -169,7 +173,7 @@ class GetblockstatsTest(BitcoinTestFramework):
 
         self.log.info('Test block height 0')
         genesis_stats = self.nodes[0].getblockstats(0)
-        assert_equal(genesis_stats["blockhash"], "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206")
+        assert_equal(genesis_stats["blockhash"], "619f976a00e10f28fea178ca9f43b0e979101b7bafa229967e476dcd993aca60")
         assert_equal(genesis_stats["utxo_increase"], 1)
         assert_equal(genesis_stats["utxo_size_inc"], 117)
         assert_equal(genesis_stats["utxo_increase_actual"], 0)

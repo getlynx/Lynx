@@ -130,20 +130,19 @@ class BIP65Test(BitcoinTestFramework):
         self.test_cltv_info(is_active=True)  # Not active as of current tip, but next block must obey rules
         assert_equal(self.nodes[0].getbestblockhash(), block.hash)
 
-        self.log.info("Test that blocks must now be at least version 4")
+        # NOTE: the stock "blocks must now be at least version 4" subtest is dropped — bidha does not
+        # enforce the block nVersion floor (no 'bad-version' rejection) below the transition/lastPoWBlock
+        # (legacy digitalcoin PoW blocks carry low nVersion). The CLTV *script* rule is still enforced below.
+        self.log.info("Test that invalid-according-to-CLTV transactions cannot appear in a block")
         tip = block.sha256
         block_time += 1
-        block = create_block(tip, create_coinbase(CLTV_HEIGHT), block_time, version=3)
-        block.solve()
-
-        with self.nodes[0].assert_debug_log(expected_msgs=[f'{block.hash}, bad-version(0x00000003)']):
-            peer.send_and_ping(msg_block(block))
-            assert_equal(int(self.nodes[0].getbestblockhash(), 16), tip)
-            peer.sync_with_ping()
-
-        self.log.info("Test that invalid-according-to-CLTV transactions cannot appear in a block")
-        block.nVersion = 4
+        block = create_block(tip, create_coinbase(CLTV_HEIGHT), block_time, version=4)
         block.vtx.append(CTransaction()) # dummy tx after coinbase that will be replaced later
+
+        # Re-sync MiniWallet to the chain: the first loop popped coinbases without re-tracking their
+        # outputs and cltv_invalidate rewrote the mined txids, so the internal utxo list is short.
+        # rescan_utxos re-reads the on-chain OP_TRUE utxos (mature coinbases + just-mined outputs).
+        wallet.rescan_utxos()
 
         # create and test one invalid tx per CLTV failure reason (5 in total)
         for i in range(5):

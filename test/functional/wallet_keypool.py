@@ -16,6 +16,10 @@ class KeyPoolTest(BitcoinTestFramework):
 
     def set_test_params(self):
         self.num_nodes = 1
+        # The dust/fee arithmetic below (lines ~175-205) is tuned to Bitcoin's 546/294-sat
+        # dust boundaries; bidha's default DUST_RELAY_TX_FEE is 300000 (100x), which makes
+        # every working amount here sub-dust. Restore Bitcoin's dust rate for this test.
+        self.extra_args = [["-dustrelayfee=0.00003"]]
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()

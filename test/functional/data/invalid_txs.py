@@ -217,7 +217,7 @@ class CreateSumTooLarge(BadTxTemplate):
 
     def get_tx(self):
         tx = create_tx_with_script(self.spend_tx, 0, amount=MAX_MONEY)
-        tx.vout = [tx.vout[0]] * 2
+        tx.vout.append(CTxOut(1, tx.vout[0].scriptPubKey))
         tx.calc_sha256()
         return tx
 

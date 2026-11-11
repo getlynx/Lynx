@@ -218,6 +218,13 @@ class SignRawTransactionWithWalletTest(BitcoinTestFramework):
         # Make sure CLTV is active
         assert self.nodes[0].getdeploymentinfo()['deployments']['bip65']['active']
 
+        # The CLTV script below locks to absolute height 100. The spend's nLockTime is
+        # set to the current height; bidha's regtest setup (COINBASE_MATURITY=5) leaves
+        # the chain well short of 100, so that nLockTime would be < 100 and CLTV would
+        # reject it. Extend the chain to at least height 100 first.
+        if self.nodes[0].getblockcount() < 100:
+            self.generate(self.nodes[0], 100 - self.nodes[0].getblockcount())
+
         # Create a P2WSH script with CLTV
         script = CScript([100, OP_CHECKLOCKTIMEVERIFY, OP_DROP])
         address = script_to_p2wsh(script)

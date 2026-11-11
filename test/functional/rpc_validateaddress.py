@@ -9,30 +9,35 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal
 
 INVALID_DATA = [
+    # bidha's main bech32 hrp is "digitalcoin" (CURRENT_CHAIN). key_io.cpp:86 only
+    # runs the Bech32 decode/error path when the address prefix equals the chain hrp,
+    # so the bc/BC vectors were re-encoded to the digitalcoin hrp with their
+    # (encoding, witness version, program, defect) preserved; the tb/tc/TB/TC vectors
+    # keep their generic "unsupported encoding" error (their prefix never matches).
     # BIP 173
     (
         "tc1qw508d6qejxtdg4y5r3zarvary0c5xw7kg3g4ty",
         "Invalid or unsupported Segwit (Bech32) or Base58 encoding.",  # Invalid hrp
         [],
     ),
-    ("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5", "Invalid Bech32 checksum", [41]),
+    ("digitalcoin1qrp33g0q4c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn", "Invalid Bech32 checksum", [20]),
     (
-        "BC13W508D6QEJXTDG4Y5R3ZARVARY0C5XW7KN40WF2",
+        "digitalcoin13w508d6qejxtdg4y5r3zarvary0c5xw7kdlur60",
         "Version 1+ witness address must use Bech32m checksum",
         [],
     ),
     (
-        "bc1rw5uspcuh",
+        "digitalcoin1rw5hcm88r",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid program length
         [],
     ),
     (
-        "bc10w508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kw5rljs90",
+        "digitalcoin10w508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kw5e4agk9",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid program length
         [],
     ),
     (
-        "BC1QR508D6QEJXTDG4Y5R3ZARVARYV98GJ9P",
+        "digitalcoin1qr508d6qejxtdg4y5r3zarvaryvst7wcl",
         "Invalid Bech32 v0 address program size (16 byte), per BIP141",
         [],
     ),
@@ -42,12 +47,12 @@ INVALID_DATA = [
         [],
     ),
     (
-        "BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3t4",
-        "Invalid character or mixed case",  # bc1, Mixed case, not in BIP 173 test vectors
-        [40],
+        "digitalcoin1qRp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn",
+        "Invalid character or mixed case",  # digitalcoin1, Mixed case
+        [13],
     ),
     (
-        "bc1zw508d6qejxtdg4y5r3zarvaryvqyzf3du",
+        "digitalcoin1zw508d6qejxtdg4y5r3zarvaryvq0ft858",
         "Version 1+ witness address must use Bech32m checksum",  # Wrong padding
         [],
     ),
@@ -56,7 +61,7 @@ INVALID_DATA = [
         "Invalid or unsupported Segwit (Bech32) or Base58 encoding.",  # tb1, Non-zero padding in 8-to-5 conversion
         [],
     ),
-    ("bc1gmk9yu", "Empty Bech32 data section", []),
+    ("digitalcoin1jq553x", "Empty Bech32 data section", []),
     # BIP 350
     (
         "tc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq5zuyut",
@@ -64,7 +69,7 @@ INVALID_DATA = [
         [],
     ),
     (
-        "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqh2y7hd",
+        "digitalcoin1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqx8z3k0",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid checksum (Bech32 instead of Bech32m)
         [],
     ),
@@ -74,12 +79,12 @@ INVALID_DATA = [
         [],
     ),
     (
-        "BC1S0XLXVLHEMJA6C4DQV22UAPCTQUPFHLXM9H8Z3K2E72Q4K9HCZ7VQ54WELL",
+        "digitalcoin1s0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq9cgk7a",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid checksum (Bech32 instead of Bech32m)
         [],
     ),
     (
-        "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kemeawh",
+        "digitalcoin1qw508d6qejxtdg4y5r3zarvary0c5xw7k832saj",
         "Version 0 witness address must use Bech32 checksum",  # Invalid checksum (Bech32m instead of Bech32)
         [],
     ),
@@ -89,23 +94,23 @@ INVALID_DATA = [
         [],
     ),
     (
-        "bc1p38j9r5y49hruaue7wxjce0updqjuyyx0kh56v8s25huc6995vvpql3jow4",
-        "Invalid Base 32 character",  # Invalid character in checksum
-        [59],
+        "digitalcoin1qrp33gbq5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn",
+        "Invalid Base 32 character",  # Invalid character
+        [18],
     ),
     (
-        "BC130XLXVLHEMJA6C4DQV22UAPCTQUPFHLXM9H8Z3K2E72Q4K9HCZ7VQ7ZWS8R",
+        "digitalcoin130xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq00glxp",
         "Invalid Bech32 address witness version",
         [],
     ),
-    ("bc1pw5dgrnzv", "Invalid Bech32 address program size (1 byte)", []),
+    ("digitalcoin1pw5xqevec", "Invalid Bech32 address program size (1 byte)", []),
     (
-        "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav253zgeav",
+        "digitalcoin1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav25tg8pwx",
         "Invalid Bech32 address program size (41 byte)",
         [],
     ),
     (
-        "BC1QR508D6QEJXTDG4Y5R3ZARVARYV98GJ9P",
+        "digitalcoin1qr508d6qejxtdg4y5r3zarvaryvst7wcl",
         "Invalid Bech32 v0 address program size (16 byte), per BIP141",
         [],
     ),
@@ -115,7 +120,7 @@ INVALID_DATA = [
         [],
     ),
     (
-        "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v07qwwzcrf",
+        "digitalcoin1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v07qdpcpsp",
         "Invalid padding in Bech32 data section",  # zero padding of more than 4 bits
         [],
     ),
@@ -124,46 +129,35 @@ INVALID_DATA = [
         "Invalid or unsupported Segwit (Bech32) or Base58 encoding.",  # tb1, Non-zero padding in 8-to-5 conversion
         [],
     ),
-    ("bc1gmk9yu", "Empty Bech32 data section", []),
+    ("digitalcoin1jq553x", "Empty Bech32 data section", []),
 ]
 VALID_DATA = [
-    # BIP 350
+    # BIP 350 — re-encoded under the digitalcoin main hrp; scriptPubKeys are
+    # hrp-independent so they are unchanged.
     (
-        "BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4",
+        "digitalcoin1qw508d6qejxtdg4y5r3zarvary0c5xw7kjd6ucs",
         "0014751e76e8199196d454941c45d1b3a323f1433bd6",
     ),
-    # (
-    #   "tb1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q0sl5k7",
-    #   "00201863143c14c5166804bd19203356da136c985678cd4d27a1b8c6329604903262",
-    # ),
     (
-        "bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3",
+        "digitalcoin1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn",
         "00201863143c14c5166804bd19203356da136c985678cd4d27a1b8c6329604903262",
     ),
     (
-        "bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kt5nd6y",
+        "digitalcoin1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7ksld9ss",
         "5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6",
     ),
-    ("BC1SW50QGDZ25J", "6002751e"),
-    ("bc1zw508d6qejxtdg4y5r3zarvaryvaxxpcs", "5210751e76e8199196d454941c45d1b3a323"),
-    # (
-    #   "tb1qqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesrxh6hy",
-    #   "0020000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433",
-    # ),
+    ("digitalcoin1sw50q7k06au", "6002751e"),
+    ("digitalcoin1zw508d6qejxtdg4y5r3zarvaryvg2sa9w", "5210751e76e8199196d454941c45d1b3a323"),
     (
-        "bc1qqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvses5wp4dt",
+        "digitalcoin1qqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvses9r86vf",
         "0020000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433",
     ),
-    # (
-    #   "tb1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesf3hn0c",
-    #   "5120000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433",
-    # ),
     (
-        "bc1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvses7epu4h",
+        "digitalcoin1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvses058n54",
         "5120000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433",
     ),
     (
-        "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0",
+        "digitalcoin1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqnmjand",
         "512079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
     ),
 ]
@@ -174,7 +168,9 @@ class ValidateAddressMainTest(BitcoinTestFramework):
         self.setup_clean_chain = True
         self.chain = ""  # main
         self.num_nodes = 1
-        self.extra_args = [["-prune=899"]] * self.num_nodes
+        # bidha does not register -prune (blockmanager_args.cpp:20 reads it but no
+        # AddArg), so passing it is rejected at parse. Pruning is incidental here.
+        self.extra_args = [[]] * self.num_nodes
 
     def check_valid(self, addr, spk):
         info = self.nodes[0].validateaddress(addr)

@@ -24,7 +24,7 @@ class MempoolLimitTest(BitcoinTestFramework):
         self.num_nodes = 1
         self.extra_args = [[
             "-datacarriersize=100000",
-            "-maxmempool=5",
+            "-maxmempool=220",
         ]]
         self.supports_cli = False
 
@@ -38,16 +38,21 @@ class MempoolLimitTest(BitcoinTestFramework):
         assert_equal(node.getmempoolinfo()['minrelaytxfee'], Decimal('0.00001000'))
         assert_equal(node.getmempoolinfo()['mempoolminfee'], Decimal('0.00001000'))
 
-        tx_batch_size = 25
+        tx_batch_size = 1200  # bidha -maxmempool min 220 MB; 3600 ~67KB txs (~243 MB) to overflow and evict
         num_of_batches = 3
-        # Generate UTXOs to flood the mempool
-        # 1 to create a tx initially that will be evicted from the mempool later
-        # 3 batches of multiple transactions with a fee rate much higher than the previous UTXO
-        # And 1 more to verify that this tx does not get added to the mempool with a fee rate less than the mempoolminfee
-        self.generate(miniwallet, 1 + (num_of_batches * tx_batch_size) + 1)
-
-        # Mine 99 blocks so that the UTXOs are allowed to be spent
-        self.generate(node, COINBASE_MATURITY - 1)
+        # bidha's -maxmempool floor is 220 MB (5x Bitcoin via MAX_BLOCK_WEIGHT),
+        # so the fill needs thousands of utxos. Halving-every-150 makes late
+        # coinbases worth less than the fill fee, so fund from a few fat early
+        # coinbases, split each into many equal outputs (all well above the fee),
+        # and confirm them so the fill txs are not unconfirmed descendants.
+        num_fill_utxos = num_of_batches * tx_batch_size + 10  # fill + evicted + min-fee txs
+        self.generate(miniwallet, 10)  # fat 50-coin coinbases, matured, well before halving
+        outputs_remaining = num_fill_utxos
+        while outputs_remaining > 0:
+            n = min(2000, outputs_remaining)
+            miniwallet.send_self_transfer_multi(from_node=node, num_outputs=n)
+            outputs_remaining -= n
+        self.generate(node, 1)  # confirm split outputs so fill txs aren't mempool descendants
 
         self.log.info('Create a mempool tx that will be evicted')
         tx_to_be_evicted_id = miniwallet.send_self_transfer(from_node=node, fee_rate=relayfee)["txid"]
@@ -76,9 +81,14 @@ class MempoolLimitTest(BitcoinTestFramework):
         self.log.info('Create a mempool tx that will not pass mempoolminfee')
         assert_raises_rpc_error(-26, "mempool min fee not met", miniwallet.send_self_transfer, from_node=node, fee_rate=relayfee)
 
+        # Mine the ~290 MB fill into blocks so the node stops with a normal (empty) mempool,
+        # like every other test, instead of tearing down a full mempool at shutdown
+        while len(node.getrawmempool()) > 0:
+            self.generate(node, 40)
+
         self.log.info('Test passing a value below the minimum (5 MB) to -maxmempool throws an error')
         self.stop_node(0)
-        self.nodes[0].assert_start_raises_init_error(["-maxmempool=4"], "Error: -maxmempool must be at least 5 MB")
+        self.nodes[0].assert_start_raises_init_error(["-maxmempool=219"], "Error: -maxmempool must be at least 220 MB")
 
 
 if __name__ == '__main__':

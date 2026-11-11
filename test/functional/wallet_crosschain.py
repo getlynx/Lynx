@@ -24,7 +24,7 @@ class WalletCrossChain(BitcoinTestFramework):
 
         # Switch node 1 to testnet before starting it.
         self.nodes[1].chain = 'testnet3'
-        self.nodes[1].extra_args = ['-maxconnections=0', '-prune=550'] # disable testnet sync
+        self.nodes[1].extra_args = ['-maxconnections=0'] # disable testnet sync (-prune unregistered on bidha)
         self.nodes[1].replace_in_config([('regtest=', 'testnet='), ('[regtest]', '[test]')])
         self.start_nodes()
 
@@ -34,11 +34,18 @@ class WalletCrossChain(BitcoinTestFramework):
         node0_wallet = os.path.join(self.nodes[0].datadir, 'node0_wallet')
         node0_wallet_backup = os.path.join(self.nodes[0].datadir, 'node0_wallet.bak')
         self.nodes[0].createwallet(node0_wallet)
+        # bidha auto-loads a default "" wallet at startup; unload it so bare wallet RPCs resolve
+        for w in self.nodes[0].listwallets():
+            if w != node0_wallet:
+                self.nodes[0].unloadwallet(w)
         self.nodes[0].backupwallet(node0_wallet_backup)
         self.nodes[0].unloadwallet(node0_wallet)
         node1_wallet = os.path.join(self.nodes[1].datadir, 'node1_wallet')
         node1_wallet_backup = os.path.join(self.nodes[0].datadir, 'node1_wallet.bak')
         self.nodes[1].createwallet(node1_wallet)
+        for w in self.nodes[1].listwallets():
+            if w != node1_wallet:
+                self.nodes[1].unloadwallet(w)
         self.nodes[1].backupwallet(node1_wallet_backup)
         self.nodes[1].unloadwallet(node1_wallet)
 
@@ -58,7 +65,7 @@ class WalletCrossChain(BitcoinTestFramework):
         if not self.options.descriptors:
             self.log.info("Override cross-chain wallet load protection")
             self.stop_nodes()
-            self.start_nodes([['-walletcrosschain', '-prune=550']] * self.num_nodes)
+            self.start_nodes([['-walletcrosschain']] * self.num_nodes)
             self.nodes[0].loadwallet(node1_wallet)
             self.nodes[1].loadwallet(node0_wallet)
 

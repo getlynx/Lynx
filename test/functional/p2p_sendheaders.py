@@ -500,18 +500,16 @@ class SendHeadersTest(BitcoinTestFramework):
         test_node.sync_with_ping()
         test_node.wait_for_getdata([x.sha256 for x in blocks[0:2]], timeout=DIRECT_FETCH_RESPONSE_TIME)
 
-        # Announcing 16 more headers should trigger direct fetch for 14 more
-        # blocks
+        # Announcing 16 more headers direct-fetches all 16
+        # (MAX_BLOCKS_IN_TRANSIT_PER_PEER=4096, no 16-in-flight cap)
         test_node.send_header_for_blocks(blocks[2:18])
         test_node.sync_with_ping()
-        test_node.wait_for_getdata([x.sha256 for x in blocks[2:16]], timeout=DIRECT_FETCH_RESPONSE_TIME)
+        test_node.wait_for_getdata([x.sha256 for x in blocks[2:18]], timeout=DIRECT_FETCH_RESPONSE_TIME)
 
-        # Announcing 1 more header should not trigger any response
-        test_node.last_message.pop("getdata", None)
+        # Announcing 1 more header direct-fetches it too (cap 4096 not reached)
         test_node.send_header_for_blocks(blocks[18:19])
         test_node.sync_with_ping()
-        with p2p_lock:
-            assert "getdata" not in test_node.last_message
+        test_node.wait_for_getdata([blocks[18].sha256], timeout=DIRECT_FETCH_RESPONSE_TIME)
 
         self.log.info("Part 4: success!")
 
