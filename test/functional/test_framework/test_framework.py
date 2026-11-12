@@ -233,7 +233,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
         binaries = {
             "bitcoind": ("bitcoind", "BITCOIND"),
-            "digitalcoin-cli": ("bitcoincli", "BITCOINCLI"),
+            "lynx-cli": ("bitcoincli", "BITCOINCLI"),
             "lynx-util": ("bitcoinutil", "BITCOINUTIL"),
             "lynx-wallet": ("bitcoinwallet", "BITCOINWALLET"),
         }
