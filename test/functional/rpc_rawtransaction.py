@@ -522,7 +522,7 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         # THIS IS AN INCOMPLETE FEATURE
         # NODE2 HAS TWO OF THREE KEYS AND THE FUNDS SHOULD BE SPENDABLE AND COUNT AT BALANCE CALCULATION
-        assert_equal(self.nodes[2].getbalance(), bal + Decimal('25.00031200'))  # 2of3 multisig funds not spendable; +1 node2 coinbase matured on the generate above (shared deterministic coinbase key, CBM=5)
+        assert_equal(self.nodes[2].getbalance(), bal)  # 2of3 multisig funds not spendable; on lynx (CBM=30) no node2 coinbase matures at this generate, so the balance is unchanged (digitalcoin CBM=5 matured one here, +25.00031200)
 
         txDetails = self.nodes[0].gettransaction(txId, True)
         rawTx = self.nodes[0].decoderawtransaction(txDetails['hex'])

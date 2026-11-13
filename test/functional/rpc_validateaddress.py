@@ -20,24 +20,24 @@ INVALID_DATA = [
         "Invalid or unsupported Segwit (Bech32) or Base58 encoding.",  # Invalid hrp
         [],
     ),
-    ("digitalcoin1qrp33g0q4c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn", "Invalid Bech32 checksum", [20]),
+    ("lynx1qrp33g0q4c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qflysgn", "Invalid Bech32 checksum", [13]),
     (
-        "digitalcoin13w508d6qejxtdg4y5r3zarvary0c5xw7kdlur60",
+        "lynx13w508d6qejxtdg4y5r3zarvary0c5xw7kggcvh0",
         "Version 1+ witness address must use Bech32m checksum",
         [],
     ),
     (
-        "digitalcoin1rw5hcm88r",
+        "lynx1rw5r98lkr",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid program length
         [],
     ),
     (
-        "digitalcoin10w508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kw5e4agk9",
+        "lynx10w508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kw5wkflc3",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid program length
         [],
     ),
     (
-        "digitalcoin1qr508d6qejxtdg4y5r3zarvaryvst7wcl",
+        "lynx1qr508d6qejxtdg4y5r3zarvaryvumxz5j",
         "Invalid Bech32 v0 address program size (16 byte), per BIP141",
         [],
     ),
@@ -47,12 +47,12 @@ INVALID_DATA = [
         [],
     ),
     (
-        "digitalcoin1qRp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn",
-        "Invalid character or mixed case",  # digitalcoin1, Mixed case
-        [13],
+        "lynx1qRp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn",
+        "Invalid character or mixed case",  # lynx1, Mixed case
+        [6],
     ),
     (
-        "digitalcoin1zw508d6qejxtdg4y5r3zarvaryvq0ft858",
+        "lynx1zw508d6qejxtdg4y5r3zarvaryvqw0ppgq",
         "Version 1+ witness address must use Bech32m checksum",  # Wrong padding
         [],
     ),
@@ -61,7 +61,7 @@ INVALID_DATA = [
         "Invalid or unsupported Segwit (Bech32) or Base58 encoding.",  # tb1, Non-zero padding in 8-to-5 conversion
         [],
     ),
-    ("digitalcoin1jq553x", "Empty Bech32 data section", []),
+    ("lynx1699zex", "Empty Bech32 data section", []),
     # BIP 350
     (
         "tc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq5zuyut",
@@ -69,7 +69,7 @@ INVALID_DATA = [
         [],
     ),
     (
-        "digitalcoin1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqx8z3k0",
+        "lynx1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqxdf4n0",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid checksum (Bech32 instead of Bech32m)
         [],
     ),
@@ -79,12 +79,12 @@ INVALID_DATA = [
         [],
     ),
     (
-        "digitalcoin1s0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq9cgk7a",
+        "lynx1s0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq9jrjma",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid checksum (Bech32 instead of Bech32m)
         [],
     ),
     (
-        "digitalcoin1qw508d6qejxtdg4y5r3zarvary0c5xw7k832saj",
+        "lynx1qw508d6qejxtdg4y5r3zarvary0c5xw7kzxwlsj",
         "Version 0 witness address must use Bech32 checksum",  # Invalid checksum (Bech32m instead of Bech32)
         [],
     ),
@@ -94,23 +94,23 @@ INVALID_DATA = [
         [],
     ),
     (
-        "digitalcoin1qrp33gbq5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn",
+        "lynx1qrp33gbq5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn",
         "Invalid Base 32 character",  # Invalid character
-        [18],
+        [11],
     ),
     (
-        "digitalcoin130xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq00glxp",
+        "lynx130xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq09rmrp",
         "Invalid Bech32 address witness version",
         [],
     ),
-    ("digitalcoin1pw5xqevec", "Invalid Bech32 address program size (1 byte)", []),
+    ("lynx1pw5ja95gc", "Invalid Bech32 address program size (1 byte)", []),
     (
-        "digitalcoin1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav25tg8pwx",
+        "lynx1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav25utnkqj",
         "Invalid Bech32 address program size (41 byte)",
         [],
     ),
     (
-        "digitalcoin1qr508d6qejxtdg4y5r3zarvaryvst7wcl",
+        "lynx1qr508d6qejxtdg4y5r3zarvaryvumxz5j",
         "Invalid Bech32 v0 address program size (16 byte), per BIP141",
         [],
     ),
@@ -120,7 +120,7 @@ INVALID_DATA = [
         [],
     ),
     (
-        "digitalcoin1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v07qdpcpsp",
+        "lynx1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v07qt5cwa3",
         "Invalid padding in Bech32 data section",  # zero padding of more than 4 bits
         [],
     ),
@@ -129,35 +129,35 @@ INVALID_DATA = [
         "Invalid or unsupported Segwit (Bech32) or Base58 encoding.",  # tb1, Non-zero padding in 8-to-5 conversion
         [],
     ),
-    ("digitalcoin1jq553x", "Empty Bech32 data section", []),
+    ("lynx1699zex", "Empty Bech32 data section", []),
 ]
 VALID_DATA = [
     # BIP 350 — re-encoded under the digitalcoin main hrp; scriptPubKeys are
     # hrp-independent so they are unchanged.
     (
-        "digitalcoin1qw508d6qejxtdg4y5r3zarvary0c5xw7kjd6ucs",
+        "lynx1qw508d6qejxtdg4y5r3zarvary0c5xw7kh67n4s",
         "0014751e76e8199196d454941c45d1b3a323f1433bd6",
     ),
     (
-        "digitalcoin1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn",
+        "lynx1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qflysgn",
         "00201863143c14c5166804bd19203356da136c985678cd4d27a1b8c6329604903262",
     ),
     (
-        "digitalcoin1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7ksld9ss",
+        "lynx1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7k7p97rh",
         "5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6",
     ),
-    ("digitalcoin1sw50q7k06au", "6002751e"),
-    ("digitalcoin1zw508d6qejxtdg4y5r3zarvaryvg2sa9w", "5210751e76e8199196d454941c45d1b3a323"),
+    ("lynx1sw50qgahs4e", "6002751e"),
+    ("lynx1zw508d6qejxtdg4y5r3zarvaryvy6g3fr", "5210751e76e8199196d454941c45d1b3a323"),
     (
-        "digitalcoin1qqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvses9r86vf",
+        "lynx1qqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvses9fv7ff",
         "0020000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433",
     ),
     (
-        "digitalcoin1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvses058n54",
+        "lynx1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvses07vh34",
         "5120000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433",
     ),
     (
-        "digitalcoin1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqnmjand",
+        "lynx1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqn3eekd",
         "512079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
     ),
 ]

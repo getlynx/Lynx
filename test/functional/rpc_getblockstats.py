@@ -42,7 +42,7 @@ class GetblockstatsTest(BitcoinTestFramework):
         return [self.nodes[0].getblockstats(hash_or_height=self.start_height + i) for i in range(self.max_stat_pos+1)]
 
     def generate_test_data(self, filename):
-        mocktime = 1685520000  # after the digitalcoin regtest genesis nTime 1685504092
+        mocktime = 1685520000  # after the lynx regtest genesis nTime 1296688602
         self.nodes[0].setmocktime(mocktime)
         self.nodes[0].createwallet(wallet_name='test')
         for w in self.nodes[0].listwallets():
@@ -173,7 +173,7 @@ class GetblockstatsTest(BitcoinTestFramework):
 
         self.log.info('Test block height 0')
         genesis_stats = self.nodes[0].getblockstats(0)
-        assert_equal(genesis_stats["blockhash"], "619f976a00e10f28fea178ca9f43b0e979101b7bafa229967e476dcd993aca60")
+        assert_equal(genesis_stats["blockhash"], self.nodes[0].getblockhash(0))  # lynx: derive genesis hash (digitalcoin was 619f976a…, lynx e048a41a…)
         assert_equal(genesis_stats["utxo_increase"], 1)
         assert_equal(genesis_stats["utxo_size_inc"], 117)
         assert_equal(genesis_stats["utxo_increase_actual"], 0)

@@ -326,7 +326,7 @@ class PSBTTest(BitcoinTestFramework):
                 self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {"fee_rate": invalid_value, "add_inputs": True})
 
         self.log.info("- raises RPC error if both feeRate and fee_rate are passed")
-        assert_raises_rpc_error(-8, "Cannot specify both fee_rate (sat/vB) and feeRate (DGC/kvB)",
+        assert_raises_rpc_error(-8, "Cannot specify both fee_rate (sat/vB) and feeRate (LYNX/kvB)",
             self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {"fee_rate": 0.1, "feeRate": 0.1, "add_inputs": True})
 
         self.log.info("- raises RPC error if both feeRate and estimate_mode passed")
@@ -484,7 +484,7 @@ class PSBTTest(BitcoinTestFramework):
         # Make sure the wallet's change type is respected by default
         small_output = {self.nodes[0].getnewaddress():0.1}
         psbtx_native = self.nodes[0].walletcreatefundedpsbt([], [small_output])
-        self.assert_change_type(psbtx_native, "pubkeyhash")
+        self.assert_change_type(psbtx_native, "witness_v0_keyhash")
         psbtx_legacy = self.nodes[1].walletcreatefundedpsbt([], [small_output])
         self.assert_change_type(psbtx_legacy, "pubkeyhash")
 

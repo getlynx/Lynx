@@ -64,7 +64,7 @@ class P2PEvict(BitcoinTestFramework):
             block_peer.sync_with_ping()
             best_block = node.getbestblockhash()
             tip = int(best_block, 16)
-            best_block_time = node.getblock(best_block)['time']
+            best_block_time = node.getblockheader(best_block)['time']  # lynx: getblockheader reads nTime from the in-memory index; getblock would ReadBlockFromDisk the prior create_block()/solve() block (sha256d-solved, fails lynx's scrypt read-time PoW check at blockstorage.cpp:1192, which exempts digitalcoin) → "Block not found on disk"
             block = create_block(tip, create_coinbase(node.getblockcount() + 1), best_block_time + 1)
             block.solve()
             block_peer.send_blocks_and_test([block], node, success=True)

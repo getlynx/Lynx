@@ -37,17 +37,19 @@ class DumptxoutsetTest(BitcoinTestFramework):
         assert_equal(out['base_height'], COINBASE_MATURITY)
         assert_equal(out['path'], str(expected_path))
         # Blockhash should be deterministic based on mocked time.
+        # lynx: base_hash is just the tip hash at base_height; read it from the node (chain-genesis-coupled;
+        # digitalcoin's hardcoded 10fd211d… was its own genesis-derived value).
         assert_equal(
             out['base_hash'],
-            '10fd211d8539fa534acb9732fcba8d8e7bc96af43edcc336f2e10d25ae8fbb86')
+            node.getblockhash(COINBASE_MATURITY))
 
         # UTXO snapshot hash should be deterministic based on mocked time.
         assert_equal(
             sha256sum_file(str(expected_path)).hex(),
-            '765f4ed2163570558b63ab0ec3f8255e1c718e8198e03a213b704060a053f66b')
+            'c436157e30b2e7432f042f461a3811eb3421770d3dff6f4d1871db6af897e2c4')  # lynx (digitalcoin: 765f4ed2…); deterministic on mocked time + lynx genesis/utxo set
 
         assert_equal(
-            out['txoutset_hash'], '5df889ff56dc152d15c693bcac7a93d373008d929818ab85e18c6038b976a3da')
+            out['txoutset_hash'], '272db3184dac747706fd3b0bbcdfec24524624c301e3dedbf3d8e8062f54b3be')  # lynx (digitalcoin: 5df889ff…)
         assert_equal(out['nchaintx'], COINBASE_MATURITY + 1)
 
         # Specifying a path to an existing or invalid file will fail.

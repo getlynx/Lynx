@@ -170,10 +170,11 @@ class TestBitcoinCli(BitcoinTestFramework):
 
             # Setup to test -getinfo, -generate, and -rpcwallet= with multiple wallets.
             wallets = [self.default_wallet_name, 'Encrypted', 'secret']
-            # w1 (default) pays the fee for both sends below; bidha's fee for the two
-            # bech32 sends is 0.00045 total (vs Bitcoin's 0.000072), so its residual is
-            # 9.99955 above BALANCE. w2/w3 receive exact amounts.
-            amounts = [BALANCE + Decimal('9.99955'), Decimal(9), Decimal(31)]
+            # w1 (default) pays the fee for both sends below. On lynx the two sends go
+            # to bech32 (segwit-discounted) addresses; fee is 0.00036 total, so its
+            # residual is 9.99964 above BALANCE. (digitalcoin forces legacy addresses →
+            # 0.00045.) w2/w3 receive exact amounts.
+            amounts = [BALANCE + Decimal('9.99964'), Decimal(9), Decimal(31)]
             self.nodes[0].createwallet(wallet_name=wallets[1])
             self.nodes[0].createwallet(wallet_name=wallets[2])
             w1 = self.nodes[0].get_wallet_rpc(wallets[0])

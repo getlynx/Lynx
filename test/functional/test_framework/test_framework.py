@@ -232,7 +232,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         """Update self.options with the paths of all binaries from environment variables or their default values"""
 
         binaries = {
-            "bitcoind": ("bitcoind", "BITCOIND"),
+            "lynxd": ("bitcoind", "BITCOIND"),
             "lynx-cli": ("bitcoincli", "BITCOINCLI"),
             "lynx-util": ("bitcoinutil", "BITCOINUTIL"),
             "lynx-wallet": ("bitcoinwallet", "BITCOINWALLET"),

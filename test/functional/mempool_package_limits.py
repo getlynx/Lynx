@@ -254,7 +254,14 @@ class MempoolPackageLimitsTest(BitcoinTestFramework):
         for _ in range(6): # Make package transactions P0 ... P5
             pc_grandparent_utxos = []
             for _ in range(5): # Make mempool transactions M(5i+1)...M(5i+5)
-                pc_grandparent_utxos.append(self.wallet.send_self_transfer(from_node=node)["new_utxo"])
+                m_utxo = self.wallet.send_self_transfer(from_node=node)["new_utxo"]
+                # Reserve this grandparent out of MiniWallet's pool. send_self_transfer re-adds
+                # the M output; on lynx the coinbase supply runs out (segwit-fee value ordering)
+                # so get_utxo() re-picks these outputs for later M's, double-spending them, and
+                # PC's parent PO then conflicts (bip125-replacement-disallowed) before the
+                # ancestor check. The M stays in the mempool; Pi still spends it explicitly.
+                self.wallet.get_utxo(txid=m_utxo["txid"], vout=m_utxo["vout"], mark_as_spent=True)
+                pc_grandparent_utxos.append(m_utxo)
             # Package transaction Pi
             pi_tx = self.wallet.create_self_transfer_multi(utxos_to_spend=pc_grandparent_utxos)
             package_hex.append(pi_tx["hex"])
