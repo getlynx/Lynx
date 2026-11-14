@@ -769,10 +769,6 @@ public:
             // set to the true cutover height when it is chosen.
             consensus.lastPoWBlock = 8725000;
             consensus.nUUIDBlockStart = 8725000;
-            // Above the transition bidha mints Lynx-native PoS blocks with witness
-            // coinstakes; activate segwit at current-tip+1 (NOT the transition 8725000,
-            // which would force -reindex of the already-validated witness-free tail).
-            consensus.SegwitHeight = 8725643;
         } else {
             consensus.lastPoWBlock = 1500;
             consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -1367,6 +1363,11 @@ public:
             consensus.hashGenesisBlock = genesis.GetHash();
             assert(consensus.hashGenesisBlock == uint256S("0x619f976a00e10f28fea178ca9f43b0e979101b7bafa229967e476dcd993aca60"));
             assert(genesis.hashMerkleRoot == uint256S("0xd421bc2c10f84323e564e4706344029afdc7d3628cddad6d66a795168976ec86"));
+        } else if (std::string(CURRENT_CHAIN) == "infiniloop") {
+            genesis = CreateGenesisBlock(1685504092, 0, 0x207fffff, 1, 50 * COIN);
+            consensus.hashGenesisBlock = genesis.GetHash();
+            assert(consensus.hashGenesisBlock == uint256S("0x63cbf15d583e5f91b0672a2868572b2e567573e31719b218344c90afd7283258"));
+            assert(genesis.hashMerkleRoot == uint256S("0xe9c3d6112c65eb6e32969195ca97d89a8da26257ad7d8cc7be8eca40e1fefbd5"));
         } else {
             // genesis = CreateGenesisBlock(spec.timestamp, spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
             // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);

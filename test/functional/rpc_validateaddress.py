@@ -9,9 +9,9 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal
 
 INVALID_DATA = [
-    # bidha's main bech32 hrp is "digitalcoin" (CURRENT_CHAIN). key_io.cpp:86 only
+    # infiniloop's main bech32 hrp is "infiniloop" (CURRENT_CHAIN). key_io.cpp:86 only
     # runs the Bech32 decode/error path when the address prefix equals the chain hrp,
-    # so the bc/BC vectors were re-encoded to the digitalcoin hrp with their
+    # so the bc/BC vectors were re-encoded to the infiniloop hrp with their
     # (encoding, witness version, program, defect) preserved; the tb/tc/TB/TC vectors
     # keep their generic "unsupported encoding" error (their prefix never matches).
     # BIP 173
@@ -20,24 +20,24 @@ INVALID_DATA = [
         "Invalid or unsupported Segwit (Bech32) or Base58 encoding.",  # Invalid hrp
         [],
     ),
-    ("lynx1qrp33g0q4c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qflysgn", "Invalid Bech32 checksum", [13]),
+    ("infiniloop1qrp33g0q4c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q00uznx", "Invalid Bech32 checksum", [19]),
     (
-        "lynx13w508d6qejxtdg4y5r3zarvary0c5xw7kggcvh0",
+        "infiniloop13w508d6qejxtdg4y5r3zarvary0c5xw7kg57qrh",
         "Version 1+ witness address must use Bech32m checksum",
         [],
     ),
     (
-        "lynx1rw5r98lkr",
+        "infiniloop1rw52sh6zp",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid program length
         [],
     ),
     (
-        "lynx10w508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kw5wkflc3",
+        "infiniloop10w508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kw5wghw4c",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid program length
         [],
     ),
     (
-        "lynx1qr508d6qejxtdg4y5r3zarvaryvumxz5j",
+        "infiniloop1qr508d6qejxtdg4y5r3zarvaryve82d50",
         "Invalid Bech32 v0 address program size (16 byte), per BIP141",
         [],
     ),
@@ -47,12 +47,12 @@ INVALID_DATA = [
         [],
     ),
     (
-        "lynx1qRp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn",
-        "Invalid character or mixed case",  # lynx1, Mixed case
-        [6],
+        "infiniloop1qRp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q00uznx",
+        "Invalid character or mixed case",  # infiniloop1, Mixed case
+        [12],
     ),
     (
-        "lynx1zw508d6qejxtdg4y5r3zarvaryvqw0ppgq",
+        "infiniloop1zw508d6qejxtdg4y5r3zarvaryvqqlcj8g",
         "Version 1+ witness address must use Bech32m checksum",  # Wrong padding
         [],
     ),
@@ -61,7 +61,7 @@ INVALID_DATA = [
         "Invalid or unsupported Segwit (Bech32) or Base58 encoding.",  # tb1, Non-zero padding in 8-to-5 conversion
         [],
     ),
-    ("lynx1699zex", "Empty Bech32 data section", []),
+    ("infiniloop1d8l2gw", "Empty Bech32 data section", []),
     # BIP 350
     (
         "tc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq5zuyut",
@@ -69,7 +69,7 @@ INVALID_DATA = [
         [],
     ),
     (
-        "lynx1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqxdf4n0",
+        "infiniloop1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqqa38g6",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid checksum (Bech32 instead of Bech32m)
         [],
     ),
@@ -79,12 +79,12 @@ INVALID_DATA = [
         [],
     ),
     (
-        "lynx1s0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq9jrjma",
+        "infiniloop1s0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqrzmqqg",
         "Version 1+ witness address must use Bech32m checksum",  # Invalid checksum (Bech32 instead of Bech32m)
         [],
     ),
     (
-        "lynx1qw508d6qejxtdg4y5r3zarvary0c5xw7kzxwlsj",
+        "infiniloop1qw508d6qejxtdg4y5r3zarvary0c5xw7kz6gny2",
         "Version 0 witness address must use Bech32 checksum",  # Invalid checksum (Bech32m instead of Bech32)
         [],
     ),
@@ -94,23 +94,23 @@ INVALID_DATA = [
         [],
     ),
     (
-        "lynx1qrp33gbq5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qf405dn",
+        "infiniloop1qrp33gbq5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q00uznx",
         "Invalid Base 32 character",  # Invalid character
-        [11],
+        [17],
     ),
     (
-        "lynx130xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq09rmrp",
+        "infiniloop130xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqf4mfc5",
         "Invalid Bech32 address witness version",
         [],
     ),
-    ("lynx1pw5ja95gc", "Invalid Bech32 address program size (1 byte)", []),
+    ("infiniloop1pw5mg43u6", "Invalid Bech32 address program size (1 byte)", []),
     (
-        "lynx1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav25utnkqj",
+        "infiniloop1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav25u4d8dm",
         "Invalid Bech32 address program size (41 byte)",
         [],
     ),
     (
-        "lynx1qr508d6qejxtdg4y5r3zarvaryvumxz5j",
+        "infiniloop1qr508d6qejxtdg4y5r3zarvaryve82d50",
         "Invalid Bech32 v0 address program size (16 byte), per BIP141",
         [],
     ),
@@ -120,7 +120,7 @@ INVALID_DATA = [
         [],
     ),
     (
-        "lynx1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v07qt5cwa3",
+        "infiniloop1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v07qdmqdmk",
         "Invalid padding in Bech32 data section",  # zero padding of more than 4 bits
         [],
     ),
@@ -129,35 +129,35 @@ INVALID_DATA = [
         "Invalid or unsupported Segwit (Bech32) or Base58 encoding.",  # tb1, Non-zero padding in 8-to-5 conversion
         [],
     ),
-    ("lynx1699zex", "Empty Bech32 data section", []),
+    ("infiniloop1d8l2gw", "Empty Bech32 data section", []),
 ]
 VALID_DATA = [
-    # BIP 350 — re-encoded under the digitalcoin main hrp; scriptPubKeys are
+    # BIP 350 — re-encoded under the infiniloop main hrp; scriptPubKeys are
     # hrp-independent so they are unchanged.
     (
-        "lynx1qw508d6qejxtdg4y5r3zarvary0c5xw7kh67n4s",
+        "infiniloop1qw508d6qejxtdg4y5r3zarvary0c5xw7khxclpg",
         "0014751e76e8199196d454941c45d1b3a323f1433bd6",
     ),
     (
-        "lynx1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qflysgn",
+        "infiniloop1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q00uznx",
         "00201863143c14c5166804bd19203356da136c985678cd4d27a1b8c6329604903262",
     ),
     (
-        "lynx1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7k7p97rh",
+        "infiniloop1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kcfsgjy",
         "5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6",
     ),
-    ("lynx1sw50qgahs4e", "6002751e"),
-    ("lynx1zw508d6qejxtdg4y5r3zarvaryvy6g3fr", "5210751e76e8199196d454941c45d1b3a323"),
+    ("infiniloop1sw50qnx3vna", "6002751e"),
+    ("infiniloop1zw508d6qejxtdg4y5r3zarvaryvpxy7f7", "5210751e76e8199196d454941c45d1b3a323"),
     (
-        "lynx1qqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvses9fv7ff",
+        "infiniloop1qqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesre5vju",
         "0020000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433",
     ),
     (
-        "lynx1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvses07vh34",
+        "infiniloop1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesfw592q",
         "5120000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433",
     ),
     (
-        "lynx1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqn3eekd",
+        "infiniloop1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq4pptdc",
         "512079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
     ),
 ]
