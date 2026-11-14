@@ -78,7 +78,7 @@ class UTXOSetHashTest(BitcoinTestFramework):
         # values); this is lynx's deterministic value. The muhash is already verified
         # self-consistently against the Python-recomputed digest above, so no hardcoded
         # chain-specific muhash literal is kept here.
-        assert_equal(node.gettxoutsetinfo()['hash_serialized_2'], "f12c0dbcfee3aab97b08ff0a319d04fc88187b4cdd4e961e23a3bccef7b1c56b")
+        assert_equal(node.gettxoutsetinfo()['hash_serialized_2'], "3ed387e63bff5bda4d96769cd6819eab9c77437c98d6205a0b45901171100ce3")
 
     def run_test(self):
         self.test_muhash_implementation()

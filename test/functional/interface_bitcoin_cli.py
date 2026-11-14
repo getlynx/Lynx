@@ -164,17 +164,13 @@ class TestBitcoinCli(BitcoinTestFramework):
             wallet_info = self.nodes[0].getwalletinfo()
             assert_equal(int(cli_get_info['Keypool size']), wallet_info['keypoolsize'])
             assert_equal(int(cli_get_info['Unlocked until']), wallet_info['unlocked_until'])
-            assert_equal(Decimal(cli_get_info['Transaction fee rate (-paytxfee) (IL8P/kvB)']), wallet_info['paytxfee'])
-            assert_equal(Decimal(cli_get_info['Min tx relay fee rate (IL8P/kvB)']), network_info['relayfee'])
+            assert_equal(Decimal(cli_get_info['Transaction fee rate (-paytxfee) (DGC/kvB)']), wallet_info['paytxfee'])
+            assert_equal(Decimal(cli_get_info['Min tx relay fee rate (DGC/kvB)']), network_info['relayfee'])
             assert_equal(self.nodes[0].cli.getwalletinfo(), wallet_info)
 
             # Setup to test -getinfo, -generate, and -rpcwallet= with multiple wallets.
             wallets = [self.default_wallet_name, 'Encrypted', 'secret']
-            # w1 (default) pays the fee for both sends below. On lynx the two sends go
-            # to bech32 (segwit-discounted) addresses; fee is 0.00036 total, so its
-            # residual is 9.99964 above BALANCE. (digitalcoin forces legacy addresses →
-            # 0.00045.) w2/w3 receive exact amounts.
-            amounts = [BALANCE + Decimal('9.99964'), Decimal(9), Decimal(31)]
+            amounts = [BALANCE + Decimal('9.99955'), Decimal(9), Decimal(31)]
             self.nodes[0].createwallet(wallet_name=wallets[1])
             self.nodes[0].createwallet(wallet_name=wallets[2])
             w1 = self.nodes[0].get_wallet_rpc(wallets[0])

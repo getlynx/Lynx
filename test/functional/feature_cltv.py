@@ -110,11 +110,6 @@ class BIP65Test(BitcoinTestFramework):
         self.generate(wallet, 10)
         self.generate(self.nodes[0], CLTV_HEIGHT - 2 - 10)
         assert_equal(self.nodes[0].getblockcount(), CLTV_HEIGHT - 2)
-        # lynx: self.generate(wallet, 10) rescanned the wallet at tip=10, so its coinbase confirmations
-        # were recorded as <=10; the subsequent node generate does not refresh the wallet. Re-read at the
-        # final tip so the 10 wallet coinbases count as mature under COINBASE_MATURITY=30, else get_utxo
-        # StopIterations on the first draw below (digitalcoin's CBM=5 was already satisfied at tip=10).
-        wallet.rescan_utxos()
 
         self.log.info("Test that invalid-according-to-CLTV transactions can still appear in a block")
 

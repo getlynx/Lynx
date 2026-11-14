@@ -46,7 +46,7 @@ class MempoolLimitTest(BitcoinTestFramework):
         # coinbases, split each into many equal outputs (all well above the fee),
         # and confirm them so the fill txs are not unconfirmed descendants.
         num_fill_utxos = num_of_batches * tx_batch_size + 10  # fill + evicted + min-fee txs
-        self.generate(miniwallet, COINBASE_MATURITY + 10)  # fat 50-coin coinbases; +COINBASE_MATURITY so the first ~10 are matured, well before halving
+        self.generate(miniwallet, 10)
         outputs_remaining = num_fill_utxos
         while outputs_remaining > 0:
             n = min(2000, outputs_remaining)
