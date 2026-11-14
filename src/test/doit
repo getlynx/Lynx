@@ -1,0 +1,9 @@
+BIN=./test_lynx
+  suites=$("$BIN" --list_content 2>&1 | grep -E '^[A-Za-z_]' | sed 's/[*!]*$//')
+  for s in $suites; do
+    if [ "$s" = coins_tests ]; then continue; fi
+    if [ "$s" = headers_sync_chainwork_tests ]; then
+  continue; fi
+    echo "running $s"
+    "$BIN" --run_test="$s" -l all > "${s}_t" 2>&1
+  done

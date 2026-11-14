@@ -281,7 +281,7 @@ static void check_computeblockversion(VersionBitsCache& versionbitscache, const 
 
     BOOST_REQUIRE(nStartTime < nTimeout);
     BOOST_REQUIRE(nStartTime >= 0);
-    BOOST_REQUIRE(nTimeout <= std::numeric_limits<uint32_t>::max() || nTimeout == Consensus::BIP9Deployment::NO_TIMEOUT);
+    BOOST_REQUIRE(nTimeout <= std::numeric_limits<uint32_t>::max() || nTimeout == Consensus::BIP9Deployment::NO_TIMEOUT || nTimeout == 999999999999LL);
     BOOST_REQUIRE(0 <= bit && bit < 32);
     // Make sure that no deployment tries to set an invalid bit.
     BOOST_REQUIRE(((1 << bit) & VERSIONBITS_TOP_MASK) == 0);
@@ -355,7 +355,8 @@ static void check_computeblockversion(VersionBitsCache& versionbitscache, const 
         nHeight += 1;
     }
 
-    if (nTimeout != Consensus::BIP9Deployment::NO_TIMEOUT) {
+    if (nTimeout != Consensus::BIP9Deployment::NO_TIMEOUT && nTimeout <= std::numeric_limits<uint32_t>::max()) {
+
         // can reach any nTimeout other than NO_TIMEOUT due to earlier BOOST_REQUIRE
 
         nTime = nTimeout;

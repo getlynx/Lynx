@@ -1369,15 +1369,10 @@ public:
             assert(consensus.hashGenesisBlock == uint256S("0x63cbf15d583e5f91b0672a2868572b2e567573e31719b218344c90afd7283258"));
             assert(genesis.hashMerkleRoot == uint256S("0xe9c3d6112c65eb6e32969195ca97d89a8da26257ad7d8cc7be8eca40e1fefbd5"));
         } else {
-            // genesis = CreateGenesisBlock(spec.timestamp, spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
-            // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
             genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
             consensus.hashGenesisBlock = genesis.GetHash();
-            if (std::string(CURRENT_CHAIN) != "infiniloop" && std::string(CURRENT_CHAIN) != "digitalcoin") {
-                // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
-                // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
+            if (std::string(CURRENT_CHAIN) != "infiniloop") {
                 assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
-                // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
                 assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
             }
         }
@@ -1400,7 +1395,7 @@ public:
         m_assumeutxo_data = MapAssumeutxo{
             {
                 110,
-                {AssumeutxoHash{uint256S("0x1ebbf5850204c0bdb15bf030f47c7fe91d45c44c712697e4509ba67adb01c618")}, 110},
+                {AssumeutxoHash{uint256S("0xd731b0c336585b79e32c4bcf8ecd6c43fbb3e513da7401fea27b609e620288e5")}, 110},
             },
             {
                 200,

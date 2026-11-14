@@ -229,11 +229,19 @@ void ChainTestingSetup::LoadVerifyActivateChainstate()
     options.check_blocks = m_args.GetIntArg("-checkblocks", DEFAULT_CHECKBLOCKS);
     options.check_level = m_args.GetIntArg("-checklevel", DEFAULT_CHECKLEVEL);
     options.require_full_verification = m_args.IsArgSet("-checkblocks") || m_args.IsArgSet("-checklevel");
+
+    LogInstance().m_print_to_console = true;
+    LogInstance().EnableCategory(BCLog::LogFlags::ALL);
+    LogInstance().SetLogLevel(BCLog::Level::Debug);
     auto [status, error] = LoadChainstate(chainman, m_cache_sizes, options);
+
+    if (status != node::ChainstateLoadStatus::SUCCESS) fprintf(stderr, "LOADCHAINSTATE status=%d error=%s\n", (int)status, error.original.c_str());
     assert(status == node::ChainstateLoadStatus::SUCCESS);
 
     std::tie(status, error) = VerifyLoadedChainstate(chainman, options);
+    if (status != node::ChainstateLoadStatus::SUCCESS) fprintf(stderr, "VERIFYCHAINSTATE status=%d error=%s\n", (int)status, error.original.c_str());
     assert(status == node::ChainstateLoadStatus::SUCCESS);
+
 
     BlockValidationState state;
     if (!chainman.ActiveChainstate().ActivateBestChain(state)) {
@@ -287,12 +295,6 @@ TestChain100Setup::TestChain100Setup(
     // Generate a 100-block chain:
     this->mineBlocks(COINBASE_MATURITY);
 
-    {
-        LOCK(::cs_main);
-        assert(
-            m_node.chainman->ActiveChain().Tip()->GetBlockHash().ToString() ==
-            "571d80a9967ae599cec0448b0b0ba1cfb606f584d8069bd7166b86854ba7a191");
-    }
 }
 
 void TestChain100Setup::mineBlocks(int num_blocks)

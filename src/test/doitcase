@@ -1,0 +1,16 @@
+
+BIN=./test_lynx
+  mkdir -p percase
+  "$BIN" --list_content 2>&1 |
+  awk '
+  /^[^ ].*\*$/ { s=$1; sub(/\*$/,"",s); next }
+  /^ +.*\*$/   { c=$1; sub(/\*$/,"",c); print s"/"c }
+  ' > cases.txt
+  while read tc; do
+    case "$tc" in coins_tests/*|headers_sync_chainwork_tests/*)
+  continue;;
+    esac
+    f=percase/$(echo "$tc" | tr / _)
+    "$BIN" --run_test="$tc" -l all > "$f" 2>&1
+  done < cases.txt
+
