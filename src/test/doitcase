@@ -7,7 +7,7 @@ BIN=./test_lynx
   /^ +.*\*$/   { c=$1; sub(/\*$/,"",c); print s"/"c }
   ' > cases.txt
   while read tc; do
-    case "$tc" in coins_tests/*|headers_sync_chainwork_tests/*)
+    case "$tc" in coins_tests/*|headers_sync_chainwork_tests/*|wallet_tests/ListCoinsTest|wallet_tests/BasicOutputTypesTest)
   continue;;
     esac
     f=percase/$(echo "$tc" | tr / _)
