@@ -1618,6 +1618,11 @@ BOOST_AUTO_TEST_CASE(message_sign)
 
 BOOST_AUTO_TEST_CASE(message_verify)
 {
+    // Addresses are the same key hashes re-encoded under the active chain's base58
+    // prefixes (digitalcoin vs lynx); signatures are over the message, so they are chain-agnostic.
+    auto A = [](const char* dgc, const char* lynx) -> std::string {
+        return std::string(CURRENT_CHAIN) == "lynx" ? lynx : dgc;
+    };
     BOOST_CHECK_EQUAL(
         MessageVerify(
             "invalid address",
@@ -1627,42 +1632,42 @@ BOOST_AUTO_TEST_CASE(message_verify)
 
     BOOST_CHECK_EQUAL(
         MessageVerify(
-            "3B5fQsEXEaV8v6U3ejYc8XaKXAkyQj2MjV",
+            A("3B5fQsEXEaV8v6U3ejYc8XaKXAkyQj2MjV", "A1pv9iJRJeN2pTqX4sD2NfChDk91ZwVQqH"),
             "signature should be irrelevant",
             "message too"),
         MessageVerificationResult::ERR_ADDRESS_NO_KEY);
 
     BOOST_CHECK_EQUAL(
         MessageVerify(
-            "DPygj5HcNf4iJTZoo5ZLkyz9ctDE7BFjZB",
+            A("DPygj5HcNf4iJTZoo5ZLkyz9ctDE7BFjZB", "KS3jVhkw2N1rZxf7ANZ82s4x4T5Npi6t6s"),
             "invalid signature, not in base64 encoding",
             "message should be irrelevant"),
         MessageVerificationResult::ERR_MALFORMED_SIGNATURE);
 
     BOOST_CHECK_EQUAL(
         MessageVerify(
-            "DPygj5HcNf4iJTZoo5ZLkyz9ctDE7BFjZB",
+            A("DPygj5HcNf4iJTZoo5ZLkyz9ctDE7BFjZB", "KS3jVhkw2N1rZxf7ANZ82s4x4T5Npi6t6s"),
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
             "message should be irrelevant"),
         MessageVerificationResult::ERR_PUBKEY_NOT_RECOVERED);
 
     BOOST_CHECK_EQUAL(
         MessageVerify(
-            "D9LXVWacjEAqsWLXrsmrUFoWc8MdPuYuMP",
+            A("D9LXVWacjEAqsWLXrsmrUFoWc8MdPuYuMP", "KBQaG93wNw7z91RqEAmdk8tK3hDn87pYvs"),
             "IPojfrX2dfPnH26UegfbGQQLrdK844DlHq5157/P6h57WyuS/Qsl+h/WSVGDF4MUi4rWSswW38oimDYfNNUBUOk=",
             "I never signed this"),
         MessageVerificationResult::ERR_NOT_SIGNED);
 
     BOOST_CHECK_EQUAL(
         MessageVerify(
-            "D9LXVWacjEAqsWLXrsmrUFoWc8MdPuYuMP",
+            A("D9LXVWacjEAqsWLXrsmrUFoWc8MdPuYuMP", "KBQaG93wNw7z91RqEAmdk8tK3hDn87pYvs"),
             "IPojfrX2dfPnH26UegfbGQQLrdK844DlHq5157/P6h57WyuS/Qsl+h/WSVGDF4MUi4rWSswW38oimDYfNNUBUOk=",
             "Trust no one"),
         MessageVerificationResult::OK);
 
     BOOST_CHECK_EQUAL(
         MessageVerify(
-            "D59i83rM7ZRJuooXwR7Wvca9LuCyx9nAHB",
+            A("D59i83rM7ZRJuooXwR7Wvca9LuCyx9nAHB", "K7DktgKfmGNTBJtqJi7JCVewnU58WkMnx6"),
             "IIcaIENoYW5jZWxsb3Igb24gYnJpbmsgb2Ygc2Vjb25kIGJhaWxvdXQgZm9yIGJhbmtzIAaHRtbCeDZINyavx14=",
             "Trust me"),
         MessageVerificationResult::OK);

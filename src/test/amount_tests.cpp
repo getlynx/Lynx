@@ -108,10 +108,9 @@ BOOST_AUTO_TEST_CASE(ToStringTest)
 {
     CFeeRate feeRate;
     feeRate = CFeeRate(1);
-    // BOOST_CHECK_EQUAL(feeRate.ToString(), "0.00000001 BTC/kvB");
-    BOOST_CHECK_EQUAL(feeRate.ToString(), "0.00000001 DGC/kvB");
-    // BOOST_CHECK_EQUAL(feeRate.ToString(FeeEstimateMode::BTC_KVB), "0.00000001 BTC/kvB");
-    BOOST_CHECK_EQUAL(feeRate.ToString(FeeEstimateMode::BTC_KVB), "0.00000001 DGC/kvB");
+    // Chain-agnostic: the ticker comes from the daemon at runtime (CurrentCoinSymbol()).
+    BOOST_CHECK_EQUAL(feeRate.ToString(), "0.00000001 " + CurrentCoinSymbol() + "/kvB");
+    BOOST_CHECK_EQUAL(feeRate.ToString(FeeEstimateMode::BTC_KVB), "0.00000001 " + CurrentCoinSymbol() + "/kvB");
     BOOST_CHECK_EQUAL(feeRate.ToString(FeeEstimateMode::SAT_VB), "0.001 sat/vB");
 }
 

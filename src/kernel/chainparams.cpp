@@ -1395,7 +1395,9 @@ public:
         m_assumeutxo_data = MapAssumeutxo{
             {
                 110,
-                {AssumeutxoHash{uint256S("0xb90d6c4811a001c0bebb0f59df48118d559b32f12a2172e06f3fb2754a018fee")}, 110},
+                {AssumeutxoHash{uint256S(std::string(CURRENT_CHAIN) == "lynx"
+                    ? "0x08dbaf9156a82f4edfa7680e82b5daf0d27bf80356e8c73219e1405be4944d3a"
+                    : "0xb90d6c4811a001c0bebb0f59df48118d559b32f12a2172e06f3fb2754a018fee")}, 110},
             },
             {
                 200,

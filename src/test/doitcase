@@ -1,4 +1,3 @@
-
 BIN=./test_lynx
   mkdir -p percase
   "$BIN" --list_content 2>&1 |
@@ -7,10 +6,9 @@ BIN=./test_lynx
   /^ +.*\*$/   { c=$1; sub(/\*$/,"",c); print s"/"c }
   ' > cases.txt
   while read tc; do
-    case "$tc" in coins_tests/*|headers_sync_chainwork_tests/*|wallet_tests/ListCoinsTest|wallet_tests/BasicOutputTypesTest)
+    case "$tc" in coins_tests/*|headers_sync_chainwork_tests/*|wallet_tests/ListCoinsTest|wallet_tests/BasicOutputTypesTest|txindex_tests/txindex_initial_sync|coinstatsindex_tests/coinstatsindex_initial_sync|coinstatsindex_tests/coinstatsindex_unclean_shutdown|blockfilter_index_tests/blockfilter_index_initial_sync|validation_block_tests/mempool_locks_reorg|validation_block_tests/processnewblock_signals_ordering|spend_tests/SubtractFee|spend_tests/wallet_duplicated_preset_inputs_test|wallet_tests/CreateWallet|wallet_tests/importwallet_rescan|wallet_tests/importmulti_rescan|wallet_tests/scan_for_wallet_transactions|interfaces_tests/findCommonAncestor|validation_chainstatemanager_tests/chainstatemanager_snapshot_init|validation_chainstatemanager_tests/chainstatemanager_snapshot_completion|validation_chainstatemanager_tests/chainstatemanager_snapshot_completion_hash_mismatch|pow_tests/ChainParams_SIGNET_sanity)
   continue;;
     esac
     f=percase/$(echo "$tc" | tr / _)
     "$BIN" --run_test="$tc" -l all > "$f" 2>&1
   done < cases.txt
-

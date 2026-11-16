@@ -115,7 +115,11 @@ BOOST_AUTO_TEST_CASE(test_assumeutxo)
     }
 
     const auto out110 = *ExpectedAssumeutxo(110, *params);
-    BOOST_CHECK_EQUAL(out110.hash_serialized.ToString(), "b90d6c4811a001c0bebb0f59df48118d559b32f12a2172e06f3fb2754a018fee");
+    // Chain-coupled: the regtest UTXO-set hash at height 110 is chain-specific (mirrors
+    // the per-chain m_assumeutxo_data value in kernel/chainparams.cpp), selected by CURRENT_CHAIN.
+    BOOST_CHECK_EQUAL(out110.hash_serialized.ToString(), std::string(CURRENT_CHAIN) == "lynx"
+        ? "08dbaf9156a82f4edfa7680e82b5daf0d27bf80356e8c73219e1405be4944d3a"
+        : "b90d6c4811a001c0bebb0f59df48118d559b32f12a2172e06f3fb2754a018fee");
     BOOST_CHECK_EQUAL(out110.nChainTx, 110U);
 
     const auto out210 = *ExpectedAssumeutxo(200, *params);

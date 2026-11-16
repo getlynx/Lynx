@@ -11,14 +11,63 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace {
 
-void CheckUnparsable(const std::string& prv, const std::string& pub, const std::string& expected_error)
+// WIF keys embedded in these descriptor vectors are digitalcoin-encoded (secret prefix 128);
+// lynx uses 173. Map the same keys to their lynx WIFs and substitute them in the descriptor
+// strings when CURRENT_CHAIN=="lynx". (xpub/xprv prefixes are chain-independent here, so those
+// keys need no mapping; the deliberately-invalid WIF used in CheckUnparsable is absent by design.)
+const std::map<std::string, std::string> kWifDgcToLynx = {
+    {"5KYZdUEo39z3FPrtuX2QbbwGnNP5zTd7yyr2SC1j299sBCnWjss", "6q24ZuSEPJREKK1dhbxNX2v7zW6QF9YXPk2sQvy4kdTKPCbVwQt"},
+    {"KwGNz6YCCQtYvFzMtrC6D3tKTKdBBboMrLTsjr2NYVBwapCkn7Mr", "SbMkiMkg5L7jmYavnFxH2t9EesfXkS15BDVjvHcde26yFiCTDo5E"},
+    {"KwsfyHKRUTZPQtysN7M3tZ4GXTnuov5XRgjdF2XCG8faAPmFruRF", "Sby3hYXuMNnaGBaSFX7EiPKBj1qGNkHEkZmVRU7TMfabqHfzdWEA"},
+    {"Kx9HCDjGiwFcgVNhTrS5z5NeZdD6veeam61eDxLDCkGWujvL4Gnn", "ScEevUwkbrUoXmyGMGCGoudZmBFTVUrJ5y3WQPvUJHBYadtisof4"},
+    {"KxDCNSST75HFPaW5QKpzHtAyaCQC7p9Vo3FYfi2u4dXD1vgMiboK", "ScJa6hevyzWSEs6eHjbB7iRtmkSYgeMD7vHQr9dAAASEgpiDpLZe"},
+    {"KxogYhiNfwxuswvXV66eFyKcCpm7dZ7TqHVqujHAVUjJxyivxQ9X", "Scu4GxvrYsC6jEX6NVrq5oaXQNoUCPKBAAXi6AsRb1eLdse7hbWt"},
+    {"KyBXTPy4T7YG4q9tcAM3LkvfRpD1ybHMvcJ2ehaWXaSqeGUxEdkP", "SdGuBfBYL2mSv7kTVa7EAbBadNFNYRV5FVKtq9Amd7MsKAUpp4Gn"},
+    {"KyLPZdwY4td98bKkXqEXTEBX3vwEYTQo1yyLjX2jKXA63GBpmSjv", "SdRmHuA1worKysvKREziH4SSFUyb7HcWLs1CuxczR457iA9Dyq6r"},
+    {"KyjHo36dWkYhimKmVVmQTq3gERv3pnqA4xFCpvUgbGDJad7eS8WE", "SdpfXJK7Pfmta3vLNuXbHfJbRyxQPd2sPqH51N4wgo8LFX1rityX"},
+    {"Kyjtp5858xL7JfeV4PNRCKy2t6XvgqNNepArGY9F9F1SSPqNEMs3", "SdqGYLLZ1sZJ9xF3wo8c2ADx5eaHFfa5yhCiSyjWEmvU7HkdfpK4"},
+    {"KzCUbGhN9LJhdeFfL9zQgTJMjqxdBKEekRGZX24hXdgCNCijkkap", "SeHrKXur2FXtUvrEDZkbWHZGwPzyk9SN5JJRhTexdAbE36jPMZDH"},
+    {"KzF8UWFcEC7BYTq8Go1xVimMkDmyNYVmXV5PV7RuDicvAocoPB8i", "SeLWCmU677LNPkRhACn9KZ2GwmpKwNhUrN7FfZ2AKFXwqhahWRwS"},
+    {"KzJDe9iwJRPtKP2F2AoN6zBgzS7uiuAwhWCfGdNeYJ3PC1HNJ8M8", "SePbNQwRBLd5AfcouaZYvpScBzAGHjNf2PEXT4xudpxQruFiUjEG"},
+    {"KzRedjSwMggebB3VufhbzpYJnvHfHe9kPJSjCU5QpJdAW3NSZxYS", "SeX2MzfREbuqSTe4o5TnpeoDzUL1rUMTiBUbNuffuqYCAwLP34YS"},
+    {"KzgpMBwwsDLwkaC5UrmBgCYaBD2WgZ7PBoGYXR8KT7gCA9UTN5a3", "SenC5TARk8a8brneNGXNW2oVNm4sFPK6WgJQhriaYebDq3RcKumm"},
+    {"KzoAz5CanayRKex3fSLQ2BwJpN7U52gZvxMyk78nDMHuqrUxuSJy", "SetYiLR4fWCcAwYcYr6ar2CE1v9pdrtHFqPqvYj3JtCwWkR5ppnj"},
+    {"L1okJGHGn1kFjdXHKxXjwVVtmCMR2JA5QsbKCSpSb7ReQjezKeoD", "Sfu82XVkevySav7rDNHvmKkoxkPmb8MnjkdBNtQhgeLg5dbcpLMo"},
+    {"L1xbHrxynrqLKkoYc4qtoQPx6uy5qYXR5ZDYVYBSRmCV5piU3JG9", "Sg3y28BTfn4XB3Q7VUc5dEesJU1SQNj8QSFQfymhXJ7WkijZJ2pS"},
+    {"L2BUNduTSyZwZjwNHynQTF14mv2uz2NRq5n5sYWTb4FkkmqgEE9f", "SgGr6u7wKto8R2XwBPYbH5FyyU5GYra99xox3z6igbAnRfpN8iBq"},
+    {"L2D4RLHPiHBidkHS8ftx11jJk1hGFELvxh8LoxNQheaGT58dKenW", "SgJS9bVsbCQuV2t125f8pqzDwZjcp4YeHaACzPxfoBVJ7y5oGFv1"},
+    {"L3nHUboKG2w4VSJ5jYZ5CBM97oeK6YuKvfZxrefdShECcjEYKMWZ", "ShsfCs1o8xAFLitecxKG21c4KMgffP73FYbq36FtYE9EHdBjFeMT"},
+    {"L4gM1FBdyHNpkzsFh9ipnofLhpZRp2mwobpeULy1a6dBTvw8Ywtd", "SimijWQ7rCc1cHTpaZV1cdvFuNbnNryf8UrWenZGfdYD8pwF26f7"},
+    {"L4o2kDvXXDRH2VS9uBnouScLduWt4dZnM25se7kvEjJeQ285en2A", "SitQUV91Q8eTsn2inbYzjGsFqTZEdTmVfu7jpZMBLGDg4v3ubJq8"},
+    {"L4rK1yDtCWekvXuE6oXD9jCYfFNV2cWRpVuPLBcCU2z8TrisoyY1", "SiwgkESN5RswmpVnzDHPyZTTroQqbSi99NwFWdCTZZuA8kiHmHR3"},
+    {"L5edQjFtnkcf5UWURn6UuuoFrabgDQUHdheKCziwN42aLwS3KizU", "Sjk18zUNffqqvm73KBrfjk4B48e2nEfzxagBPSKCTawc1qNCo3m4"},
+};
+
+std::string PortDesc(std::string s)
 {
+    if (std::string(CURRENT_CHAIN) == "lynx") {
+        for (const auto& [dgc, lynx] : kWifDgcToLynx) {
+            size_t pos = 0;
+            while ((pos = s.find(dgc, pos)) != std::string::npos) {
+                s.replace(pos, dgc.size(), lynx);
+                pos += lynx.size();
+            }
+        }
+    }
+    return s;
+}
+
+void CheckUnparsable(const std::string& prv_in, const std::string& pub_in, const std::string& expected_error)
+{
+    const std::string prv = PortDesc(prv_in);
+    const std::string pub = PortDesc(pub_in);
     FlatSigningProvider keys_priv, keys_pub;
     std::string error;
     auto parse_priv = Parse(prv, keys_priv, error);
@@ -133,6 +182,9 @@ void DoCheck(std::string prv, std::string pub, const std::string& norm_pub, int 
              bool replace_apostrophe_with_h_in_pub=false, uint32_t spender_nlocktime=0, uint32_t spender_nsequence=CTxIn::SEQUENCE_FINAL,
              std::map<std::vector<uint8_t>, std::vector<uint8_t>> preimages={})
 {
+    // Re-encode embedded WIF keys for the active chain (digitalcoin vectors -> lynx).
+    prv = PortDesc(prv);
+    pub = PortDesc(pub);
     FlatSigningProvider keys_priv, keys_pub;
     std::set<std::vector<uint32_t>> left_paths = paths;
     std::string error;
