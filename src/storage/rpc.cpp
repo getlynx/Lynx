@@ -2408,10 +2408,15 @@ static RPCHelpMan allow()
             // return std::string("error-generating-authpayload");
         }
 
-        if (!generate_auth_transaction(*storage_context, tx, opreturn_payload)) {
-            ret.push_back("error-generating-authtransaction");
+        // if (!generate_auth_transaction(*storage_context, tx, opreturn_payload)) {
+            // ret.push_back("error-generating-authtransaction");
+            // return ret;
+        // }
+
+        std::string error;
+        if (!generate_auth_transaction(*storage_context, tx, opreturn_payload, error)) {
+            ret.push_back(error);
             return ret;
-            // return std::string("error-generating-authtransaction");
         }
 
         // add_auth_member(hash);
@@ -3003,8 +3008,13 @@ static RPCHelpMan deny()
             return std::string("error-generating-authpayload");
         }
 
-        if (!generate_auth_transaction(*storage_context, tx, opreturn_payload)) {
-            return std::string("error-generating-authtransaction");
+        // if (!generate_auth_transaction(*storage_context, tx, opreturn_payload)) {
+            // return std::string("error-generating-authtransaction");
+        // }
+
+        std::string error;
+        if (!generate_auth_transaction(*storage_context, tx, opreturn_payload, error)) {
+            return error;
         }
 
         return std::string("success");
