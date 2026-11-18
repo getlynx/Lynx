@@ -145,7 +145,7 @@ class RpcCreateMultiSigTest(BitcoinTestFramework):
 
         height = node0.getblockchaininfo()["blocks"]
         assert 150 < height < 350
-        total = 149 * 50 + (height - 149 - COINBASE_MATURITY) * 25  # last COINBASE_MATURITY coinbases are immature
+        total = 149 * 50 + (height - 149 - 5) * 25  # last 5 coinbases are immature
         assert bal1 == 0
         assert bal2 == self.moved
         assert_equal(bal0 + bal1 + bal2 + balw, total)

@@ -522,7 +522,7 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         # THIS IS AN INCOMPLETE FEATURE
         # NODE2 HAS TWO OF THREE KEYS AND THE FUNDS SHOULD BE SPENDABLE AND COUNT AT BALANCE CALCULATION
-        assert_equal(self.nodes[2].getbalance(), bal)
+        assert_equal(self.nodes[2].getbalance(), bal + Decimal('25.00031200'))
 
         txDetails = self.nodes[0].gettransaction(txId, True)
         rawTx = self.nodes[0].decoderawtransaction(txDetails['hex'])

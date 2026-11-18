@@ -110,9 +110,6 @@ class BIP65Test(BitcoinTestFramework):
         self.generate(wallet, 10)
         self.generate(self.nodes[0], CLTV_HEIGHT - 2 - 10)
         assert_equal(self.nodes[0].getblockcount(), CLTV_HEIGHT - 2)
-        # Node-generated blocks above don't refresh the MiniWallet; under lynx CBM=30 its
-        # coinbase confirmations stay stale, so re-read at the final tip before drawing utxos.
-        wallet.rescan_utxos()
 
         self.log.info("Test that invalid-according-to-CLTV transactions can still appear in a block")
 
