@@ -1,0 +1,12 @@
+
+cd /root/dkdkfjfjdkdk/Lynx/test/functional
+
+date > d0
+
+> /root/fan
+while read -r line; do
+  ./test_runner.py "${line% failed,}" >/dev/null 2>&1 || echo "$line" >> /root/fan
+done < /root/fa
+
+date >> d0
+
