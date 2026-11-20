@@ -688,7 +688,7 @@ LogPrint(BCLog::CHAIN, "pszTimestamp %s \n", pszTimestamp);
 // ============================================================================
 struct AnchorNode { const char* host; const char* ipv4; const char* ipv6; bool failover; };
 static const AnchorNode ANCHOR_NODES[] = {
-    { "anchor1.getlynx.io",   "172.233.86.58",   "",                   false },  // Osaka
+    { "anchor1.getlynx.io",   "194.62.251.237",  "2a09:e683:7:98::a",  false },  // Frankfurt
     { "anchor2.getlynx.io",   "89.116.210.64",   "2a09:e683:5:111::a", false },  // Los Angeles
     { "anchor3.getlynx.io",   "89.117.30.12",    "2a09:e683:9:43::a",  false },  // London
     { "anchor4.getlynx.io",   "89.117.67.246",   "2a09:e683:6:82::a",  false },  // New Jersey
