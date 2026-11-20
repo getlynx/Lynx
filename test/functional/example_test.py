@@ -171,24 +171,12 @@ class ExampleTest(BitcoinTestFramework):
         self.custom_method()
 
         self.log.info("Create some blocks")
-        self.tip = int(self.nodes[0].getbestblockhash(), 16)
-        self.block_time = self.nodes[0].getblock(self.nodes[0].getbestblockhash())['time'] + 1
-
-        height = self.nodes[0].getblockcount()
-
-        for _ in range(10):
-            # Use the blocktools functionality to manually build a block.
-            # Calling the generate() rpc is easier, but this allows us to exactly
-            # control the blocks and transactions.
-            block = create_block(self.tip, create_coinbase(height+1), self.block_time)
-            block.solve()
-            block_message = msg_block(block)
-            # Send message is used to send a P2P message to the node over our P2PInterface
-            peer_messaging.send_message(block_message)
-            self.tip = block.sha256
-            blocks.append(self.tip)
-            self.block_time += 1
-            height += 1
+        # lynx: use daemon-mined blocks (valid scrypt PoW). A manual create_block()/solve()
+        # grinds sha256d, not lynx's GetPoWHash, so when node2 reads these blocks back from
+        # disk the read-time CheckProofOfWork (blockstorage.cpp:1192, not skipped for lynx)
+        # fails and fatally aborts the node.
+        for h in self.generate(self.nodes[0], 10, sync_fun=lambda: self.sync_all(self.nodes[0:2])):
+            blocks.append(int(h, 16))
 
         self.log.info("Wait for node1 to reach current tip (height 11) using RPC")
         self.nodes[1].waitforblockheight(11)

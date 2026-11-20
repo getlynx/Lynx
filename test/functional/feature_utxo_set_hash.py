@@ -35,6 +35,11 @@ class UTXOSetHashTest(BitcoinTestFramework):
         blocks = list(map(lambda block: from_hex(CBlock(), node.getblock(block, False)), block_hashes))
         blocks.pop(0)
 
+        # The 99 node-mined blocks don't rescan the wallet, leaving the coinbase's stored
+        # confirmations at 1 (from the generate(wallet,1) rescan); refresh so the maturity
+        # filter in get_utxo sees the live confirmation count.
+        wallet.rescan_utxos()
+
         # Create a spending transaction and mine a block which includes it
         txid = wallet.send_self_transfer(from_node=node)['txid']
         tx_block = self.generateblock(node, output=wallet.get_address(), transactions=[txid])
@@ -69,8 +74,11 @@ class UTXOSetHashTest(BitcoinTestFramework):
         assert_equal(finalized[::-1].hex(), node_muhash)
 
         self.log.info("Test deterministic UTXO set hash results")
-        assert_equal(node.gettxoutsetinfo()['hash_serialized_2'], "f9aa4fb5ffd10489b9a6994e70ccf1de8a8bfa2d5f201d9857332e9954b0855d")
-        assert_equal(node.gettxoutsetinfo("muhash")['muhash'], "d1725b2fe3ef43e55aa4907480aea98d406fc9e0bf8f60169e2305f1fbf5961b")
+        # hash_serialized_2 is chain-specific (depends on the genesis coinbase and reward
+        # values); this is lynx's deterministic value. The muhash is already verified
+        # self-consistently against the Python-recomputed digest above, so no hardcoded
+        # chain-specific muhash literal is kept here.
+        assert_equal(node.gettxoutsetinfo()['hash_serialized_2'], "3ed387e63bff5bda4d96769cd6819eab9c77437c98d6205a0b45901171100ce3")
 
     def run_test(self):
         self.test_muhash_implementation()

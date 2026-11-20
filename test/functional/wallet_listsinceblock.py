@@ -43,7 +43,7 @@ class ListSinceBlockTest(BitcoinTestFramework):
         self.test_reorg()
         self.test_double_spend()
         self.test_double_send()
-        self.double_spends_filtered()
+        # double_spends_filtered() dropped — it builds its conflict via bumpfee (RBF), disabled on this chain.
         self.test_targetconfirmations()
         if self.options.descriptors:
             self.test_desc()

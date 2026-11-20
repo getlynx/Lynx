@@ -386,7 +386,10 @@ BOOST_AUTO_TEST_CASE(script_standard_taproot_builder)
     BOOST_CHECK(builder.IsValid() && builder.IsComplete());
     builder.Finalize(key_inner);
     BOOST_CHECK(builder.IsValid() && builder.IsComplete());
-    BOOST_CHECK_EQUAL(EncodeDestination(builder.GetOutput()), "bc1pj6gaw944fy0xpmzzu45ugqde4rz7mqj5kj0tg8kmr5f0pjq8vnaqgynnge");
+    // Taproot bech32m address is chain-specific (hrp folds into the checksum); selected by CURRENT_CHAIN.
+    BOOST_CHECK_EQUAL(EncodeDestination(builder.GetOutput()), std::string(CURRENT_CHAIN) == "lynx"
+        ? "lynx1pj6gaw944fy0xpmzzu45ugqde4rz7mqj5kj0tg8kmr5f0pjq8vnaqer7cvm"
+        : "digitalcoin1pj6gaw944fy0xpmzzu45ugqde4rz7mqj5kj0tg8kmr5f0pjq8vnaqef4ufm");
 }
 
 BOOST_AUTO_TEST_CASE(bip341_spk_test_vectors)
@@ -397,6 +400,20 @@ BOOST_AUTO_TEST_CASE(bip341_spk_test_vectors)
     tests.read((const char*)json_tests::bip341_wallet_vectors, sizeof(json_tests::bip341_wallet_vectors));
 
     const auto& vectors = tests["scriptPubKey"];
+
+    // The bip350Address vectors are digitalcoin-encoded in the JSON; lynx uses a different hrp
+    // (same witness programs), so select the lynx re-encodings by CURRENT_CHAIN, in JSON order.
+    static const std::vector<std::string> lynx_bip350 = {
+        "lynx1p2wsldez5mud2yam29q22wgfh9439spgduvct83k3pm50fcxa5dps9z67xk",
+        "lynx1pz37fc4cn9ah8anwm4xqqhvxygjf9rjf2resrw8h8w4tmvcs0863svd5lrc",
+        "lynx1punvppl2stp38f7kwv2u2spltjuvuaayuqsthe34hd2dyy5w4g58q3w3kvk",
+        "lynx1pwyjywgrd0ffr3tx8laflh6228dj98xkjj8rum0zfpd6h0e930h6sv8tg8e",
+        "lynx1pwl3s54fzmk0cjnpl3w9af39je7pv5ldg504x5guk2hpecpg2kgsqv8aqkz",
+        "lynx1pjxmy65eywgafs5tsunw95ruycpqcqnev6ynxp7jaasylcgtcxczst5u6wm",
+        "lynx1pw5tf7sqp4f50zka7629jrr036znzew70zxyvvej3zrpf8jg8hqcspr3j2m",
+    };
+    const bool port_lynx = std::string(CURRENT_CHAIN) == "lynx";
+    size_t vi = 0;
 
     for (const auto& vec : vectors.getValues()) {
         TaprootBuilder spktest;
@@ -417,7 +434,10 @@ BOOST_AUTO_TEST_CASE(bip341_spk_test_vectors)
         parse_tree(vec["given"]["scriptTree"], 0);
         spktest.Finalize(XOnlyPubKey(ParseHex(vec["given"]["internalPubkey"].get_str())));
         BOOST_CHECK_EQUAL(HexStr(GetScriptForDestination(spktest.GetOutput())), vec["expected"]["scriptPubKey"].get_str());
-        BOOST_CHECK_EQUAL(EncodeDestination(spktest.GetOutput()), vec["expected"]["bip350Address"].get_str());
+        const std::string exp_addr = (port_lynx && vi < lynx_bip350.size())
+            ? lynx_bip350[vi] : vec["expected"]["bip350Address"].get_str();
+        ++vi;
+        BOOST_CHECK_EQUAL(EncodeDestination(spktest.GetOutput()), exp_addr);
         auto spend_data = spktest.GetSpendData();
         BOOST_CHECK_EQUAL(vec["intermediary"]["merkleRoot"].isNull(), spend_data.merkle_root.IsNull());
         if (!spend_data.merkle_root.IsNull()) {

@@ -832,6 +832,10 @@ public:
             // set to the true cutover height when it is chosen.
             consensus.lastPoWBlock = 8725000;
             consensus.nUUIDBlockStart = 8725000;
+            // Above the transition bidha mints Lynx-native PoS blocks with witness
+            // coinstakes; activate segwit at current-tip+1 (NOT the transition 8725000,
+            // which would force -reindex of the already-validated witness-free tail).
+            consensus.SegwitHeight = 8725643;
         } else {
             consensus.lastPoWBlock = 1500;
             consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -1349,7 +1353,10 @@ public:
         consensus.nPowTargetSpacing = 10 * 60;
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = true;
-        consensus.lastPoWBlock = 250;
+        consensus.lastPoWBlock = 10000000;
+        consensus.PowTargetSpacingV1 = 30;
+        consensus.PowTargetSpacingV2 = 60;
+        consensus.PowTargetSpacingV3 = 30;
         consensus.posLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPosTargetTimespan = 5 * 60;
         consensus.nPosTargetSpacing = 5 * 60;
@@ -1419,16 +1426,21 @@ public:
             consensus.hashGenesisBlock = genesis.GetHash();
             //assert(consensus.hashGenesisBlock == uint256S("0x0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"));
             //assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
+        } else if (std::string(CURRENT_CHAIN) == "digitalcoin") {
+            genesis = CreateGenesisBlock(1685504092, 1, 0x207fffff, 1, 50 * COIN);
+            consensus.hashGenesisBlock = genesis.GetHash();
+            assert(consensus.hashGenesisBlock == uint256S("0x619f976a00e10f28fea178ca9f43b0e979101b7bafa229967e476dcd993aca60"));
+            assert(genesis.hashMerkleRoot == uint256S("0xd421bc2c10f84323e564e4706344029afdc7d3628cddad6d66a795168976ec86"));
+        } else if (std::string(CURRENT_CHAIN) == "infiniloop") {
+            genesis = CreateGenesisBlock(1685504092, 0, 0x207fffff, 1, 50 * COIN);
+            consensus.hashGenesisBlock = genesis.GetHash();
+            assert(consensus.hashGenesisBlock == uint256S("0x63cbf15d583e5f91b0672a2868572b2e567573e31719b218344c90afd7283258"));
+            assert(genesis.hashMerkleRoot == uint256S("0xe9c3d6112c65eb6e32969195ca97d89a8da26257ad7d8cc7be8eca40e1fefbd5"));
         } else {
-            // genesis = CreateGenesisBlock(spec.timestamp, spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
-            // genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce, 0x1e0ffff0, 1, 88 * COIN);
             genesis = CreateGenesisBlock(spec.timestamp[CURRENT_CHAIN], spec.nonce[CURRENT_CHAIN], 0x1e0ffff0, 1, 88 * COIN);
             consensus.hashGenesisBlock = genesis.GetHash();
-            if (std::string(CURRENT_CHAIN) != "infiniloop" && std::string(CURRENT_CHAIN) != "digitalcoin") {
-                // infiniloop is mainnet-only; skip asserts in unused testnet/signet/regtest constructors.
-                // assert(consensus.hashGenesisBlock == uint256S(spec.genesishash));
+            if (std::string(CURRENT_CHAIN) != "infiniloop") {
                 assert(consensus.hashGenesisBlock == uint256S(spec.genesishash[CURRENT_CHAIN]));
-                // assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot));
                 assert(genesis.hashMerkleRoot == uint256S(spec.genesismerkleroot[CURRENT_CHAIN]));
             }
         }
@@ -1451,7 +1463,9 @@ public:
         m_assumeutxo_data = MapAssumeutxo{
             {
                 110,
-                {AssumeutxoHash{uint256S("0x1ebbf5850204c0bdb15bf030f47c7fe91d45c44c712697e4509ba67adb01c618")}, 110},
+                {AssumeutxoHash{uint256S(std::string(CURRENT_CHAIN) == "lynx"
+                    ? "0x08dbaf9156a82f4edfa7680e82b5daf0d27bf80356e8c73219e1405be4944d3a"
+                    : "0xb90d6c4811a001c0bebb0f59df48118d559b32f12a2172e06f3fb2754a018fee")}, 110},
             },
             {
                 200,

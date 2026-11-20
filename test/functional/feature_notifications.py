@@ -54,7 +54,10 @@ class NotificationsTest(BitcoinTestFramework):
         ], [
             f"-walletnotify=echo %h_%b > {os.path.join(self.walletnotify_dir, notify_outputname('%w', '%s'))}",
         ]]
-        self.wallet_names = [self.default_wallet_name, self.wallet]
+        # bidha auto-creates the default "" wallet at startup (load.cpp:140), so createwallet("")
+        # fails "Database already exists"; node0 uses a named wallet instead. node1 keeps self.wallet
+        # (its name is asserted by expect_wallet_notify via walletnotify %w).
+        self.wallet_names = ["node0", self.wallet]
         super().setup_network()
 
     def run_test(self):
@@ -78,6 +81,10 @@ class NotificationsTest(BitcoinTestFramework):
             # Ensures that node 0 and node 1 share the same wallet for the conflicting transaction tests below.
             for i, name in enumerate(self.wallet_names):
                 self.nodes[i].createwallet(wallet_name=name, descriptors=self.options.descriptors, blank=True, load_on_startup=True)
+                # bidha auto-loads a default "" wallet at startup; unload it so bare wallet RPCs resolve to this test wallet
+                for w in self.nodes[i].listwallets():
+                    if w != name:
+                        self.nodes[i].unloadwallet(w)
                 if self.options.descriptors:
                     self.nodes[i].importdescriptors(desc_imports)
                 else:
@@ -113,56 +120,9 @@ class NotificationsTest(BitcoinTestFramework):
             tx_details = list(map(lambda t: (t['txid'], t['blockheight'], t['blockhash']), self.nodes[1].listtransactions("*", block_count)))
             self.expect_wallet_notify(tx_details)
 
-            # Conflicting transactions tests.
-            # Generate spends from node 0, and check notifications
-            # triggered by node 1
-            self.log.info("test -walletnotify with conflicting transactions")
-            self.nodes[0].rescanblockchain()
-            self.generatetoaddress(self.nodes[0], 100, ADDRESS_BCRT1_UNSPENDABLE)
-
-            # Generate transaction on node 0, sync mempools, and check for
-            # notification on node 1.
-            tx1 = self.nodes[0].sendtoaddress(address=ADDRESS_BCRT1_UNSPENDABLE, amount=1, replaceable=True)
-            assert_equal(tx1 in self.nodes[0].getrawmempool(), True)
-            self.sync_mempools()
-            self.expect_wallet_notify([(tx1, -1, UNCONFIRMED_HASH_STRING)])
-
-            # Generate bump transaction, sync mempools, and check for bump1
-            # notification. In the future, per
-            # https://github.com/bitcoin/bitcoin/pull/9371, it might be better
-            # to have notifications for both tx1 and bump1.
-            bump1 = self.nodes[0].bumpfee(tx1)["txid"]
-            assert_equal(bump1 in self.nodes[0].getrawmempool(), True)
-            self.sync_mempools()
-            self.expect_wallet_notify([(bump1, -1, UNCONFIRMED_HASH_STRING)])
-
-            # Add bump1 transaction to new block, checking for a notification
-            # and the correct number of confirmations.
-            blockhash1 = self.generatetoaddress(self.nodes[0], 1, ADDRESS_BCRT1_UNSPENDABLE)[0]
-            blockheight1 = self.nodes[0].getblockcount()
-            self.sync_blocks()
-            self.expect_wallet_notify([(bump1, blockheight1, blockhash1)])
-            assert_equal(self.nodes[1].gettransaction(bump1)["confirmations"], 1)
-
-            # Generate a second transaction to be bumped.
-            tx2 = self.nodes[0].sendtoaddress(address=ADDRESS_BCRT1_UNSPENDABLE, amount=1, replaceable=True)
-            assert_equal(tx2 in self.nodes[0].getrawmempool(), True)
-            self.sync_mempools()
-            self.expect_wallet_notify([(tx2, -1, UNCONFIRMED_HASH_STRING)])
-
-            # Bump tx2 as bump2 and generate a block on node 0 while
-            # disconnected, then reconnect and check for notifications on node 1
-            # about newly confirmed bump2 and newly conflicted tx2.
-            self.disconnect_nodes(0, 1)
-            bump2 = self.nodes[0].bumpfee(tx2)["txid"]
-            blockhash2 = self.generatetoaddress(self.nodes[0], 1, ADDRESS_BCRT1_UNSPENDABLE, sync_fun=self.no_op)[0]
-            blockheight2 = self.nodes[0].getblockcount()
-            assert_equal(self.nodes[0].gettransaction(bump2)["confirmations"], 1)
-            assert_equal(tx2 in self.nodes[1].getrawmempool(), True)
-            self.connect_nodes(0, 1)
-            self.sync_blocks()
-            self.expect_wallet_notify([(bump2, blockheight2, blockhash2), (tx2, -1, UNCONFIRMED_HASH_STRING)])
-            assert_equal(self.nodes[1].gettransaction(bump2)["confirmations"], 1)
+            # Conflicting-transaction (-walletnotify) tests removed: they drive
+            # bumpfee replacements of replaceable spends, which bidha's
+            # RBF-disabled mempool rejects (validation.cpp:751).
 
         # TODO: add test for `-alertnotify` large fork notifications
 

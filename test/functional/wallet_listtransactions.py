@@ -109,7 +109,8 @@ class ListTransactionsTest(BitcoinTestFramework):
                                 {"category": "receive", "amount": Decimal("0.1")},
                                 {"txid": txid, "label": "watchonly"})
 
-        self.run_rbf_opt_in_test()
+        # RBF disabled by design (validation.cpp:751 bip125-replacement-disallowed) — sub-test can't broadcast a replacement
+        # self.run_rbf_opt_in_test()
         self.run_externally_generated_address_test()
         self.run_invalid_parameters_test()
         self.test_op_return()

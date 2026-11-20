@@ -18,14 +18,18 @@
 
 #include <boost/test/unit_test.hpp>
 
-static const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
-static const std::string strSecret2 = "5KC4ejrDjv152FGwP386VD1i2NYc5KkfSMyv1nGy1VGDxGHqVY3";
-static const std::string strSecret1C = "Kwr371tjA9u2rFSMZjTNun2PXXP3WPZu2afRHTcta6KxEUdm1vEw";
-static const std::string strSecret2C = "L3Hq7a8FEQwJkW1M2GNKDW28546Vp5miewcCzSqUD9kCAXrJdS3g";
-static const std::string addr1 = "1QFqqMUD55ZV3PJEJZtaKCsQmjLT6JkjvJ";
-static const std::string addr2 = "1F5y5E5FMc5YzdJtB9hLaUe43GDxEKXENJ";
-static const std::string addr1C = "1NoJrossxPBKfCHuJXT4HadJrXRE9Fxiqs";
-static const std::string addr2C = "1CRj2HyM1CXWzHAXLQtiGLyggNT9WQqsDs";
+// Chain-coupled base58: digitalcoin shares Bitcoin's secret(128)/pubkey-differs(30)
+// prefixes; lynx uses secret=173/pubkey=45, so the WIFs and P2PKH addrs are the same
+// keys re-encoded under the active chain's prefixes, selected by CURRENT_CHAIN.
+static const bool LYNX_CHAIN = std::string(CURRENT_CHAIN) == "lynx";
+static const std::string strSecret1 = LYNX_CHAIN ? "6oS1sMsLwqy1cTyAqyEirXegMrwTyh3rhS5bYUEdQFZAisK958f" : "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
+static const std::string strSecret2 = LYNX_CHAIN ? "6pfZbB3f64SG6ARgB844QdzZEWFvL1g4r8AkzXEJjyZgACrU2Fb" : "5KC4ejrDjv152FGwP386VD1i2NYc5KkfSMyv1nGy1VGDxGHqVY3";
+static const std::string strSecret1C = LYNX_CHAIN ? "SbwQqH7D358DhY2vT9DZjcHJj5RQ5DmcMThHTuD9fdEyuNd8e8XZ" : "Kwr371tjA9u2rFSMZjTNun2PXXP3WPZu2afRHTcta6KxEUdm1vEw";
+static const std::string strSecret2C = LYNX_CHAIN ? "ShPCqqLj7LAVbnbuug8W3LH3Gc8rNuyRype5AtRjJgfDqRqxQ5T6" : "L3Hq7a8FEQwJkW1M2GNKDW28546Vp5miewcCzSqUD9kCAXrJdS3g";
+static const std::string addr1 = LYNX_CHAIN ? "KWTz9EtB2CQuqta8QSsv8r7p6Rvu4kqBxa" : "DUPwNcQrNVTmaPUq39t8ry31es4kPtV24v";
+static const std::string addr2 = LYNX_CHAIN ? "KMJ7P7VDJivyo8anH2ggQ7tTMxpQEt6txb" : "DKE4cV1tf1yqXdVUujgu8EoevPxFWYkHdv";
+static const std::string addr1C = LYNX_CHAIN ? "KV1TAhHquW2kThZoQQSQ7DsiBE1g9RxbTs" : "DSwQQ4pXFo5cCCUW37ScqLnujf9XTqAFvn";
+static const std::string addr2C = LYNX_CHAIN ? "KJdsLBPJxKNwnnSRSHt45zE6153bYCwekg" : "DGZpZYuzJcRoXHM84ztGp79HZWBSowYjKM";
 
 static const std::string strAddressBad = "1HV9Lc3sNHZxwj4Zk6fB38tEmBryq2cBiF";
 

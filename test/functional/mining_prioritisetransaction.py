@@ -174,13 +174,18 @@ class PrioritiseTransactionTest(BitcoinTestFramework):
         # Test `prioritisetransaction` invalid `fee_delta`
         assert_raises_rpc_error(-3, "JSON value of type string is not of expected type number", self.nodes[0].prioritisetransaction, txid=txid, fee_delta='foo')
 
-        self.test_replacement()
+        # test_replacement() is RBF-only (bip125 eviction); RBF is disabled on bidha
+        # (validation.cpp:751), so sendrawtransaction of the replacement returns
+        # bip125-replacement-disallowed. The rest of the suite is RBF-independent.
         self.test_diamond()
 
         self.txouts = gen_return_txouts()
         self.relayfee = self.nodes[0].getnetworkinfo()['relayfee']
 
-        utxo_count = 90
+        # bidha MAX_BLOCK_WEIGHT is 20,000,000 (5x Bitcoin's 4M), so each batch must exceed
+        # MAX_BLOCK_WEIGHT//4 = 5,000,000 vbytes. Scale utxo_count 90->450 to keep the same
+        # ~2x margin (150 big txs/batch x ~67.5k vbytes ~= 10.1M).
+        utxo_count = 450
         utxos = self.wallet.send_self_transfer_multi(from_node=self.nodes[0], num_outputs=utxo_count)['new_utxos']
         self.generate(self.wallet, 1)
         assert_equal(len(self.nodes[0].getrawmempool()), 0)

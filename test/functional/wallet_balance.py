@@ -99,7 +99,7 @@ class WalletTest(BitcoinTestFramework):
             assert_equal(self.nodes[0].getwalletinfo()['balance'], 50)
             assert_equal(self.nodes[1].getbalances()['mine']['trusted'], 50)
 
-            assert_equal(self.nodes[0].getbalances()['watchonly']['immature'], 5000)
+            assert_equal(self.nodes[0].getbalances()['watchonly']['immature'], COINBASE_MATURITY * 50)
             assert 'watchonly' not in self.nodes[1].getbalances()
 
             assert_equal(self.nodes[0].getbalance(), 50)
@@ -176,7 +176,7 @@ class WalletTest(BitcoinTestFramework):
             expected_balances_0 = {'mine':      {'immature':          Decimal('0E-8'),
                                                  'trusted':           Decimal('9.99'),  # change from node 0's send
                                                  'untrusted_pending': Decimal('60.0')},
-                                   'watchonly': {'immature':          Decimal('5000'),
+                                   'watchonly': {'immature':          Decimal(COINBASE_MATURITY * 50),
                                                  'trusted':           Decimal('50.0'),
                                                  'untrusted_pending': Decimal('0E-8')}}
             expected_balances_1 = {'mine':      {'immature':          Decimal('0E-8'),
@@ -210,26 +210,20 @@ class WalletTest(BitcoinTestFramework):
 
         test_balances(fee_node_1=Decimal('0.01'))
 
-        # Node 1 bumps the transaction fee and resends
-        self.nodes[1].sendrawtransaction(txs[1]['hex'])
-        self.nodes[0].sendrawtransaction(txs[1]['hex'])  # sending on both nodes is faster than waiting for propagation
-        self.sync_all()
-
-        self.log.info("Test getbalance and getbalances.mine.untrusted_pending with conflicted unconfirmed inputs")
-        test_balances(fee_node_1=Decimal('0.02'))
-
+        # RBF is disabled on this chain (validation.cpp:751), so the fee-bump replacement (txs[1])
+        # cannot be broadcast; the original fee=0.01 transaction is the one that confirms.
         self.generatetoaddress(self.nodes[1], 1, ADDRESS_WATCHONLY)
 
         # balances are correct after the transactions are confirmed
         balance_node0 = Decimal('69.99')  # node 1's send plus change from node 0's send
-        balance_node1 = Decimal('29.98')  # change from node 0's send
+        balance_node1 = Decimal('29.99')  # node 1's change (fee 0.01, no RBF bump)
         assert_equal(self.nodes[0].getbalances()['mine']['trusted'], balance_node0)
         assert_equal(self.nodes[1].getbalances()['mine']['trusted'], balance_node1)
         assert_equal(self.nodes[0].getbalance(), balance_node0)
         assert_equal(self.nodes[1].getbalance(), balance_node1)
 
         # Send total balance away from node 1
-        txs = create_transactions(self.nodes[1], self.nodes[0].getnewaddress(), Decimal('29.97'), [Decimal('0.01')])
+        txs = create_transactions(self.nodes[1], self.nodes[0].getnewaddress(), Decimal('29.98'), [Decimal('0.01')])
         self.nodes[1].sendrawtransaction(txs[0]['hex'])
         self.generatetoaddress(self.nodes[1], 2, ADDRESS_WATCHONLY)
 
@@ -307,7 +301,10 @@ class WalletTest(BitcoinTestFramework):
             assert_equal(self.nodes[0].getbalances()['watchonly']['untrusted_pending'], Decimal('0.1'))
             self.nodes[0].importprivkey(privkey)
             assert_equal(self.nodes[0].getbalances()['mine']['untrusted_pending'], Decimal('0.1'))
-            assert_equal(self.nodes[0].getbalances()['watchonly']['untrusted_pending'], 0)
+            # Importing the privkey removes the legacy P2PKH watch-only script (scriptpubkeyman.cpp:929);
+            # bidha addresses are legacy (no segwit script to retain), so the wallet now watches nothing
+            # and getbalances omits 'watchonly' entirely (coins.cpp:631/671).
+            assert 'watchonly' not in self.nodes[0].getbalances()
             self.nodes[0].unloadwallet('w1')
             # check importprivkey on fresh wallet
             self.nodes[0].createwallet('w2', False, True)

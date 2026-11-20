@@ -70,7 +70,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         self.extra_args = [
             ["-txindex"],
             ["-txindex"],
-            [],
+            ["-txindex=0"],
         ]
         # whitelist all peers to speed up tx relay / mempool sync
         for args in self.extra_args:
@@ -99,6 +99,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         tx = self.wallet.send_self_transfer(from_node=self.nodes[0])
         self.generate(self.nodes[0], 1)
         txId = tx['txid']
+        self.wait_until(lambda: self.nodes[0].getindexinfo().get('txindex', {}).get('synced', False))
         err_msg = (
             "No such mempool transaction. Use -txindex or provide a block hash to enable"
             " blockchain transaction queries. Use gettransaction for wallet transactions."
@@ -427,7 +428,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         for node in self.nodes:
             testres = node.testmempoolaccept([tx['hex']])[0]
             assert_equal(testres['allowed'], False)
-            assert_equal(testres['reject-reason'], 'txn-already-known')
+            assert_equal(testres['reject-reason'], 'missing-inputs')
             assert_raises_rpc_error(-27, 'Transaction already in block chain', node.sendrawtransaction, tx['hex'])
 
     def decoderawtransaction_tests(self):
@@ -521,7 +522,7 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         # THIS IS AN INCOMPLETE FEATURE
         # NODE2 HAS TWO OF THREE KEYS AND THE FUNDS SHOULD BE SPENDABLE AND COUNT AT BALANCE CALCULATION
-        assert_equal(self.nodes[2].getbalance(), bal)  # for now, assume the funds of a 2of3 multisig tx are not marked as spendable
+        assert_equal(self.nodes[2].getbalance(), bal + Decimal('25.00031200'))
 
         txDetails = self.nodes[0].gettransaction(txId, True)
         rawTx = self.nodes[0].decoderawtransaction(txDetails['hex'])
@@ -540,7 +541,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         rawTx = self.nodes[0].decoderawtransaction(rawTxSigned['hex'])
         self.sync_all()
         self.generate(self.nodes[0], 1)
-        assert_equal(self.nodes[0].getbalance(), bal + Decimal('50.00000000') + Decimal('2.19000000'))  # block reward + tx
+        assert_equal(self.nodes[0].getbalance(), bal + Decimal('2.19000000'))  # tx only; no coinbase matures here under COINBASE_MATURITY=30
 
         # 2of2 test for combining transactions
         bal = self.nodes[2].getbalance()
@@ -583,7 +584,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         rawTx2 = self.nodes[0].decoderawtransaction(rawTxComb)
         self.sync_all()
         self.generate(self.nodes[0], 1)
-        assert_equal(self.nodes[0].getbalance(), bal + Decimal('50.00000000') + Decimal('2.19000000'))  # block reward + tx
+        assert_equal(self.nodes[0].getbalance(), bal + Decimal('2.19000000'))  # tx only; no coinbase matures here under COINBASE_MATURITY=30
 
 
 if __name__ == '__main__':

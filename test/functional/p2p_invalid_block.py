@@ -96,13 +96,10 @@ class InvalidBlockRequestTest(BitcoinTestFramework):
         block2_dup.solve()
         peer.send_blocks_and_test([block2_dup], node, success=False, reject_reason='bad-txns-inputs-duplicate')
 
-        self.log.info("Test very broken block.")
-
-        block3 = create_block(tip, create_coinbase(height, nValue=100), block_time)
+        # "Very broken block" (coinbase overpay -> bad-cb-amount) removed: bidha disables the
+        # PoW coinbase-amount check for CURRENT_CHAIN=="digitalcoin" (validation.cpp:2755) so
+        # legacy dgc PoW history assimilates; regtest digitalcoin PoW blocks inherit that skip.
         block_time += 1
-        block3.solve()
-
-        peer.send_blocks_and_test([block3], node, success=False, reject_reason='bad-cb-amount')
 
 
         # Complete testing of CVE-2012-2459 by sending the original block.

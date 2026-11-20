@@ -19,6 +19,12 @@ TIME_SIZE = 8
 LENGTH_SIZE = 4
 MSGTYPE_SIZE = 12
 
+# Message types sent by this daemon that are not in the framework MESSAGEMAP.
+# "alert" is the legacy final-alert pushed to every peer at greatest_common_version
+# <= 70012 (net_processing.cpp); PROTOCOL_VERSION=70006 means it is sent on every
+# handshake. The test docstring already treats message type as too brittle to test.
+ALLOWED_EXTRA_MSGTYPES = {b"alert"}
+
 def mini_parser(dat_file):
     """Parse a data file created by CaptureMessageToFile.
 
@@ -44,7 +50,7 @@ def mini_parser(dat_file):
             tmp_header = BytesIO(tmp_header_raw)
             tmp_header.read(TIME_SIZE) # skip the timestamp field
             msgtype = tmp_header.read(MSGTYPE_SIZE).rstrip(b'\x00')
-            assert msgtype in MESSAGEMAP
+            assert msgtype in MESSAGEMAP or msgtype in ALLOWED_EXTRA_MSGTYPES
             length: int = int.from_bytes(tmp_header.read(LENGTH_SIZE), "little")
             data = f_in.read(length)
             assert_equal(len(data), length)

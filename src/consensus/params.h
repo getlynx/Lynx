@@ -108,6 +108,9 @@ struct Params {
     int BIP65Height;
     /** Block height at which BIP66 becomes active */
     int BIP66Height;
+    /** Block height at which SegWit activates as a buried deployment (digitalcoin).
+     * INT_MAX = use the BIP9 vDeployments path, as lynx/infiniloop do. */
+    int SegwitHeight{std::numeric_limits<int>::max()};
     /** Don't warn about unknown BIP 9 activations below this height.
      * This prevents us from warning about the CSV and segwit activations. */
     int MinBIP9WarningHeight;

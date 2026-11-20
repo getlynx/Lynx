@@ -39,8 +39,11 @@ class TxnMallTest(BitcoinTestFramework):
         return self.nodes[0].sendrawtransaction(tx['hex'])
 
     def run_test(self):
-        # All nodes should start with 1,250 BTC:
-        starting_balance = 1250
+        # Node balances come from the shared cache. bidha's regtest subsidy halves at
+        # height 150 (chainparams.cpp:1277) and the 199-block cache crosses it, so the
+        # four cache addresses (→ nodes) hold UNEQUAL amounts (node0 all pre-halving,
+        # node1 straddling height 150, node2 post-halving). Capture each node's actual
+        # starting balance instead of assuming a uniform 1250.
 
         # All nodes should be out of IBD.
         # If the nodes are not all out of IBD, that can interfere with
@@ -49,8 +52,7 @@ class TxnMallTest(BitcoinTestFramework):
         for n in self.nodes:
             assert n.getblockchaininfo()["initialblockdownload"] == False
 
-        for i in range(3):
-            assert_equal(self.nodes[i].getbalance(), starting_balance)
+        starting_balance = [self.nodes[i].getbalance() for i in range(3)]
 
         # Assign coins to foo and bar addresses:
         node0_address_foo = self.nodes[0].getnewaddress()
@@ -63,7 +65,7 @@ class TxnMallTest(BitcoinTestFramework):
         fund_bar_tx = self.nodes[0].gettransaction(fund_bar_txid)
 
         assert_equal(self.nodes[0].getbalance(),
-                     starting_balance + fund_foo_tx["fee"] + fund_bar_tx["fee"])
+                     starting_balance[0] + fund_foo_tx["fee"] + fund_bar_tx["fee"])
 
         # Coins are sent to node1_address
         node1_address = self.nodes[1].getnewaddress()
@@ -99,9 +101,12 @@ class TxnMallTest(BitcoinTestFramework):
 
         # Node0's balance should be starting balance, plus 50BTC for another
         # matured block, minus 40, minus 20, and minus transaction fees:
-        expected = starting_balance + fund_foo_tx["fee"] + fund_bar_tx["fee"]
+        expected = starting_balance[0] + fund_foo_tx["fee"] + fund_bar_tx["fee"]
         if self.options.mine_block:
-            expected += 50
+            # bidha: node0's cache coinbases (heights <=125) are all already mature at
+            # maturity 5, and the coinbase that matures by extending the chain belongs
+            # to another cache address, so mining a block adds nothing mature here.
+            expected += 0
         expected += tx1["amount"] + tx1["fee"]
         expected += tx2["amount"] + tx2["fee"]
         assert_equal(self.nodes[0].getbalance(), expected)
@@ -110,7 +115,7 @@ class TxnMallTest(BitcoinTestFramework):
             assert_equal(tx1["confirmations"], 1)
             assert_equal(tx2["confirmations"], 1)
             # Node1's balance should be both transaction amounts:
-            assert_equal(self.nodes[1].getbalance(), starting_balance - tx1["amount"] - tx2["amount"])
+            assert_equal(self.nodes[1].getbalance(), starting_balance[1] - tx1["amount"] - tx2["amount"])
         else:
             assert_equal(tx1["confirmations"], 0)
             assert_equal(tx2["confirmations"], 0)
@@ -138,11 +143,14 @@ class TxnMallTest(BitcoinTestFramework):
         # Node0's total balance should be starting balance, plus 100BTC for
         # two more matured blocks, minus 1240 for the double-spend, plus fees (which are
         # negative):
-        expected = starting_balance + 100 - 1240 + fund_foo_tx["fee"] + fund_bar_tx["fee"] + doublespend_fee
+        # No "+100 for two matured blocks": on bidha node0's cache coinbases are all
+        # already mature and the blocks maturing across the reorg belong to other cache
+        # addresses, so node0 gains nothing mature.
+        expected = starting_balance[0] - 1240 + fund_foo_tx["fee"] + fund_bar_tx["fee"] + doublespend_fee
         assert_equal(self.nodes[0].getbalance(), expected)
 
-        # Node1's balance should be its initial balance (1250 for 25 block rewards) plus the doublespend:
-        assert_equal(self.nodes[1].getbalance(), 1250 + 1240)
+        # Node1's balance should be its initial balance plus the doublespend:
+        assert_equal(self.nodes[1].getbalance(), starting_balance[1] + 1240)
 
 
 if __name__ == '__main__':

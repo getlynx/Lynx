@@ -11,24 +11,30 @@ from test_framework.util import (
     assert_raises_rpc_error,
 )
 
-BECH32_VALID = 'bcrt1qtmp74ayg7p24uslctssvjm06q5phz4yrxucgnv'
-BECH32_VALID_CAPITALS = 'BCRT1QPLMTZKC2XHARPPZDLNPAQL78RSHJ68U33RAH7R'
-BECH32_VALID_MULTISIG = 'bcrt1qdg3myrgvzw7ml9q0ejxhlkyxm7vl9r56yzkfgvzclrf4hkpx9yfqhpsuks'
+# Valid-checksum fixtures re-encoded under the regtest hrp (rlynx); each keeps the
+# original (encoding, witver, program) so the daemon reaches the specific error.
+BECH32_VALID = 'rlynx1qtmp74ayg7p24uslctssvjm06q5phz4yrngng8p'
+BECH32_VALID_CAPITALS = 'RLYNX1QPLMTZKC2XHARPPZDLNPAQL78RSHJ68U3YHKH2W'
+BECH32_VALID_MULTISIG = 'rlynx1qdg3myrgvzw7ml9q0ejxhlkyxm7vl9r56yzkfgvzclrf4hkpx9yfqz6q020'
 
-BECH32_INVALID_BECH32 = 'bcrt1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqdmchcc'
-BECH32_INVALID_BECH32M = 'bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7k35mrzd'
-BECH32_INVALID_VERSION = 'bcrt130xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqynjegk'
-BECH32_INVALID_SIZE = 'bcrt1s0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav25430mtr'
-BECH32_INVALID_V0_SIZE = 'bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kqqq5k3my'
+BECH32_INVALID_BECH32 = 'rlynx1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqcqgyy8'
+BECH32_INVALID_BECH32M = 'rlynx1qw508d6qejxtdg4y5r3zarvary0c5xw7kyqsrkq'
+BECH32_INVALID_VERSION = 'rlynx130xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq3gz25f'
+BECH32_INVALID_SIZE = 'rlynx1s0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav25zaf0js'
+BECH32_INVALID_V0_SIZE = 'rlynx1qw508d6qejxtdg4y5r3zarvary0c5xw7kqqdc54mg'
 BECH32_INVALID_PREFIX = 'bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7k7grplx'
-BECH32_TOO_LONG = 'bcrt1q049edschfnwystcqnsvyfpj23mpsg3jcedq9xv049edschfnwystcqnsvyfpj23mpsg3jcedq9xv049edschfnwystcqnsvyfpj23m'
-BECH32_ONE_ERROR = 'bcrt1q049edschfnwystcqnsvyfpj23mpsg3jcedq9xv'
-BECH32_ONE_ERROR_CAPITALS = 'BCRT1QPLMTZKC2XHARPPZDLNPAQL78RSHJ68U32RAH7R'
-BECH32_TWO_ERRORS = 'bcrt1qax9suht3qv95sw33xavx8crpxduefdrsvgsklu' # should be bcrt1qax9suht3qv95sw33wavx8crpxduefdrsvgsklx
-BECH32_NO_SEPARATOR = 'bcrtq049ldschfnwystcqnsvyfpj23mpsg3jcedq9xv'
-BECH32_INVALID_CHAR = 'bcrt1q04oldschfnwystcqnsvyfpj23mpsg3jcedq9xv'
-BECH32_MULTISIG_TWO_ERRORS = 'bcrt1qdg3myrgvzw7ml8q0ejxhlkyxn7vl9r56yzkfgvzclrf4hkpx9yfqhpsuks'
-BECH32_WRONG_VERSION = 'bcrt1ptmp74ayg7p24uslctssvjm06q5phz4yrxucgnv'
+# Checksum/format-error fixtures also re-encoded under rlynx; the daemon only
+# runs its Bech32 error locator once the hrp prefix matches (key_io.cpp:86), so a
+# bcrt string would fall through to the generic error. Errors introduced by
+# substitution at a given index are reported at that index (shifted vs bcrt).
+BECH32_TOO_LONG = 'rlynx1q049edschfnwystcqnsvyfpj23mpsg3jcedq9xvq049edschfnwystcqnsvyfpj23mpsg3jcedq9xvq049edschfnwystcqnsvyfpj23mpsg3jcedq9xv'
+BECH32_ONE_ERROR = 'rlynx1qtmz74ayg7p24uslctssvjm06q5phz4yrngng8p'
+BECH32_ONE_ERROR_CAPITALS = 'RLYNX1QPLMTZKC2XHARPPZDLNPAQL78RSHJ68UJYHKH2W'
+BECH32_TWO_ERRORS = 'rlynx1qtmp74ayg7p24usletssvjm06q5phz4yrngnggp'
+BECH32_NO_SEPARATOR = 'rlynxq049ldschfnwystcqnsvyfpj23mpsg3jcedq9xv'
+BECH32_INVALID_CHAR = 'rlynx1q04oldschfnwystcqnsvyfpj23mpsg3jcedq9xv'
+BECH32_MULTISIG_TWO_ERRORS = 'rlynx1qdg3myrgvzw7mq9q0ejxhlky8m7vl9r56yzkfgvzclrf4hkpx9yfqz6q020'
+BECH32_WRONG_VERSION = 'rlynx1qvmp74ayg7p24uslctssvjm06q5phz4yrngng8p'
 
 BASE58_VALID = 'mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn'
 BASE58_INVALID_PREFIX = '17VZNX1SN5NtKa8UQFxwQbFeFc3iqRYhem'
@@ -40,7 +46,8 @@ INVALID_ADDRESS_2 = '1q049ldschfnwystcqnsvyfpj23mpsg3jcedq9xv'
 
 class InvalidAddressErrorMessageTest(BitcoinTestFramework):
     def add_options(self, parser):
-        self.add_wallet_options(parser)
+        # Descriptor wallets are unsupported on this chain; run legacy-only.
+        self.add_wallet_options(parser, descriptors=False)
 
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -69,14 +76,14 @@ class InvalidAddressErrorMessageTest(BitcoinTestFramework):
         self.check_invalid(BECH32_INVALID_BECH32M, 'Version 0 witness address must use Bech32 checksum')
         self.check_invalid(BECH32_INVALID_VERSION, 'Invalid Bech32 address witness version')
         self.check_invalid(BECH32_INVALID_V0_SIZE, "Invalid Bech32 v0 address program size (21 byte), per BIP141")
-        self.check_invalid(BECH32_TOO_LONG, 'Bech32 string too long', list(range(90, 108)))
+        self.check_invalid(BECH32_TOO_LONG, 'Bech32 string too long', list(range(90, 123)))
         self.check_invalid(BECH32_ONE_ERROR, 'Invalid Bech32 checksum', [9])
         self.check_invalid(BECH32_TWO_ERRORS, 'Invalid Bech32 checksum', [22, 43])
         self.check_invalid(BECH32_ONE_ERROR_CAPITALS, 'Invalid Bech32 checksum', [38])
         self.check_invalid(BECH32_NO_SEPARATOR, 'Missing separator')
-        self.check_invalid(BECH32_INVALID_CHAR, 'Invalid Base 32 character', [8])
+        self.check_invalid(BECH32_INVALID_CHAR, 'Invalid Base 32 character', [9])
         self.check_invalid(BECH32_MULTISIG_TWO_ERRORS, 'Invalid Bech32 checksum', [19, 30])
-        self.check_invalid(BECH32_WRONG_VERSION, 'Invalid Bech32 checksum', [5])
+        self.check_invalid(BECH32_WRONG_VERSION, 'Invalid Bech32 checksum', [7])
 
         # Valid Bech32
         self.check_valid(BECH32_VALID)
@@ -98,7 +105,7 @@ class InvalidAddressErrorMessageTest(BitcoinTestFramework):
         node = self.nodes[0]
 
         # Missing arg returns the help text
-        assert_raises_rpc_error(-1, "Return information about the given bitcoin address.", node.validateaddress)
+        assert_raises_rpc_error(-1, "Return information about the given address.", node.validateaddress)
         # Explicit None is not allowed for required parameters
         assert_raises_rpc_error(-3, "JSON value of type null is not of expected type string", node.validateaddress, None)
 

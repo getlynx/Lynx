@@ -6,7 +6,7 @@
 
 import time
 
-from test_framework.messages import msg_tx, msg_inv, CInv, MSG_WTX
+from test_framework.messages import msg_tx, msg_inv, CInv, MSG_TX
 from test_framework.p2p import P2PInterface, P2PTxInvStore
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal
@@ -34,7 +34,10 @@ class P2PBlocksOnly(BitcoinTestFramework):
         self.log.info('Check that tx invs also violate the protocol')
         self.nodes[0].add_p2p_connection(P2PInterface())
         with self.nodes[0].assert_debug_log(['transaction (0000000000000000000000000000000000000000000000000000000000001234) inv sent in violation of protocol, disconnecting peer']):
-            self.nodes[0].p2ps[0].send_message(msg_inv([CInv(t=MSG_WTX, h=0x1234)]))
+            # bidha PROTOCOL_VERSION=70006 < WTXID_RELAY_VERSION(70016): wtxid relay is never
+            # negotiated, so a MSG_WTX inv is skipped (net_processing.cpp:3936) before the
+            # blocksonly reject. Send a MSG_TX inv so it reaches the violation path.
+            self.nodes[0].p2ps[0].send_message(msg_inv([CInv(t=MSG_TX, h=0x1234)]))
             self.nodes[0].p2ps[0].wait_for_disconnect()
             del self.nodes[0].p2ps[0]
 
@@ -43,7 +46,7 @@ class P2PBlocksOnly(BitcoinTestFramework):
         assert_equal(self.nodes[0].getpeerinfo()[0]['relaytxes'], True)
 
         assert_equal(self.nodes[0].testmempoolaccept([tx_hex])[0]['allowed'], True)
-        with self.nodes[0].assert_debug_log(['received getdata for: wtx {} peer'.format(wtxid)]):
+        with self.nodes[0].assert_debug_log(['received getdata for: tx {} peer'.format(txid)]):
             self.nodes[0].sendrawtransaction(tx_hex)
             tx_relay_peer.wait_for_tx(txid)
             assert_equal(self.nodes[0].getmempoolinfo()['size'], 1)
@@ -107,7 +110,7 @@ class P2PBlocksOnly(BitcoinTestFramework):
     def check_p2p_inv_violation(self, peer):
         self.log.info("Check that tx-invs from P2P are rejected and result in disconnect")
         with self.nodes[0].assert_debug_log(["inv sent in violation of protocol, disconnecting peer"]):
-            peer.send_message(msg_inv([CInv(t=MSG_WTX, h=0x12345)]))
+            peer.send_message(msg_inv([CInv(t=MSG_TX, h=0x12345)]))
             peer.wait_for_disconnect()
         self.nodes[0].disconnect_p2ps()
 

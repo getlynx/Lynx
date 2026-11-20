@@ -95,19 +95,14 @@ class BIP66Test(BitcoinTestFramework):
         self.test_dersig_info(is_active=True)  # Not active as of current tip, but next block must obey rules
         assert_equal(self.nodes[0].getbestblockhash(), block.hash)
 
-        self.log.info("Test that blocks must now be at least version 3")
+        # NOTE: the stock "blocks must now be at least version 3" subtest is dropped. bidha does not
+        # enforce the block nVersion floor (no 'bad-version' rejection) below the transition/lastPoWBlock
+        # — legacy digitalcoin PoW blocks carry low nVersion — so a v2 block at this height is accepted.
+        # The DERSIG *script* rule is still enforced (GetBlockScriptFlags), which the tests below cover.
+        self.log.info("Test that transactions with non-DER signatures cannot appear in a block")
         tip = block.sha256
         block_time += 1
-        block = create_block(tip, create_coinbase(DERSIG_HEIGHT), block_time, version=2)
-        block.solve()
-
-        with self.nodes[0].assert_debug_log(expected_msgs=[f'{block.hash}, bad-version(0x00000002)']):
-            peer.send_and_ping(msg_block(block))
-            assert_equal(int(self.nodes[0].getbestblockhash(), 16), tip)
-            peer.sync_with_ping()
-
-        self.log.info("Test that transactions with non-DER signatures cannot appear in a block")
-        block.nVersion = 4
+        block = create_block(tip, create_coinbase(DERSIG_HEIGHT), block_time, version=4)
 
         spendtx = self.create_tx(self.coinbase_txids[1])
         unDERify(spendtx)

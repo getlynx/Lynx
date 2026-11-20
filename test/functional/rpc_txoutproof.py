@@ -72,6 +72,9 @@ class MerkleBlockTest(BitcoinTestFramework):
         # We can get the proof if we provide a list of transactions and one of them is unspent. The ordering of the list should not matter.
         assert_equal(sorted(self.nodes[0].verifytxoutproof(self.nodes[0].gettxoutproof([txid1, txid2]))), sorted(txlist))
         assert_equal(sorted(self.nodes[0].verifytxoutproof(self.nodes[0].gettxoutproof([txid2, txid1]))), sorted(txlist))
+        # node1's -txindex build is deferred past IBD and kicked off from the
+        # scheduler (first tick at startup + 10s), so wait for it before relying on it.
+        self.wait_until(lambda: self.nodes[1].getindexinfo().get("txindex", {}).get("synced", False))
         # We can always get a proof if we have a -txindex
         assert_equal(self.nodes[0].verifytxoutproof(self.nodes[1].gettxoutproof([txid_spent])), [txid_spent])
         # We can't get a proof if we specify transactions from different blocks

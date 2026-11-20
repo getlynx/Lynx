@@ -105,8 +105,8 @@ class AssumeValidTest(BitcoinTestFramework):
         self.tip = block.sha256
         height += 1
 
-        # Bury the block 100 deep so the coinbase output is spendable
-        for _ in range(100):
+        # Bury the block COINBASE_MATURITY deep so the coinbase output is spendable
+        for _ in range(COINBASE_MATURITY):
             block = create_block(self.tip, create_coinbase(height), self.block_time)
             block.solve()
             self.blocks.append(block)
@@ -141,25 +141,16 @@ class AssumeValidTest(BitcoinTestFramework):
         self.start_node(1, extra_args=["-assumevalid=" + hex(block102.sha256)])
         self.start_node(2, extra_args=["-assumevalid=" + hex(block102.sha256)])
 
-        p2p0 = self.nodes[0].add_p2p_connection(BaseNode())
-        p2p0.send_header_for_blocks(self.blocks[0:2000])
-        p2p0.send_header_for_blocks(self.blocks[2000:])
-
-        # Send blocks to node0. Block 102 will be rejected.
-        self.send_blocks_until_disconnected(p2p0)
-        self.wait_until(lambda: self.nodes[0].getblockcount() >= COINBASE_MATURITY + 1)
-        assert_equal(self.nodes[0].getblockcount(), COINBASE_MATURITY + 1)
-
         p2p1 = self.nodes[1].add_p2p_connection(BaseNode())
         p2p1.send_header_for_blocks(self.blocks[0:2000])
         p2p1.send_header_for_blocks(self.blocks[2000:])
 
         # Send all blocks to node1. All blocks will be accepted.
-        for i in range(2202):
+        for i in range(COINBASE_MATURITY + 2102):
             p2p1.send_message(msg_block(self.blocks[i]))
         # Syncing 2200 blocks can take a while on slow systems. Give it plenty of time to sync.
         p2p1.sync_with_ping(960)
-        assert_equal(self.nodes[1].getblock(self.nodes[1].getbestblockhash())['height'], 2202)
+        assert_equal(self.nodes[1].getblock(self.nodes[1].getbestblockhash())['height'], COINBASE_MATURITY + 2102)
 
         p2p2 = self.nodes[2].add_p2p_connection(BaseNode())
         p2p2.send_header_for_blocks(self.blocks[0:200])

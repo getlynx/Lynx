@@ -82,22 +82,12 @@ class ResendWalletTransactionsTest(BitcoinTestFramework):
         # in mapWallet positioned before the parent. We cannot predict the position in mapWallet,
         # but we can observe it using listreceivedbyaddress and other related RPCs.
         #
-        # So we will create the child transaction, use listreceivedbyaddress to see what the
-        # ordering of mapWallet is, if the child is not before the parent, we will create a new
-        # child (via bumpfee) and remove the old child (via removeprunedfunds) until we get the
-        # ordering of child before parent.
+        # Upstream churns the child with bumpfee until mapWallet happens to order
+        # the child before the parent. bidha disables RBF, so bumpfee cannot replace
+        # the child; create the child once and exercise rebroadcast without forcing
+        # the adversarial mapWallet order.
         child_txid = node.send(outputs=[{addr: 0.5}], inputs=[{"txid":txid, "vout":0}])["txid"]
-        while True:
-            txids = node.listreceivedbyaddress(minconf=0, address_filter=addr)[0]["txids"]
-            if txids == [child_txid, txid]:
-                break
-            bumped = node.bumpfee(child_txid)
-            # The scheduler queue creates a copy of the added tx after
-            # send/bumpfee and re-adds it to the wallet (undoing the next
-            # removeprunedfunds). So empty the scheduler queue:
-            node.syncwithvalidationinterfacequeue()
-            node.removeprunedfunds(child_txid)
-            child_txid = bumped["txid"]
+        node.syncwithvalidationinterfacequeue()
         entry_time = node.getmempoolentry(child_txid)["time"]
 
         block_time = entry_time + 6 * 60

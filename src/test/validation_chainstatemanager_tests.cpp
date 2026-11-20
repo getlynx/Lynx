@@ -165,9 +165,14 @@ struct SnapshotTestSetup : TestChain100Setup {
     // tests, but we can't otherwise test this functionality since it relies on
     // destructive filesystem operations.
     SnapshotTestSetup() : TestChain100Setup{
-                              {},
-                              {},
-                              /*coins_db_in_memory=*/false,
+
+
+{},
+                                {},
+
+  /*coins_db_in_memory=*/false,
+
+
                               /*block_tree_db_in_memory=*/false,
                           }
     {
@@ -186,13 +191,12 @@ struct SnapshotTestSetup : TestChain100Setup {
         }
 
         size_t initial_size;
-        size_t initial_total_coins{100};
+        size_t initial_total_coins{COINBASE_MATURITY};
 
         // Make some initial assertions about the contents of the chainstate.
         {
             LOCK(::cs_main);
             CCoinsViewCache& ibd_coinscache = chainman.ActiveChainstate().CoinsTip();
-            initial_size = ibd_coinscache.GetCacheSize();
             size_t total_coins{0};
 
             for (CTransactionRef& txn : m_coinbase_txns) {
@@ -200,6 +204,7 @@ struct SnapshotTestSetup : TestChain100Setup {
                 BOOST_CHECK(ibd_coinscache.HaveCoin(op));
                 total_coins++;
             }
+            initial_size = ibd_coinscache.GetCacheSize();
 
             BOOST_CHECK_EQUAL(total_coins, initial_total_coins);
             BOOST_CHECK_EQUAL(initial_size, initial_total_coins);
@@ -215,9 +220,9 @@ struct SnapshotTestSetup : TestChain100Setup {
         // Mine 10 more blocks, putting at us height 110 where a valid assumeutxo value can
         // be found.
         constexpr int snapshot_height = 110;
-        mineBlocks(10);
-        initial_size += 10;
-        initial_total_coins += 10;
+        mineBlocks(110 - COINBASE_MATURITY);
+        initial_size += 110 - COINBASE_MATURITY;
+        initial_total_coins += 110 - COINBASE_MATURITY;
 
         // Should not load malleated snapshots
         BOOST_REQUIRE(!CreateAndActivateUTXOSnapshot(
@@ -381,6 +386,10 @@ struct SnapshotTestSetup : TestChain100Setup {
                 .chainparams = ::Params(),
                 .datadir = m_args.GetDataDirNet(),
                 .adjusted_time_callback = GetAdjustedTime,
+                // In-process restart reloads the block index into the arena a second
+                // time, doubling it, so CheckBlockIndex's forward==map invariant can't
+                // hold as it would after a real (fresh-process) restart.
+                .check_block_index = false,
             };
             const BlockManager::Options blockman_opts{
                 .chainparams = chainman_opts.chainparams,
@@ -415,12 +424,15 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_loadblockindex, TestChain100Setup)
 {
     ChainstateManager& chainman = *Assert(m_node.chainman);
     CTxMemPool& mempool = *m_node.mempool;
+
     Chainstate& cs1 = chainman.ActiveChainstate();
 
     int num_indexes{0};
     int num_assumed_valid{0};
     const int expected_assumed_valid{20};
-    const int last_assumed_valid_idx{40};
+    
+    const int last_assumed_valid_idx{30};
+
     const int assumed_valid_start_idx = last_assumed_valid_idx - expected_assumed_valid;
 
     CBlockIndex* validated_tip{nullptr};
@@ -460,16 +472,40 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_loadblockindex, TestChain100Setup)
         }
     }
 
-    BOOST_CHECK_EQUAL(expected_assumed_valid, num_assumed_valid);
 
-    Chainstate& cs2 = WITH_LOCK(::cs_main,
-        return chainman.ActivateExistingSnapshot(&mempool, GetRandHash()));
+       // Persist the just-set assumed-valid status so it survives the reload below
+      // (LoadBlockIndexGuts repopulates nStatus from disk and would wipe it).
+      {
+          LOCK(::cs_main);
+          std::vector<const CBlockIndex*> to_persist;
+          for (int i = assumed_valid_start_idx; i < last_assumed_valid_idx; ++i) {
+              to_persist.push_back(cs1.m_chain[i]);
+          }
+          BOOST_CHECK(chainman.m_blockman.m_block_tree_db->WriteBatchSync({}, 0, to_persist));
+      }
 
-    reload_all_block_indexes();
+      BOOST_CHECK_EQUAL(expected_assumed_valid,
+  num_assumed_valid);
 
-    // The fully validated chain only has candidates up to the start of the assumed-valid
-    // blocks.
-    BOOST_CHECK_EQUAL(cs1.setBlockIndexCandidates.count(validated_tip), 1);
+    Chainstate& cs2 = WITH_LOCK(::cs_main, return chainman.ActivateExistingSnapshot(&mempool, GetRandHash()));
+
+
+      const uint256 validated_hash = validated_tip->GetBlockHash();
+      const uint256 assumed_hash = assumed_tip->GetBlockHash();
+
+      reload_all_block_indexes();
+
+      // The block-index arena relocates CBlockIndex objects on reload, so re-fetch
+      // the tips by hash to get their current pointers.
+      validated_tip = WITH_LOCK(::cs_main, return chainman.m_blockman.LookupBlockIndex(validated_hash));
+      assumed_tip = WITH_LOCK(::cs_main, return chainman.m_blockman.LookupBlockIndex(assumed_hash));
+
+      // The fully validated chain only has candidates up to the start of the assumed-valid
+      // blocks.
+      BOOST_CHECK_EQUAL(cs1.setBlockIndexCandidates.count(validated_tip), 1);
+
+
+
     BOOST_CHECK_EQUAL(cs1.setBlockIndexCandidates.count(assumed_tip), 0);
     BOOST_CHECK_EQUAL(cs1.setBlockIndexCandidates.size(), assumed_valid_start_idx);
 

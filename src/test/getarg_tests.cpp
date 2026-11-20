@@ -440,6 +440,7 @@ BOOST_AUTO_TEST_CASE(logargs)
         });
 
     // Log the arguments
+LogInstance().EnableCategory(BCLog::STARTUP);
     local_args.LogArgs();
 
     LogInstance().DeleteCallback(print_connection);

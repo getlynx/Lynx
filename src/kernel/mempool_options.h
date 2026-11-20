@@ -26,7 +26,7 @@ class CBlockPolicyEstimator;
  */
 static constexpr unsigned int DEFAULT_MAX_MEMPOOL_SIZE_MB{2880};
 /** Default for -maxmempool when blocksonly is set */
-static constexpr unsigned int DEFAULT_BLOCKSONLY_MAX_MEMPOOL_SIZE_MB{5};
+static constexpr unsigned int DEFAULT_BLOCKSONLY_MAX_MEMPOOL_SIZE_MB{220};
 /** Default for -mempoolexpiry, expiration time for mempool transactions in hours
  * 
  * 336 ÷ 24 = 14 days

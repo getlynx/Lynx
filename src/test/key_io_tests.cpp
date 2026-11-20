@@ -17,6 +17,39 @@
 
 #include <univalue.h>
 
+#include <map>
+
+namespace {
+// The key_io_valid.json vectors are digitalcoin-encoded; lynx uses different base58/bech32
+// prefixes (pubkey 45 / script 22 / secret 173 / hrp "lynx"). This maps the main-chain
+// vectors to their lynx re-encodings, applied when CURRENT_CHAIN=="lynx" so one vector set
+// serves both chains. (testnet/regtest prefixes are chain-independent, so those vectors need no entry.)
+const std::map<std::string, std::string> kDgcToLynx = {
+    {"DL1YFq6WDUGvmx6tkrv6QHGws6HBBMTzpa", "KN5b2TZpsBE53TCC89usgAMkJf9KoYipUe"},
+    {"36j4NfKv6Akva9amjWrLG6MuSQym1GuEmm", "9wUK7WPpAEdpUWxF9eWkWDzH8zMo2GVF6u"},
+    {"digitalcoin1qvyq0cc6rahyvsazfdje0twl7ez82ndmurjejyf", "lynx1qvyq0cc6rahyvsazfdje0twl7ez82ndmux9aaff"},
+    {"digitalcoin1qyucykdlhp62tezs0hagqury402qwhk589q80tqs5myh3rxq34nwqxmtcdu", "lynx1qyucykdlhp62tezs0hagqury402qwhk589q80tqs5myh3rxq34nwqx3qugu"},
+    {"digitalcoin1p83n3au0rjylefxq2nc2xh2y4jzz4pm6zxj4mw5pagdjjr2a9f36stl5uj7", "lynx1p83n3au0rjylefxq2nc2xh2y4jzz4pm6zxj4mw5pagdjjr2a9f36st4lch7"},
+    {"digitalcoin1z2rks2dmz2f", "lynx1z2rksuxrgzv"},
+    {"DKsRfNmRSAsP2bmXMbYrBxs2R2YGBJVi19", "KMwUS1Ek5spXJ6rpitYdTqwprbQQsMiN3a"},
+    {"3BZECeAH8gSKkjrTx8PwMrNQBLG18yHpvf", "A2JUwVEBCkKDf7DwNG4Mbyzmsue3BvYyhQ"},
+    {"digitalcoin1qhxt04s5xnpy0kxw4x99n5hpdf5pmtzpqw7e5r0", "lynx1qhxt04s5xnpy0kxw4x99n5hpdf5pmtzpqtfamw0"},
+    {"digitalcoin1qgc9ljrvdf2e0zg9rmmq86xklqwfys7r6wptjlacdgrcdc7sa6ggqdc9v8t", "lynx1qgc9ljrvdf2e0zg9rmmq86xklqwfys7r6wptjlacdgrcdc7sa6ggqdjwgzt"},
+    {"5JuW2AMDYu4xVwRG9DZW18VbzQrGcd5RCgb99sS6ehJsNQXu5b9", "6pNzxbYeu3W9ZrZzwJVTvZUTCYZasJzpcSmz8cPSPBcKaTGP7vS"},
+    {"L5nJeqKmpHp4P7F8ZYyjwc5a7P4d8EabuGAzfGJk7yC1BJyzNaEd", "SjsgP6YFhD3FEPqhSxjvmSLVJw6yh4nKE9Crqhu1DW72rCxkXNFD"},
+    {"5HsL2nZuEebU5nM3RxNVQD9GcAnvNMahqQskf4fkqHe54zwd14e", "6oLpyDmLao2f9hVnE3JTKe87pJWEd3W7FB4bdod6ZmwXGyFeefQ"},
+    {"KwuVvu6hsuEMHrfFWJQV64tRrWX3QzqHH18JuAHYqYV6dqBvNKxd", "SbzsfAKBkpTY99FpPiAfuu9M44ZPyq2zbtAB5bsow5Q8Jj4124sq"},
+};
+std::string PortKeyIo(std::string s)
+{
+    if (std::string(CURRENT_CHAIN) == "lynx") {
+        auto it = kDgcToLynx.find(s);
+        if (it != kDgcToLynx.end()) return it->second;
+    }
+    return s;
+}
+} // namespace
+
 BOOST_FIXTURE_TEST_SUITE(key_io_tests, BasicTestingSetup)
 
 // Goal: check that parsed keys match test payload
@@ -34,7 +67,7 @@ BOOST_AUTO_TEST_CASE(key_io_valid_parse)
             BOOST_ERROR("Bad test: " << strTest);
             continue;
         }
-        std::string exp_base58string = test[0].get_str();
+        std::string exp_base58string = PortKeyIo(test[0].get_str());
         const std::vector<std::byte> exp_payload{ParseHex<std::byte>(test[1].get_str())};
         const UniValue &metadata = test[2].get_obj();
         bool isPrivkey = metadata.find_value("isPrivkey").get_bool();
@@ -93,7 +126,7 @@ BOOST_AUTO_TEST_CASE(key_io_valid_gen)
             BOOST_ERROR("Bad test: " << strTest);
             continue;
         }
-        std::string exp_base58string = test[0].get_str();
+        std::string exp_base58string = PortKeyIo(test[0].get_str());
         std::vector<unsigned char> exp_payload = ParseHex(test[1].get_str());
         const UniValue &metadata = test[2].get_obj();
         bool isPrivkey = metadata.find_value("isPrivkey").get_bool();
@@ -133,7 +166,7 @@ BOOST_AUTO_TEST_CASE(key_io_invalid)
             BOOST_ERROR("Bad test: " << strTest);
             continue;
         }
-        std::string exp_base58string = test[0].get_str();
+        std::string exp_base58string = PortKeyIo(test[0].get_str());
 
         // must be invalid as public and as private key
         for (const auto& chain : {ChainType::MAIN, ChainType::TESTNET, ChainType::SIGNET, ChainType::REGTEST}) {

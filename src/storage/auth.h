@@ -74,7 +74,10 @@ bool check_mempool_for_blockuuid(const CTxMemPool& mempool, const std::string& u
 bool generate_auth_payload(std::string& payload, int& type, uint32_t& time, std::string& hash);
 bool generate_blockuuid_payload(std::string& payload, int& type, uint32_t& time, std::string& uuid);
 bool generate_blocktenant_payload(std::string& payload, int& type, uint32_t& time, std::string& tenant);
-bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload);
+// bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload);
+
+bool generate_auth_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload, std::string& error);
+
 bool generate_blockuuid_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload);
 bool generate_blocktenant_transaction(WalletContext& wallet_context, CMutableTransaction& tx, std::string& opPayload);
 

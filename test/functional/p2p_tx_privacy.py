@@ -25,7 +25,7 @@ from test_framework.messages import (
     msg_verack,
     msg_tx,
     CInv,
-    MSG_WTX,
+    MSG_TX,
 )
 from test_framework.p2p import (
     P2PInterface,
@@ -69,9 +69,13 @@ class TxPrivacyTest(BitcoinTestFramework):
         tx2 = self.wallet.create_self_transfer()["tx"]
         tx_originator.send_and_ping(msg_tx(tx2))
 
-        # Spy should only get an inv for the second transaction as the first
-        # one was received pre-verack with the spy
-        spy.wait_for_inv_match(CInv(MSG_WTX, tx2.calc_sha256(True)))
+        # Spy should only get an inv for the second transaction; the first was
+        # received pre-verack. At PROTOCOL_VERSION=70006 the node ignores the spy's
+        # wtxidrelay (BIP339 needs 70016) and announces by txid (MSG_TX), not wtxid.
+        # calc_sha256() populates tx.sha256 (the txid int) and returns None, so read
+        # the attribute, not the call.
+        tx2.calc_sha256()
+        spy.wait_for_inv_match(CInv(MSG_TX, tx2.sha256))
 
 if __name__ == '__main__':
     TxPrivacyTest().main()

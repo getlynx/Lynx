@@ -45,6 +45,11 @@ class CoinStatsIndexTest(BitcoinTestFramework):
             [],
             ["-coinstatsindex"]
         ]
+        # The coinstatsindex node's shutdown/flush can take minutes on bidha (mmap
+        # block-index arena + multiple indexes), long enough that a sync RPC can blow
+        # the 30s client timeout, break the connection, and leave the other node never
+        # receiving `stop` → 300s wait_until_stopped. Give RPC calls a wide timeout.
+        self.rpc_timeout = 600
 
     def run_test(self):
         self.wallet = MiniWallet(self.nodes[0])
@@ -93,7 +98,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
 
         for hash_option in index_hash_options:
             # Fetch old stats by height
-            res2 = index_node.gettxoutsetinfo(hash_option, 102)
+            res2 = index_node.gettxoutsetinfo(hash_option, res0['height'])
             del res2['block_info'], res2['total_unspendable_amount']
             res2.pop('muhash', None)
             assert_equal(res0, res2)
@@ -105,7 +110,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
             assert_equal(res0, res3)
 
             # It does not work without coinstatsindex
-            assert_raises_rpc_error(-8, "Querying specific block heights requires coinstatsindex", node.gettxoutsetinfo, hash_option, 102)
+            assert_raises_rpc_error(-8, "Querying specific block heights requires coinstatsindex", node.gettxoutsetinfo, hash_option, res0['height'])
 
         self.log.info("Test gettxoutsetinfo() with index and verbose flag")
 
@@ -128,7 +133,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
             self.block_sanity_check(res4['block_info'])
 
             # Test an older block height that included a normal tx
-            res5 = index_node.gettxoutsetinfo(hash_option, 102)
+            res5 = index_node.gettxoutsetinfo(hash_option, res0['height'])
             assert_equal(res5['total_unspendable_amount'], 50)
             assert_equal(res5['block_info'], {
                 'unspendable': 0,
@@ -166,7 +171,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
 
         for hash_option in index_hash_options:
             # Check all amounts were registered correctly
-            res6 = index_node.gettxoutsetinfo(hash_option, 108)
+            res6 = index_node.gettxoutsetinfo(hash_option, node.getblockcount())
             assert_equal(res6['total_unspendable_amount'], Decimal('70.99000000'))
             assert_equal(res6['block_info'], {
                 'unspendable': Decimal('20.99000000'),
@@ -197,7 +202,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         self.sync_all()
 
         for hash_option in index_hash_options:
-            res7 = index_node.gettxoutsetinfo(hash_option, 109)
+            res7 = index_node.gettxoutsetinfo(hash_option, node.getblockcount())
             assert_equal(res7['total_unspendable_amount'], Decimal('80.99000000'))
             assert_equal(res7['block_info'], {
                 'unspendable': 10,
