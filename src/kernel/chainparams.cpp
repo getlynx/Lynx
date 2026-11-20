@@ -688,15 +688,16 @@ LogPrint(BCLog::CHAIN, "pszTimestamp %s \n", pszTimestamp);
 // ============================================================================
 struct AnchorNode { const char* host; const char* ipv4; const char* ipv6; bool failover; };
 static const AnchorNode ANCHOR_NODES[] = {
-    { "anchor1.getlynx.io",   "172.233.86.58",   "",                  false },  // Osaka
-    { "anchor2.getlynx.io",   "172.234.107.17",  "",                  false },  // Stockholm
-    { "anchor3.getlynx.io",   "194.195.121.7",   "",                  false },  // Sydney
-    { "anchor4.getlynx.io",   "172.105.5.55",    "",                  false },  // Toronto
-    { "anchor5.getlynx.io",   "172.232.181.236", "",                  false },  // Seattle
-    { "anchor7.getlynx.io",   "89.116.210.6",    "2a09:e683:5:23::a", false },  // Los Angeles
-    { "anchor8.getlynx.io",   "194.62.249.144",  "2a09:e683:9:1c::a", false },  // London
-    { "electrum1.getlynx.io", "77.37.65.34",     "2a09:e683:7:9e::a", true  },  // Frankfurt
-    { "electrum2.getlynx.io", "89.117.30.45",    "2a09:e683:9:23::a", true  },  // London
+    { "anchor1.getlynx.io",   "172.233.86.58",   "",                   false },  // Osaka
+    { "anchor2.getlynx.io",   "89.116.210.64",   "2a09:e683:5:111::a", false },  // Los Angeles
+    { "anchor3.getlynx.io",   "89.117.30.12",    "2a09:e683:9:43::a",  false },  // London
+    { "anchor4.getlynx.io",   "89.117.67.246",   "2a09:e683:6:82::a",  false },  // New Jersey
+    { "anchor5.getlynx.io",   "89.117.0.152",    "2a09:e683:8:c::a",   false },  // Miami
+    { "anchor6.getlynx.io",   "77.223.214.248",  "2a09:e683:7:11d::a", false },  // Frankfurt
+    { "anchor7.getlynx.io",   "89.116.210.6",    "2a09:e683:5:23::a",  false },  // Los Angeles
+    { "anchor8.getlynx.io",   "194.62.249.144",  "2a09:e683:9:1c::a",  false },  // London
+    { "electrum1.getlynx.io", "77.37.65.34",     "2a09:e683:7:9e::a",  true  },  // Frankfurt
+    { "electrum2.getlynx.io", "89.117.30.45",    "2a09:e683:9:23::a",  true  },  // London
 };
 
 // Parse a textual IPv6 address (hex groups, at most one "::"; no embedded
