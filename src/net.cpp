@@ -31,6 +31,7 @@
 #include <util/fs.h>
 #include <util/sock.h>
 #include <util/strencodings.h>
+#include <util/string.h>
 #include <util/syscall_sandbox.h>
 #include <util/system.h>
 #include <util/thread.h>
@@ -55,6 +56,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <optional>
 #include <unordered_map>
@@ -126,16 +128,53 @@ bool ConnectToStaticLynxNodes(CConnman& connman)
 {
     // Persistent MANUAL connections to the anchor nodes. The anchors only run
     // each coin's MAIN network today (testnet anchors may come later), so skip
-    // this on testnet/regtest. Hosts mirror the ANCHOR_NODES table in
-    // kernel/chainparams.cpp — keep the count (5) in sync with it.
+    // this on testnet/regtest. Hosts come from the ANCHOR_NODES table in
+    // kernel/chainparams.cpp.
+    //
+    // Rather than every node dialing every anchor, each node picks a random
+    // ANCHOR_CONNECTIONS of the primary anchors once per session, so many nodes
+    // syncing at once spread across the set. On each later call (the IBD retry,
+    // once a minute) a picked anchor that is not connected is swapped for the
+    // next spare: the remaining primaries first, then the failover anchors. The
+    // dropped host goes to the back of the spare queue so it can come back.
+    // Only ever called from the ThreadOpenConnections thread, so the
+    // function-local state needs no lock.
     if (Params().GetChainType() != ChainType::MAIN) return true;
 
-    char hostname[24];
-    for (unsigned int i = 1; i < 6; i++) {
+    static std::vector<std::string> picked;
+    static std::deque<std::string> spares;
+    static bool initialized = false;
+    if (!initialized) {
+        initialized = true;
+        FastRandomContext rng;
+        std::vector<std::string> order = Params().AnchorHosts();
+        std::vector<std::string> failover = Params().FailoverAnchorHosts();
+        Shuffle(order.begin(), order.end(), rng);
+        Shuffle(failover.begin(), failover.end(), rng);
+        order.insert(order.end(), failover.begin(), failover.end());
+        const size_t n = std::min(order.size(), static_cast<size_t>(ANCHOR_CONNECTIONS));
+        picked.assign(order.begin(), order.begin() + n);
+        spares.assign(order.begin() + n, order.end());
+        LogPrintf("Anchor peers picked: %s\n", Join(picked, ", "));
+    } else {
+        // Every connection the node holds, including ones still handshaking,
+        // so an anchor mid-connect is not mistaken for a dead one.
+        std::vector<CNodeStats> stats;
+        connman.GetNodeStats(stats);
+        for (std::string& host : picked) {
+            const bool connected = std::any_of(stats.begin(), stats.end(),
+                [&](const CNodeStats& s) { return s.m_addr_name == host; });
+            if (connected || spares.empty()) continue;
+            LogPrintf("Anchor peer %s not connected, replacing with %s\n", host, spares.front());
+            spares.push_back(host);
+            host = spares.front();
+            spares.pop_front();
+        }
+    }
+
+    for (const std::string& host : picked) {
         CAddress addr;
-        memset(hostname, 0, sizeof(hostname));
-        snprintf(hostname, sizeof(hostname), "anchor%u.getlynx.io", i);
-        connman.OpenNetworkConnection(addr, false, nullptr, hostname, ConnectionType::MANUAL);
+        connman.OpenNetworkConnection(addr, false, nullptr, host.c_str(), ConnectionType::MANUAL);
     }
     return true;
 }
@@ -1788,7 +1827,7 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect)
 
         // [ANCHOR-ONLY SYNC] During initial block download, do not dial any
         // auto-outbound peers (full-relay, block-relay, anchors.dat, feelers).
-        // The 5 manual anchors are opened separately by ConnectToStaticLynxNodes
+        // The manual anchors are opened separately by ConnectToStaticLynxNodes
         // above and are unaffected, so the sync draws only from peers whose
         // staking state we control. The guard falls away when IBD latches off
         // (g_ibd_active is seeded at startup in init.cpp and kept current in

@@ -75,6 +75,9 @@ static const unsigned int MAX_SUBVERSION_LENGTH = 256;
 static const int MAX_OUTBOUND_FULL_RELAY_CONNECTIONS = 8;
 /** Maximum number of addnode outgoing nodes */
 static const int MAX_ADDNODE_CONNECTIONS = 8;
+/** Number of anchor nodes (ANCHOR_NODES in kernel/chainparams.cpp) each node
+ *  dials as manual peers, picked at random to spread sync load across them */
+static const int ANCHOR_CONNECTIONS = 4;
 /** Maximum number of block-relay-only outgoing connections */
 static const int MAX_BLOCK_RELAY_ONLY_CONNECTIONS = 2;
 /** Maximum number of feeler connections */

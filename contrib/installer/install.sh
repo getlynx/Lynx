@@ -164,7 +164,7 @@ SCRIPT_BASE_URL="https://raw.githubusercontent.com/getlynx/Lynx/main/contrib/ins
 #   DAEMON COMMANDS:
 #     lyv    - Show daemon version
 #     lyc    - View/edit daemon config file (-e to edit)
-#     lyl    - View daemon debug log (default 30 lines, -f for follow)
+#     lyl    - View daemon debug log (default 35 lines, -f for follow)
 #     lyr    - Restart daemon (-d to purge debug log)
 #     gbi    - Get blockchain info
 #     hel    - Show daemon help (with keyword search)
@@ -500,7 +500,7 @@ lyv() { _spark_require_chain && $SPARK_CLI -version; }
 lv() { lyv; }
 gbi() { _spark_require_chain && $SPARK_CLI getblockchaininfo; }
 gi() { gbi; }
-lyl() { _spark_require_chain || return 1; if [ "$1" = "-f" ]; then tail -f "$SPARK_DATADIR/debug.log"; elif [ "${2:-}" = "-f" ]; then tail -n ${1:-30} -f "$SPARK_DATADIR/debug.log"; else tail -n ${1:-30} "$SPARK_DATADIR/debug.log"; fi; }
+lyl() { _spark_require_chain || return 1; if [ "$1" = "-f" ]; then tail -n 35 -f "$SPARK_DATADIR/debug.log"; elif [ "${2:-}" = "-f" ]; then tail -n ${1:-35} -f "$SPARK_DATADIR/debug.log"; else tail -n ${1:-35} "$SPARK_DATADIR/debug.log"; fi; }
 lyc() { _spark_require_chain || return 1; if [ "$1" = "-e" ]; then nano "$SPARK_CONF" && read -p "Restart daemon to apply config changes? (y/N): " confirm && if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then lyr; else echo "Daemon not restarted."; fi; else cat "$SPARK_CONF"; fi; }
 lc() { lyc "$@"; }
 lyr() { _spark_require_chain || return 1; if [ "$1" = "-d" ]; then echo "This will permanently delete the debug log and restart the daemon. Node Status staking stats are unaffected."; read -p "Do you want to continue? (y/N): " confirm; if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then systemctl stop $SPARK_CHAIN && rm -rf "$SPARK_DATADIR/debug.log" && systemctl daemon-reload 2>/dev/null && systemctl start --no-block $SPARK_CHAIN && echo "Start queued. Check progress with: lss"; else echo "Operation cancelled."; fi; else systemctl daemon-reload 2>/dev/null; systemctl restart --no-block $SPARK_CHAIN && echo "Restart queued. Check progress with: lss"; fi; }
@@ -725,7 +725,7 @@ executeHelpCommand() {
     echo "    💰 Current wallet balance: $wallet_balance"
     echo ""
     echo "  DAEMON COMMANDS:"
-    echo "    lyl [lines] [-f]       - View daemon debug log (default 30)"
+    echo "    lyl [lines] [-f]       - View daemon debug log (default 35)"
     echo "    lyv                    - Show daemon version"
     echo "    lyr [-d]               - Restart daemon (-d to purge debug)"
     echo "    lyc [-e]               - View/edit daemon conf (-e to edit)"

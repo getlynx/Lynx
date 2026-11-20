@@ -121,8 +121,9 @@ static const int MAX_BLOCKS_IN_TRANSIT_PER_PEER_DOWNLOAD = 1024;
  *  peer finishes the header chain — so the early part of a sync is fed by a
  *  single peer. Starting the header sync from several peers up front gets them
  *  all a best-known-block early, so block download spreads across them from the
- *  beginning instead of after headers complete. Sized for the anchor set. */
-static const int MAX_INITIAL_HEADER_SYNC_PEERS = 5;
+ *  beginning instead of after headers complete. Sized for the anchor peers
+ *  each node dials. */
+static const int MAX_INITIAL_HEADER_SYNC_PEERS = ANCHOR_CONNECTIONS;
 /** Default time during which a peer must stall block download progress before being disconnected.
  * the actual timeout is increased temporarily if peers are disconnected for hitting the timeout */
 static constexpr auto BLOCK_STALLING_TIMEOUT_DEFAULT{2s};

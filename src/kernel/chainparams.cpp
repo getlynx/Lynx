@@ -661,55 +661,118 @@ LogPrint(BCLog::CHAIN, "pszTimestamp %s \n", pszTimestamp);
 // ============================================================================
 //  ANCHOR NODES
 //  ---------------------------------------------------------------------------
-//  Five getlynx.io VPS hosts. Each host runs every supported chain's daemon on
+//  getlynx.io VPS hosts. Each host runs every supported chain's daemon on
 //  that chain's own default port, so a single host serves all chains — the port
-//  (not the hostname) selects the coin.
+//  (not the hostname) selects the coin. The electrumN hosts are full anchors
+//  that also run Electrum services on other ports; they are marked failover
+//  and listed last.
 //
-//  This one table drives BOTH mainnet peer sources wired up in CMainParams:
+//  This one table drives ALL mainnet anchor peer sources:
 //    (1) vSeeds      — DNS discovery (requires working DNS resolution)
 //    (2) vFixedSeeds — compiled-in fallback used when DNS is unavailable,
 //                      built per-chain at that chain's default port.
+//    (3) The MANUAL anchor connections in net.cpp (ConnectToStaticLynxNodes).
+//        Each node dials a random ANCHOR_CONNECTIONS (net.h) of the primary
+//        hosts, and swaps in another primary, then a failover host, for any
+//        that fails to connect, so sync load spreads across the set.
 //
-//  The MANUAL fallback connections in net.cpp (ConnectToStaticLynxNodes) use
-//  the same anchorN.getlynx.io hostnames — keep the count (5) in sync there.
-//
-//  To update an anchor: edit its row below. `host` feeds vSeeds; `ipv4` feeds
-//  the DNS-free fixed-seed blob. If a VPS is re-addressed, update ipv4 and
-//  recompile (the fixed seeds are baked into the binary by design).
+//  To update an anchor: edit its row below. `host` feeds vSeeds and the
+//  manual connections; `ipv4` and `ipv6` feed the DNS-free fixed-seed blob
+//  ("" = none). If a VPS is re-addressed, update its IPs and recompile (the
+//  fixed seeds are baked into the binary by design).
 //
 //  NOTE: this file is compiled into libbitcoinkernel, which does NOT link
 //  netaddress/netbase. BuildAnchorFixedSeeds() therefore emits the ADDRv2
 //  wire bytes by hand rather than calling CNetAddr/CService, keeping this
 //  translation unit free of those symbols.
 // ============================================================================
-struct AnchorNode { const char* host; const char* ipv4; };
+struct AnchorNode { const char* host; const char* ipv4; const char* ipv6; bool failover; };
 static const AnchorNode ANCHOR_NODES[] = {
-    { "anchor1.getlynx.io", "172.233.86.58"   },  // Osaka
-    { "anchor2.getlynx.io", "172.234.107.17"  },  // Stockholm
-    { "anchor3.getlynx.io", "194.195.121.7"   },  // Sydney
-    { "anchor4.getlynx.io", "172.105.5.55"    },  // Toronto
-    { "anchor5.getlynx.io", "172.232.181.236" },  // Seattle
+    { "anchor1.getlynx.io",   "172.233.86.58",   "",                  false },  // Osaka
+    { "anchor2.getlynx.io",   "172.234.107.17",  "",                  false },  // Stockholm
+    { "anchor3.getlynx.io",   "194.195.121.7",   "",                  false },  // Sydney
+    { "anchor4.getlynx.io",   "172.105.5.55",    "",                  false },  // Toronto
+    { "anchor5.getlynx.io",   "172.232.181.236", "",                  false },  // Seattle
+    { "anchor7.getlynx.io",   "89.116.210.6",    "2a09:e683:5:23::a", false },  // Los Angeles
+    { "anchor8.getlynx.io",   "194.62.249.144",  "2a09:e683:9:1c::a", false },  // London
+    { "electrum1.getlynx.io", "77.37.65.34",     "2a09:e683:7:9e::a", true  },  // Frankfurt
+    { "electrum2.getlynx.io", "89.117.30.45",    "2a09:e683:9:23::a", true  },  // London
 };
+
+// Parse a textual IPv6 address (hex groups, at most one "::"; no embedded
+// IPv4 form) into 16 network-order bytes. Returns false on anything malformed.
+static bool ParseAnchorIPv6(const char* s, uint8_t out[16])
+{
+    uint16_t head[8], tail[8];
+    int nhead = 0, ntail = 0;
+    bool gap = false;
+    const char* p = s;
+    if (p[0] == ':' && p[1] == ':') { gap = true; p += 2; }
+    while (*p) {
+        unsigned int group = 0;
+        int digits = 0;
+        for (; HexDigit(*p) >= 0; ++p) {
+            if (++digits > 4) return false;
+            group = (group << 4) | static_cast<unsigned int>(HexDigit(*p));
+        }
+        if (digits == 0 || nhead + ntail >= 8) return false;
+        if (gap) tail[ntail++] = group; else head[nhead++] = group;
+        if (*p == ':') {
+            ++p;
+            if (*p == ':') {
+                if (gap) return false;
+                gap = true;
+                ++p;
+            } else if (*p == '\0') {
+                return false;  // trailing single ':'
+            }
+        } else if (*p != '\0') {
+            return false;
+        }
+    }
+    if (gap ? nhead + ntail > 7 : nhead + ntail != 8) return false;
+    memset(out, 0, 16);
+    for (int i = 0; i < nhead; ++i) {
+        out[2 * i] = head[i] >> 8;
+        out[2 * i + 1] = head[i] & 0xff;
+    }
+    for (int i = 0; i < ntail; ++i) {
+        out[16 - 2 * (ntail - i)] = tail[i] >> 8;
+        out[16 - 2 * (ntail - i) + 1] = tail[i] & 0xff;
+    }
+    return true;
+}
 
 // Build the DNS-free fixed-seed blob for the anchor nodes at `port`, in the
 // exact BIP155/ADDRv2 wire format that ConvertSeeds() in net.cpp deserializes.
-// Each IPv4 anchor is 8 bytes:
+// Each IPv4 address is 8 bytes:
 //   [0x01 network=IPV4][0x04 addr length][a][b][c][d][port hi][port lo]
+// Each IPv6 address is 20 bytes:
+//   [0x02 network=IPV6][0x10 addr length][16 address bytes][port hi][port lo]
 static std::vector<uint8_t> BuildAnchorFixedSeeds(uint16_t port)
 {
     std::vector<uint8_t> seeds;
     for (const auto& a : ANCHOR_NODES) {
         unsigned int o0, o1, o2, o3;
-        if (sscanf(a.ipv4, "%u.%u.%u.%u", &o0, &o1, &o2, &o3) != 4) continue;
-        if (o0 > 255 || o1 > 255 || o2 > 255 || o3 > 255) continue;
-        seeds.push_back(0x01);  // BIP155 network id: IPV4
-        seeds.push_back(0x04);  // address length (CompactSize; 4 < 253 => 1 byte)
-        seeds.push_back(static_cast<uint8_t>(o0));
-        seeds.push_back(static_cast<uint8_t>(o1));
-        seeds.push_back(static_cast<uint8_t>(o2));
-        seeds.push_back(static_cast<uint8_t>(o3));
-        seeds.push_back(static_cast<uint8_t>(port >> 8));    // port, big-endian
-        seeds.push_back(static_cast<uint8_t>(port & 0xff));
+        if (sscanf(a.ipv4, "%u.%u.%u.%u", &o0, &o1, &o2, &o3) == 4 &&
+            o0 <= 255 && o1 <= 255 && o2 <= 255 && o3 <= 255) {
+            seeds.push_back(0x01);  // BIP155 network id: IPV4
+            seeds.push_back(0x04);  // address length (CompactSize; 4 < 253 => 1 byte)
+            seeds.push_back(static_cast<uint8_t>(o0));
+            seeds.push_back(static_cast<uint8_t>(o1));
+            seeds.push_back(static_cast<uint8_t>(o2));
+            seeds.push_back(static_cast<uint8_t>(o3));
+            seeds.push_back(static_cast<uint8_t>(port >> 8));    // port, big-endian
+            seeds.push_back(static_cast<uint8_t>(port & 0xff));
+        }
+        uint8_t v6[16];
+        if (a.ipv6[0] != '\0' && ParseAnchorIPv6(a.ipv6, v6)) {
+            seeds.push_back(0x02);  // BIP155 network id: IPV6
+            seeds.push_back(0x10);  // address length (16)
+            seeds.insert(seeds.end(), v6, v6 + 16);
+            seeds.push_back(static_cast<uint8_t>(port >> 8));    // port, big-endian
+            seeds.push_back(static_cast<uint8_t>(port & 0xff));
+        }
     }
     return seeds;
 }
@@ -913,11 +976,12 @@ public:
 
         consensus.initAuthTime = genesis.nTime;
 
-        // Anchor nodes (see the ANCHOR_NODES table above). The same five hosts
+        // Anchor nodes (see the ANCHOR_NODES table above). The same hosts
         // serve every chain; this chain's default port (already resolved into
         // nDefaultPort above) is what routes peers to the right daemon.
         for (const auto& a : ANCHOR_NODES) {
             vSeeds.emplace_back(a.host);                    // (1) DNS discovery
+            (a.failover ? m_failover_anchor_hosts : m_anchor_hosts).emplace_back(a.host);  // (3) manual
         }
         vFixedSeeds = BuildAnchorFixedSeeds(nDefaultPort);  // (2) DNS-free fallback, this chain's port
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,spec.pubkeyPrefix[CURRENT_CHAIN]);
