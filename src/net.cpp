@@ -155,6 +155,7 @@ bool ConnectToStaticLynxNodes(CConnman& connman)
         const size_t n = std::min(order.size(), static_cast<size_t>(ANCHOR_CONNECTIONS));
         picked.assign(order.begin(), order.begin() + n);
         spares.assign(order.begin() + n, order.end());
+        std::sort(picked.begin(), picked.end());
         LogPrintf("Anchor peers picked: %s\n", Join(picked, ", "));
     } else {
         // Every connection the node holds, including ones still handshaking,
